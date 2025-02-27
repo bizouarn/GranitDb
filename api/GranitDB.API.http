@@ -1,0 +1,6 @@
+@GranitDB.API_HostAddress = http://localhost:5105
+
+GET {{GranitDB.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
