@@ -1,11 +1,6 @@
-﻿using Dapper.Contrib.Extensions;
-using GranitDB.API.Models.Descriptions.Base;
-using GranitDb.Interfaces;
+﻿namespace GranitDb.Interfaces;
 
-namespace GranitDB.API.Models.Descriptions;
-
-[Table("Databases")]
-public class DatabaseInfo : InfoBase, IDatabaseInfo
+public interface IDatabaseInfo : IInfoBase
 {
     public string Name { get; set; }
 

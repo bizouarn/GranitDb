@@ -1,10 +1,11 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 using GranitDB.API.Models.Descriptions.Base;
+using GranitDb.Interfaces;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Relations")]
-public class RelationInfo : InfoBase
+public class RelationInfo : InfoBase, IRelationInfo
 {
     public string FirstId { get; set; }
 

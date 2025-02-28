@@ -54,12 +54,8 @@ public class SqlServer
         }
 
         foreach (var table in tables.Values)
-        {
             if (!tablesNames.Contains(table.Name))
-            {
                 _ = InfoBase.DeleteAsync(table);
-            }
-        }
 
         tables.Clear();
         foreach (var table in await InfoBase.GetAllAsync<TableInfo>())
@@ -98,15 +94,13 @@ public class SqlServer
                 columnInfo.IsNullable = true;
                 await InfoBase.UpdateAsync(columnInfo.Id, columnInfo);
             }
-            if(columnInfo != null)
+
+            if (columnInfo != null)
                 columnsIds.Add(columnInfo.Id);
         }
+
         foreach (var column in columns.Values)
-        {
             if (!columnsIds.Contains(column.Id))
-            {
                 _ = InfoBase.DeleteAsync(column);
-            }
-        }
     }
 }

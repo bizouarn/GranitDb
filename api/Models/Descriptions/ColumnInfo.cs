@@ -1,10 +1,11 @@
 ﻿using Dapper.Contrib.Extensions;
 using GranitDB.API.Models.Descriptions.Base;
+using GranitDb.Interfaces;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Columns")]
-public class ColumnInfo : InfoBase
+public class ColumnInfo : InfoBase, IColumnInfo
 {
     public string DatabaseId { get; set; } // Foreign key to DatabaseInfo
 

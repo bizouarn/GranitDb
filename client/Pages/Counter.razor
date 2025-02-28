@@ -1,0 +1,22 @@
+﻿@page "/counter"
+@using GranitDb.Client.api
+
+<PageTitle>Counter</PageTitle>
+
+<h1>Counter</h1>
+
+<p role="status">Current count: @currentCount</p>
+
+<button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
+
+@code {
+	private int currentCount;
+
+	private async void IncrementCount()
+	{
+		var client = new Client("http://localhost:5105/");
+		var database = await client.GetAllDatabaseAsync();
+		currentCount = database.Length;
+	}
+
+}

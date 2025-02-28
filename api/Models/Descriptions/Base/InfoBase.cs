@@ -1,9 +1,10 @@
 ﻿using Dapper.Contrib.Extensions;
 using GranitDB.API.Exceptions;
+using GranitDb.Interfaces;
 
 namespace GranitDB.API.Models.Descriptions.Base;
 
-public class InfoBase
+public class InfoBase : IInfoBase
 {
     [ExplicitKey] public string Id { get; set; }
 

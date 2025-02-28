@@ -15,9 +15,9 @@ public class TableInfoController : ControllerBase
         var table = await InfoBase.GetAsync<TableInfo>(id);
         if (table == null)
             return NotFound();
-        table.Columns = (await InfoBase.GetAllAsync<ColumnInfo>()).Where(t => t.TableId == table.Id).ToList();
-        table.Relations = (await InfoBase.GetAllAsync<RelationInfo>())
-            .Where(r => table.Columns.Exists(c => c.Id == r.FirstId || c.Id == r.SecondId)).ToList();
+        table.Columns.AddRange((await InfoBase.GetAllAsync<ColumnInfo>()).Where(t => t.TableId == table.Id));
+        table.Relations.AddRange((await InfoBase.GetAllAsync<RelationInfo>())
+            .Where(r => table.Columns.Exists(c => c.Id == r.FirstId || c.Id == r.SecondId)));
         return Ok(table);
     }
 
@@ -61,9 +61,9 @@ public class TableInfoController : ControllerBase
         var tables = (await InfoBase.GetAllAsync<TableInfo>()).Where(t => t.DatabaseId == databaseId).ToList();
         foreach (var table in tables)
         {
-            table.Columns = (await InfoBase.GetAllAsync<ColumnInfo>()).Where(t => t.TableId == table.Id).ToList();
-            table.Relations = (await InfoBase.GetAllAsync<RelationInfo>())
-                .Where(r => table.Columns.Exists(c => c.Id == r.FirstId || c.Id == r.SecondId)).ToList();
+            table.Columns.AddRange((await InfoBase.GetAllAsync<ColumnInfo>()).Where(t => t.TableId == table.Id));
+            table.Relations.AddRange((await InfoBase.GetAllAsync<RelationInfo>())
+                .Where(r => table.Columns.Exists(c => c.Id == r.FirstId || c.Id == r.SecondId)));
         }
 
         if (tables.Count == 0)

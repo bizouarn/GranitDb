@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.13.35825.156 d17.13
+VisualStudioVersion = 17.13.35825.156
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GranitDB.API", "GranitDB.API.csproj", "{A20A6403-4026-4566-9F00-54F126EC7D7B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GranitDb.Interfaces", "..\interfaces\GranitDb.Interfaces.csproj", "{AF69FDB0-C1A9-3A88-2EAA-6AF7E451F004}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{A20A6403-4026-4566-9F00-54F126EC7D7B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A20A6403-4026-4566-9F00-54F126EC7D7B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A20A6403-4026-4566-9F00-54F126EC7D7B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF69FDB0-C1A9-3A88-2EAA-6AF7E451F004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF69FDB0-C1A9-3A88-2EAA-6AF7E451F004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF69FDB0-C1A9-3A88-2EAA-6AF7E451F004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF69FDB0-C1A9-3A88-2EAA-6AF7E451F004}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
