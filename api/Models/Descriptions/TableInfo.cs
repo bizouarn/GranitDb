@@ -1,20 +1,22 @@
 ﻿using Dapper.Contrib.Extensions;
+using GranitDB.API.Models.Descriptions.Base;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Tables")]
-public class TableInfo
+public class TableInfo : InfoBase
 {
-    [Key] public string Id { get; set; }
+    public TableInfo()
+    {
+        Relations = new List<RelationInfo>();
+        Columns = new List<ColumnInfo>();
+    }
 
     public string Name { get; set; }
 
     public string DatabaseId { get; set; } // Relation vers DatabaseInfo
 
-    public int ColumnCount { get; set; }
+    [Computed] public List<RelationInfo> Relations { get; set; }
 
-    public string MetaInfo { get; set; }
-
-    public List<RelationInfo> Relations { get; set; }
-    public List<ColumnInfo> Columns { get; set; }
+    [Computed] public List<ColumnInfo> Columns { get; set; }
 }

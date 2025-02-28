@@ -1,1 +1,0 @@
-2025-02-28 08:42:31.984 +01:00 [INF] Start ... version : System.Collections.Generic.List`1[System.String]

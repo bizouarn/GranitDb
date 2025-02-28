@@ -1,5 +1,6 @@
 using Dapper;
 using Gabi.Base;
+using GranitDB.API.Connectors;
 using GranitDB.API.Models;
 using Serilog;
 
@@ -21,6 +22,7 @@ using (var db = config.GetConnection())
 {
     var version = db.Query<string>("SELECT TOP(1) [versionNumber] FROM [Version]");
     Log.Information($"Start ... version : {version}");
+    await SqlServer.SyncAsync("1", db);
 }
 
 // Configure the HTTP request pipeline.

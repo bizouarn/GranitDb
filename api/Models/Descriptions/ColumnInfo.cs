@@ -1,13 +1,11 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using Dapper.Contrib.Extensions;
+using GranitDB.API.Models.Descriptions.Base;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Columns")]
-public class ColumnInfo
+public class ColumnInfo : InfoBase
 {
-    [Key] public string Id { get; set; }
-
     public string DatabaseId { get; set; } // Foreign key to DatabaseInfo
 
     public string TableId { get; set; } // Foreign key to TableInfo
@@ -17,5 +15,4 @@ public class ColumnInfo
     public string DataType { get; set; }
 
     public bool IsNullable { get; set; }
-    public string MetaInfo { get; set; }
 }

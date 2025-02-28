@@ -5,3 +5,5 @@
 api/config.json
 
 *.user
+
+api/log.txt
