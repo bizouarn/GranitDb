@@ -1,0 +1,34 @@
+﻿@page "/edit-database/{id?}"
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject NavigationManager Navigation
+
+<h3>Édition de la base</h3>
+
+<MudTextField @bind-Value="Database.Name" Label="Nom"/>
+<MudTextField @bind-Value="Database.Description" Label="Description"/>
+
+<MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="Save">Sauvegarder</MudButton>
+<MudButton Variant="Variant.Outlined" Color="Color.Secondary" OnClick="Cancel">Annuler</MudButton>
+
+@code {
+	[Parameter] public string? Id { get; set; }
+	private DatabaseInfo Database { get; set; } = new();
+
+	protected override async Task OnInitializedAsync()
+	{
+		Database = await Client.GetClient().GetDatabaseAsync(Id);
+	}
+
+	private async Task Save()
+	{
+		// TODO
+		Navigation.NavigateTo("/");
+	}
+
+	private void Cancel()
+	{
+		Navigation.NavigateTo("/");
+	}
+
+}

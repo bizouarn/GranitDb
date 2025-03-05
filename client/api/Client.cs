@@ -34,4 +34,13 @@ public class Client : IDisposable
         if (!result.IsSuccessStatusCode || string.IsNullOrEmpty(content)) return [];
         return JsonConvert.DeserializeObject<DatabaseInfo[]>(content) ?? [];
     }
+
+    public async Task<DatabaseInfo?> GetDatabaseAsync(string id)
+    {
+        var url = $"{_httpClient.BaseAddress}DatabaseInfo/{id}";
+        var result = await _httpClient.GetAsync(new Uri(url));
+        var content = await result.Content.ReadAsStringAsync();
+        if (!result.IsSuccessStatusCode || string.IsNullOrEmpty(content)) return null;
+        return JsonConvert.DeserializeObject<DatabaseInfo>(content) ?? null;
+    }
 }
