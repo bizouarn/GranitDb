@@ -1,6 +1,6 @@
 {
-  "name": "GranitDb.Client",
-  "short_name": "GranitDb.Client",
+  "name": "GranitDb",
+  "short_name": "GranitDb",
   "id": "./",
   "start_url": "./",
   "display": "standalone",

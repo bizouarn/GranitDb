@@ -40,6 +40,9 @@
 }
 
 .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
     font-weight: 700;
     letter-spacing: .02em;
     margin-right: 1rem;
@@ -449,4 +452,10 @@
     .palette {
         top: 4vh;
     }
+}
+
+.brand-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
 }

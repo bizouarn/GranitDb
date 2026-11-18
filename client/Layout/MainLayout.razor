@@ -17,7 +17,7 @@
     <MudAppBar Dense="true" Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleExplorer"
                        aria-label="Afficher ou masquer l'explorateur" title="Explorateur (Ctrl+B)" />
-        <span class="brand">Granit DB</span>
+        <span class="brand"><img src="menhir.svg" alt="" class="brand-icon" />Granit DB</span>
         <MudSpacer />
         <MudTextField T="string" @bind-Value="_query" Immediate="true" Placeholder="Rechercher une table, une colonne, un index…"
                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="search-box"
