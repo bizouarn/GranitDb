@@ -64,7 +64,7 @@
 
     [Parameter] public WebhookView? Existing { get; set; }
 
-    [Parameter, EditorRequired] public DatabaseInfo[] Databases { get; set; } = [];
+    [Parameter, EditorRequired] public DatabaseView[] Databases { get; set; } = [];
 
     private WebhookForm _form = new();
     private string? _secret, _error;

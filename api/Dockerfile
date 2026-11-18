@@ -1,4 +1,4 @@
-# Contexte de build : la racine du dépôt (l'API référence le projet interfaces/).
+# Contexte de build : la racine du dépôt.
 #   docker build -f api/Dockerfile -t granitdb-api .
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
@@ -15,10 +15,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY api/GranitDB.API.csproj api/
-COPY interfaces/GranitDb.Interfaces.csproj interfaces/
 RUN dotnet restore api/GranitDB.API.csproj
 COPY api/ api/
-COPY interfaces/ interfaces/
 RUN dotnet publish api/GranitDB.API.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final

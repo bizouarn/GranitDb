@@ -122,11 +122,11 @@
 
     private SelectionItem? _selection;
     private bool _loading;
-    private DatabaseInfo? _database;
+    private DatabaseView? _database;
     private TableInfo[] _tables = [];
     private TableInfo? _table;
     private ColumnInfo? _column;
-    private DomainInfo[] _domains = [];
+    private DomainView[] _domains = [];
     private TagLinkView[] _tagLinks = [];
     private CompletenessReport? _completeness;
     private ImpactResult? _impact;
@@ -193,6 +193,7 @@
             var tags = database == null ? [] : await Api.GetTagLinksAsync(selection.DatabaseId);
             var completeness = database == null ? null : await Api.GetCompletenessAsync(selection.DatabaseId);
             var table = selection.Kind == "database" ? null : tables.FirstOrDefault(t => t.Id == (selection.TableId ?? selection.Id));
+            if (table != null) await Cache.EnsureColumnsAsync(table);
             var column = selection.Kind == "column" ? table?.Columns.FirstOrDefault(c => c.Id == selection.Id) : null;
             ImpactResult? impact = null;
             if (selection.Kind == "table" && table != null) impact = await Api.GetImpactAsync("table", table.Id);
@@ -259,11 +260,11 @@
         builder.CloseElement();
         builder.OpenElement(5, "p");
         builder.AddAttribute(6, "class", "impact-summary");
-        builder.AddContent(7, _impact.Dependents.Length == 0 && _impact.Dependencies.Length == 0
+        builder.AddContent(7, _impact.Dependents.Count == 0 && _impact.Dependencies.Count == 0
             ? "Aucune relation : rien ne dépend de cet élément et il ne dépend de rien."
-            : $"{_impact.Dependents.Length} élément(s) en dépendent, il dépend de {_impact.Dependencies.Length}.");
+            : $"{_impact.Dependents.Count} élément(s) en dépendent, il dépend de {_impact.Dependencies.Count}.");
         builder.CloseElement();
-        if (_impact.Dependents.Length > 0)
+        if (_impact.Dependents.Count > 0)
         {
             builder.OpenElement(8, "ul");
             builder.AddAttribute(9, "class", "impact-list");
@@ -274,10 +275,10 @@
                 builder.CloseElement();
             }
 
-            if (_impact.Dependents.Length > 8)
+            if (_impact.Dependents.Count > 8)
             {
                 builder.OpenElement(12, "li");
-                builder.AddContent(13, $"… et {_impact.Dependents.Length - 8} autre(s)");
+                builder.AddContent(13, $"… et {_impact.Dependents.Count - 8} autre(s)");
                 builder.CloseElement();
             }
 

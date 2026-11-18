@@ -44,7 +44,23 @@ builder.Services.AddControllers();
 builder.Services.AddExceptionHandler<GranitExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    // string = jamais null, string? = peut l'être : le client généré garde cette distinction.
+    options.SupportNonNullableReferenceTypes();
+    // Seules les routes versionnées sont décrites (l'alias sans préfixe doublerait chaque opération) ; chaque opération a un
+    // nom stable « Contrôleur_Action » : c'est lui qui nomme les méthodes du client typé généré (client/api/openapi.json).
+    options.DocInclusionPredicate((_, api) => api.RelativePath?.StartsWith("api/v1/", StringComparison.Ordinal) == true);
+    options.CustomOperationIds(api =>
+    {
+        // Les actions génériques du contrôleur de base finissent par « T » (GetAllT, GetT…) : on retire cette trace technique.
+        var action = api.ActionDescriptor.RouteValues["action"] ?? "";
+        if (action is "GetAllT" or "GetT" or "CreateT" or "UpdateT" or "DeleteT") action = action[..^1];
+        return $"{api.ActionDescriptor.RouteValues["controller"]}_{action}";
+    });
+    // Les actions renvoient IActionResult : ce filtre déclare le type de chaque réponse pour le client généré.
+    options.OperationFilter<GranitDB.API.Swagger.ResponseTypesFilter>();
+});
 
 var app = builder.Build();
 
@@ -55,6 +71,15 @@ var startupLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogg
 startupLogger.LogInformation("Catalogue {Provider} prêt (dossier de données : {Dir})", catalogOptions.Provider,
     Path.GetFullPath(catalogOptions.DataDirectory));
 var importer = app.Services.GetRequiredService<DatabaseImportService>();
+try
+{
+    var orphans = await importer.CleanOrphanFilesAsync();
+    if (orphans > 0) startupLogger.LogInformation("{Count} fichier(s) source orphelin(s) supprimé(s)", orphans);
+}
+catch (Exception e)
+{
+    startupLogger.LogWarning(e, "Balayage des fichiers sources orphelins impossible");
+}
 foreach (var source in catalogOptions.StartupSources)
     try
     {
@@ -68,6 +93,24 @@ foreach (var source in catalogOptions.StartupSources)
     }
 
 // Avant le gestionnaire d'erreurs : le journal voit le code de réponse définitif.
+// Chaque réponse porte l'identifiant de la requête (le même que le traceId des erreurs et des journaux) et des en-têtes
+// de durcissement ; l'API ne sert que du JSON, jamais de page : rien ne doit être interprété ni mis en cadre.
+app.Use(async (context, next) =>
+{
+    var id = context.TraceIdentifier;
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Request-Id"] = id;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+        headers["Cross-Origin-Resource-Policy"] = "cross-origin"; // le client est servi depuis une autre origine
+        return Task.CompletedTask;
+    });
+    using (app.Logger.BeginScope(new Dictionary<string, object> { ["RequestId"] = id }))
+        await next();
+});
 app.UseMiddleware<AuditMiddleware>();
 app.UseExceptionHandler();
 

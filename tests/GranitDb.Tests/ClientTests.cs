@@ -109,7 +109,7 @@ public class ApiClientTests
     }
 
     [Fact]
-    public async Task UploadSqliteAsync_omits_blank_metadata()
+    public async Task UploadSqliteAsync_sends_blank_metadata_empty_so_the_server_treats_it_as_absent()
     {
         var api = new FakeApi
         {
@@ -118,9 +118,10 @@ public class ApiClientTests
 
         await api.Client.UploadSqliteAsync(new MemoryStream([1]), "a.db", " ", null);
 
+        // Le client généré envoie les champs du formulaire ; vides, le serveur les ignore (nom du fichier, pas de description).
         var body = api.Bodies.Single();
-        Assert.DoesNotContain("name=name", body);
-        Assert.DoesNotContain("name=description", body);
+        Assert.Matches(@"name=name\s*\r?\n\r?\n\r?\n", body);
+        Assert.DoesNotContain("Une description", body);
     }
 
     [Fact]

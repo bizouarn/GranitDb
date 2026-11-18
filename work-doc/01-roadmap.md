@@ -6,19 +6,18 @@ Priorités : **P0** bloquant · **P1** cœur de valeur · **P2** confort · **P3
 
 ## Avancement (mis à jour le 2026-11-18)
 
-Jalons **1** (SQLite sans serveur), **2** (fondations : migrations, Docker, CI), **4** (interface de consultation), **3** (API catalogue complète : routes `/api/v1`, entrées validées, vues de sortie, filtres, historique, impact, import et resynchronisation d'une base SQL Server depuis l'interface avec connexion chiffrée), **5** (édition et gouvernance : descriptions et notes modifiables, relations manuelles, étiquettes, domaines et diagrammes par domaine, colonnes sensibles, complétude, aperçu de la synchronisation) et **7** (visualisation : diagramme entité-relation interactif, analyse d'impact, exports SVG/PNG/Mermaid) : terminés à 100 %, retirés de ce document (leur contenu est dans l'historique git).
+Jalons **1** (SQLite sans serveur), **2** (fondations : migrations, Docker, CI), **4** (interface de consultation), **3** (API catalogue complète : routes `/api/v1`, entrées validées, vues de sortie, filtres, historique, impact, import et resynchronisation d'une base SQL Server depuis l'interface avec connexion chiffrée), **5** (édition et gouvernance : descriptions et notes modifiables, relations manuelles, étiquettes, domaines et diagrammes par domaine, colonnes sensibles, complétude, aperçu de la synchronisation), **7** (visualisation : diagramme entité-relation interactif, analyse d'impact, exports SVG/PNG/Mermaid) et **9** (exports HTML, Markdown, CSV, Excel natif et PDF imprimable ; client typé généré depuis OpenAPI, adopté par l'interface, projet `interfaces` supprimé) : terminés à 100 %, retirés de ce document (leur contenu est dans l'historique git).
 
 | Ordre | Jalon | État | Pourquoi à cette place |
 |---|---|---|---|
-| 1 | 6 — Sécurité et multi-utilisateurs | ⬜ Non commencé | l'API accepte des uploads sans authentification : à faire avant toute exposition et avant d'ouvrir l'édition |
+| 1 | 6 — Sécurité et multi-utilisateurs (authentification via GitHub) | ⬜ Non commencé | l'API accepte des uploads sans authentification : à faire avant toute exposition et avant d'ouvrir l'édition |
 | 2 | 11 — Refonte UI/UX du client | 🟢 Presque terminé | l'espace de travail est en place ; reste la validation avec de vrais utilisateurs et appareils (tests, lecteur d'écran, petits écrans) |
 | 3 | 8 — Autres moteurs | ⬜ Non commencé | élargit les sources, une fois le cœur stabilisé |
-| 4 | 9 — Export et intégrations | ⬜ Non commencé | |
-| 5 | 10 — Fonctions avancées | ⬜ Non commencé | exploratoire |
+| 4 | 10 — Fonctions avancées | ⬜ Non commencé | exploratoire |
 
-**Prochain jalon : 6 (sécurité).** Les jalons ci-dessous sont classés dans l'ordre où les traiter ; leurs numéros sont conservés pour ne pas être confondus avec les jalons 1, 2, 3, 4, 5 et 7 déjà terminés. Depuis les jalons 1 et 2, l'API accepte des uploads de fichiers, expose `docker-compose` sur le réseau et n'a toujours ni authentification ni CORS restreint : elle ne doit pas être joignable hors poste de dev ou réseau de confiance.
+**Prochain jalon : 6 (sécurité).** Les jalons ci-dessous sont classés dans l'ordre où les traiter ; leurs numéros sont conservés pour ne pas être confondus avec les jalons 1, 2, 3, 4, 5, 7 et 9 déjà terminés. Depuis les jalons 1 et 2, l'API accepte des uploads de fichiers, expose `docker-compose` sur le réseau et n'a toujours ni authentification ni CORS restreint : elle ne doit pas être joignable hors poste de dev ou réseau de confiance.
 
-Chiffres : 621 tests sous .NET 10 (30 tests SQL Server nécessitent Docker), CI GitHub Actions, pile `docker compose` vérifiée en SQLite et en SQL Server. Catalogue en version 12. L'interface (espace de travail, diagramme, glisser-déposer, édition en place) est couverte par des tests bUnit et de modèle ; sa vérification dans un vrai navigateur reste manuelle.
+Chiffres : 611 tests sous .NET 10 hors SQL Server (les tests SQL Server nécessitent Docker), CI GitHub Actions, pile `docker compose` vérifiée en SQLite et en SQL Server. Catalogue en version 12. L'interface (espace de travail, diagramme, glisser-déposer, édition en place) est couverte par des tests bUnit et de modèle ; sa vérification dans un vrai navigateur reste manuelle.
 
 ---
 
@@ -26,13 +25,18 @@ Chiffres : 621 tests sous .NET 10 (30 tests SQL Server nécessitent Docker), CI 
 
 À planifier **avant toute exposition hors réseau de confiance** (l'upload de fichiers du jalon 1 en fait partie).
 
-- [ ] Authentification (OIDC / JWT) côté API et client. _L'historique des modifications inscrit déjà l'auteur dès que l'appelant est identifié (`User.Identity.Name`) : il se remplira tout seul._
-- [ ] Rôles : lecteur, éditeur, administrateur.
+- [ ] **Authentification via GitHub** (connexion OAuth « Se connecter avec GitHub ») côté API et client. _L'historique des modifications et le journal d'audit inscrivent déjà l'auteur dès que l'appelant est identifié (`User.Identity.Name`) : ils se rempliront tout seuls, avec le login GitHub._ À décider et à faire :
+  - une **OAuth App GitHub** (identifiant et secret client en configuration ou coffre, jamais dans le dépôt ; adresse de retour par environnement) et le flux « code d'autorisation » côté API (`AddOAuth` avec les points d'accès GitHub, lecture de `/user` pour le login, le nom et l'avatar) ;
+  - comment le client Blazor WASM garde la session : **cookie de session émis par l'API** (recommandé : pas de jeton lisible par le script de la page ; demande CORS avec identifiants et origine précise, donc après la restriction de CORS ci-dessous) plutôt qu'un jeton stocké dans le navigateur ;
+  - qui a le droit d'entrer : liste de logins autorisés, ou appartenance à une **organisation / équipe GitHub** (portée `read:org`), vérifiée à la connexion ;
+  - déconnexion, expiration de session, et un mode « sans authentification » conservé pour le poste de développement (`Auth:Enabled` à faux), pour que le catalogue SQLite local reste utilisable sans compte ;
+  - tests : faux fournisseur GitHub (aucun appel réseau), refus sans session (401), session invalide, login visible dans l'historique.
+- [ ] Rôles : lecteur, éditeur, administrateur, **attribués d'après GitHub** (équipe ou liste de logins par rôle) ; le premier administrateur est déclaré en configuration.
 - [ ] Autoriser l'enregistrement de sources SQL Server (`Catalog:AllowSqlServerSources`) selon un rôle (administrateur) plutôt que pour tous les appelants.
-- [ ] Mise en œuvre de `IsPublic` : bases publiques lisibles sans compte.
+- [ ] Mise en œuvre de `IsPublic` : bases publiques lisibles sans compte GitHub.
 - [ ] Restreindre CORS aux origines configurées.
 - [ ] Secrets de connexion hors fichier, chiffrés dans le catalogue. _Fait pour les sources SQL Server enregistrées depuis l'interface (chiffrées, jamais renvoyées par l'API, clés dans `Catalog:KeysDirectory`). Reste `Catalog:StartupSources`, dont la chaîne de connexion reste en clair dans la configuration, et le coffre de clés (Key Vault, DPAPI…) pour ne pas laisser les clés en fichiers._
-- [ ] **Journal d'audit : suite** : la page `/audit` du client (filtres, pagination) et la conservation (`Audit:RetentionDays`) sont faites. Reste l'auteur réel une fois l'authentification en place.
+- [ ] **Journal d'audit : suite** : la page `/audit` du client (filtres, pagination) et la conservation (`Audit:RetentionDays`) sont faites. Reste l'auteur réel (login GitHub) une fois l'authentification en place, et la réserver aux administrateurs.
 
 ## Jalon 11 — Refonte de l'UI/UX du client (P1)
 
@@ -54,12 +58,6 @@ Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, p
 - [ ] Connecteurs PostgreSQL et MySQL (via `ISchemaConnector`).
 - [ ] Synchronisation planifiée et notification des changements de schéma.
 
-## Jalon 9 — Export et intégrations (P2/P3)
-
-- [ ] **Export de la documentation : suite** : le HTML, le Markdown et le CSV sont faits. Reste le PDF (impression du HTML) et le format Excel natif (le CSV s'ouvre dans Excel).
-- [ ] Client typé généré depuis OpenAPI (remplace le projet `interfaces` si jugé redondant).
-- [ ] Écriture des descriptions vers la base source (propriétés étendues SQL Server / `COMMENT ON`) ; impossible en SQLite, qui n'a pas de commentaires de schéma natifs.
-
 ## Jalon 10 — Fonctions avancées (P3, exploratoire)
 
 - [ ] Suggestions de descriptions par IA à partir des noms et types, avec relecture humaine.
@@ -71,20 +69,7 @@ Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, p
 
 ## Dette connue (issue des jalons 1 et 2)
 
-### Soldée (2026-11-18)
-
-| Sujet | Résolution |
-|---|---|
-| Index SQLite non lus | Lecture des index créés et des contraintes `UNIQUE` (SQLite via `pragma_index_list`, SQL Server via `sys.indexes`, colonnes `INCLUDE` exclues, clé primaire exclue), stockés dans une table `Indexes` (migration 6), synchronisés (ajout, mise à jour, suppression, cascade), exposés par `TableInfo` et affichés dans le client. Les descriptions d'index saisies sont conservées. |
-| Ordre des colonnes non conservé | Colonne `Position` (migration 5), mise à jour par la synchro sans recréer les colonnes ; l'API et le client trient par position. |
-| `SqlServerSchemaConnector` ignorait le schéma SQL | Les tables hors `dbo` sont préfixées (`sales.Orders`) : deux tables de même nom dans deux schémas ne se confondent plus, clés étrangères comprises. Testé sur SQL Server. |
-| `GetAll` sans pagination | `GET /DatabaseInfo?skip=0&take=50` (take de 1 à 1000, tri par nom) et en-tête `X-Total-Count` (exposé en CORS). Sans paramètre, le comportement est inchangé. Le client n'utilise pas encore la pagination. |
-| Glisser-déposer non vérifié | Vérifié dans le navigateur avec un vrai `File`/`DataTransfer` : dépôt d'une base (redirection vers le détail, colonnes dans l'ordre, index, relations) et dépôt d'un faux fichier (message du serveur affiché, pas de redirection). |
-| Aucun test du client | `ApiClientTests` (client HTTP : listes, 404, multipart, erreurs `ProblemDetails`, repli sur le code HTTP) et `ClientPagesTests` (bUnit : liste, zone de dépôt, upload, erreur d'upload, détail, filtre, resynchronisation). |
-| Extension du fichier importé non contrôlée | **Abandonné volontairement** : l'en-tête `SQLite format 3` est le vrai contrôle ; refuser une extension inhabituelle gênerait sans protéger davantage. |
-| Migration 4 : lignes orphelines supprimées ; `Gabi.Base` / `config.json` supprimés | Comportements documentés (README, `CLAUDE.md`), pas de correction à prévoir. |
-
-### Restante
+_La dette soldée (index, position des colonnes, schémas SQL Server, pagination, tests du client…) est dans l'historique git._
 
 | Sujet | Jalon |
 |---|---|
@@ -98,8 +83,8 @@ Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, p
 ## Ordre recommandé
 
 ```
-J1, J2, J3, J4, J5, J7 terminés (J11 : validation utilisateurs à faire) → J6 Sécurité
-                                                        └→ J8 Autres moteurs → J9 Export/intégrations → J10 Avancé
+J1, J2, J3, J4, J5, J7, J9 terminés (J11 : validation utilisateurs à faire) → J6 Sécurité
+                                                        └→ J8 Autres moteurs → J10 Avancé
 ```
 
 Le livrable « documenter un fichier SQLite sans serveur » (jalon 1) est en place et déployable en une commande (jalon 2). Pour qu'il soit utilisable par d'autres personnes que son auteur, l'étape suivante la plus utile est **J6 (sécurité)** : GranitDb sait désormais documenter (descriptions, relations, étiquettes, domaines, colonnes sensibles) mais n'a toujours ni compte ni droits, donc personne ne devrait pouvoir l'ouvrir à d'autres. Vient ensuite **J11 (refonte de l'UI/UX)**.

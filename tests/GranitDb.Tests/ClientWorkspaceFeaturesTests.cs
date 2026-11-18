@@ -128,7 +128,7 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
         State.Select(new GranitDb.Client.Workspace.SelectionItem("database", "d1", "d1"));
         var deleted = 0;
         var cut = Ctx.Render<DeleteDatabaseButton>(p => p
-            .Add(x => x.Database, new GranitDb.Client.Models.DatabaseInfo { Id = "d1", Name = "Boutique", Type = "Sqlite" })
+            .Add(x => x.Database, new GranitDb.Client.Models.DatabaseView { Id = "d1", Name = "Boutique", Type = "Sqlite" })
             .Add(x => x.OnDeleted, () => deleted++));
 
         cut.Find("button.delete-database").Click();
@@ -156,7 +156,7 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
             ? new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("""{"title":"Impossible de supprimer."}""", System.Text.Encoding.UTF8, "application/json") }
             : null;
         var cut = Ctx.Render<DeleteDatabaseButton>(p => p
-            .Add(x => x.Database, new GranitDb.Client.Models.DatabaseInfo { Id = "d1", Name = "Boutique", Type = "Sqlite" }));
+            .Add(x => x.Database, new GranitDb.Client.Models.DatabaseView { Id = "d1", Name = "Boutique", Type = "Sqlite" }));
 
         cut.Find("button.delete-database").Click();
         cut.Find("button.delete-cancel").Click();

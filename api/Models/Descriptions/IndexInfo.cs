@@ -1,11 +1,10 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using GranitDB.API.Models.Descriptions.Base;
-using GranitDb.Interfaces;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Indexes")]
-public class IndexInfo : InfoBase, IIndexInfo
+public class IndexInfo : InfoBase
 {
     public string DatabaseId { get; set; } = "";
 

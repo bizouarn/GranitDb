@@ -112,7 +112,7 @@
         @if (_test != null)
         {
             <MudAlert Severity="@(_test.Ok ? Severity.Success : Severity.Error)" Class="mt-3 connection-test">@_test.Message</MudAlert>
-            @if (_test.Ok && _test.Schemas.Length > 0)
+            @if (_test.Ok && _test.Schemas.Count > 0)
             {
                 <MudPaper Class="pa-3 mt-3" Outlined="true" id="schemas">
                     <MudText Typo="Typo.subtitle2">Schémas à documenter</MudText>
@@ -131,9 +131,9 @@
 </MudContainer>
 
 @code {
-    private readonly SqlServerConnection _form = new();
-    private Capabilities _capabilities = new(false, false);
-    private DatabaseInfo? _existing;
+    private readonly SqlServerConnectionInput _form = new();
+    private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false };
+    private DatabaseView? _existing;
     private ConnectionTestResult? _test;
     private readonly HashSet<string> _selected = [];
     private bool _loading = true;
@@ -168,8 +168,8 @@
     /// <summary>Les schémas cochés ; <c>null</c> (tous) quand rien n'a été restreint.</summary>
     private List<string>? ChosenSchemas()
     {
-        if (_test is not { Ok: true } || _test.Schemas.Length == 0) return null;
-        return _selected.Count == _test.Schemas.Length ? null : _selected.ToList();
+        if (_test is not { Ok: true } || _test.Schemas.Count == 0) return null;
+        return _selected.Count == _test.Schemas.Count ? null : _selected.ToList();
     }
 
     private void ToggleSchema(string name, bool on)
@@ -217,7 +217,7 @@
         try
         {
             _form.Schemas = ChosenSchemas();
-            var result = EditId == null ? await Api.ImportSqlServerAsync(_form) : await Api.UpdateSqlServerConnectionAsync(EditId, _form);
+            var result = EditId == null ? await Api.ImportSqlServerAsync(_form) : await Api.UpdateSqlServerConnectionInputAsync(EditId, _form);
             Workspace.NotifyCatalogChanged(EditId, this);
             Notifier.Show(EditId == null
                 ? $"Base {result.Database.Name} importée : {result.Sync.TablesAdded} table(s), {result.Sync.ColumnsAdded} colonne(s)."

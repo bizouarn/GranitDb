@@ -92,7 +92,7 @@
 
                     @if (_tables.TryGetValue(db.Id, out var tables))
                     {
-                        @foreach (var table in VisibleTables(db, tables))
+                        @foreach (var table in VisibleTables(db, tables).Take(TableLimit(db)))
                         {
                             var t = table;
                             var tableExpanded = _expandedTables.Contains(table.Id);
@@ -137,6 +137,13 @@
                                     }
                                 </div>
                             }
+                        }
+                        @if (VisibleTables(db, tables).Count() is var shown && shown > TableLimit(db))
+                        {
+                            <div class="node-hint" style="padding-left: 2rem;">
+                                @TableLimit(db) tables affichées sur @shown.
+                                <MudButton Size="Size.Small" Class="show-more-tables" OnClick="() => ShowMoreTables(db)">Afficher la suite</MudButton>
+                            </div>
                         }
                     }
 
@@ -193,9 +200,9 @@
 </nav>
 
 @code {
-    private DatabaseInfo[] _databases = [];
+    private DatabaseView[] _databases = [];
     private readonly Dictionary<string, TableInfo[]> _tables = [];
-    private readonly Dictionary<string, DomainInfo[]> _domains = [];
+    private readonly Dictionary<string, DomainView[]> _domains = [];
     private readonly HashSet<string> _expandedDbs = [];
     private readonly HashSet<string> _expandedTables = [];
     private readonly HashSet<string> _expandedDomains = [];
@@ -273,7 +280,7 @@
         }
     }
 
-    private async Task ToggleDbAsync(DatabaseInfo db)
+    private async Task ToggleDbAsync(DatabaseView db)
     {
         if (!_expandedDbs.Remove(db.Id))
         {
@@ -282,10 +289,32 @@
         }
     }
 
-    private Task ToggleTable(string tableId)
+    private const int TablePage = 300;
+    private readonly Dictionary<string, int> _tableLimits = [];
+
+    /// <summary>Nombre de tables dessinées pour une base : une base de plusieurs centaines de tables n'est pas rendue d'un bloc.</summary>
+    private int TableLimit(DatabaseView db) => _tableLimits.TryGetValue(db.Id, out var limit) ? limit : TablePage;
+
+    private void ShowMoreTables(DatabaseView db) => _tableLimits[db.Id] = TableLimit(db) + TablePage;
+
+    private async Task ToggleTable(string tableId)
     {
-        if (!_expandedTables.Remove(tableId)) _expandedTables.Add(tableId);
-        return Task.CompletedTask;
+        if (_expandedTables.Remove(tableId)) return;
+        _expandedTables.Add(tableId);
+        // Les colonnes ne sont pas dans le résumé des tables : on les lit à l'ouverture.
+        var table = _tables.Values.SelectMany(t => t).FirstOrDefault(t => t.Id == tableId);
+        if (table != null && table.Columns.Count == 0)
+        {
+            try
+            {
+                await Cache.EnsureColumnsAsync(table);
+            }
+            catch (HttpRequestException)
+            {
+                // La table s'ouvre vide ; une nouvelle ouverture réessaie.
+                _expandedTables.Remove(tableId);
+            }
+        }
     }
 
     private Task ToggleDomain(string domainId)
@@ -307,14 +336,14 @@
 
     private bool Matches(string name) => name.Contains(_filter!.Trim(), StringComparison.OrdinalIgnoreCase);
 
-    private IEnumerable<DatabaseInfo> VisibleDatabases => !Filtering
+    private IEnumerable<DatabaseView> VisibleDatabases => !Filtering
         ? _databases
         : _databases.Where(d => Matches(d.Name) || (_tables.TryGetValue(d.Id, out var t) && t.Any(x => Matches(x.Name))));
 
-    private IEnumerable<TableInfo> VisibleTables(DatabaseInfo db, TableInfo[] tables) =>
+    private IEnumerable<TableInfo> VisibleTables(DatabaseView db, TableInfo[] tables) =>
         !Filtering || Matches(db.Name) ? tables : tables.Where(t => Matches(t.Name));
 
-    private bool IsDbExpanded(DatabaseInfo db) => _expandedDbs.Contains(db.Id) || (Filtering && VisibleDatabases.Contains(db));
+    private bool IsDbExpanded(DatabaseView db) => _expandedDbs.Contains(db.Id) || (Filtering && VisibleDatabases.Contains(db));
 
     // --- Sélection et repères ---
 
@@ -323,22 +352,22 @@
     private bool IsCurrent(string path) =>
         Workspace.ActiveHref != null && WorkspaceState.Normalize(Workspace.ActiveHref).Split('?')[0] == path;
 
-    private void SelectDb(DatabaseInfo db) => Workspace.Select(new SelectionItem("database", db.Id, db.Id));
+    private void SelectDb(DatabaseView db) => Workspace.Select(new SelectionItem("database", db.Id, db.Id));
 
-    private void SelectTable(DatabaseInfo db, TableInfo table) => Workspace.Select(new SelectionItem("table", table.Id, db.Id, table.Id));
+    private void SelectTable(DatabaseView db, TableInfo table) => Workspace.Select(new SelectionItem("table", table.Id, db.Id, table.Id));
 
-    private void SelectColumn(DatabaseInfo db, TableInfo table, ColumnInfo column) =>
+    private void SelectColumn(DatabaseView db, TableInfo table, ColumnInfo column) =>
         Workspace.Select(new SelectionItem("column", column.Id, db.Id, table.Id));
 
-    private void GoDiagram(DatabaseInfo db) => Navigation.NavigateTo($"/databases/{db.Id}/diagram");
+    private void GoDiagram(DatabaseView db) => Navigation.NavigateTo($"/databases/{db.Id}/diagram");
 
-    private static string DbHref(DatabaseInfo db) => $"/databases/{db.Id}";
+    private static string DbHref(DatabaseView db) => $"/databases/{db.Id}";
 
-    private static string TableHref(DatabaseInfo db, TableInfo table) => $"/databases/{db.Id}/tables/{table.Id}";
+    private static string TableHref(DatabaseView db, TableInfo table) => $"/databases/{db.Id}/tables/{table.Id}";
 
-    private static string ColumnHref(DatabaseInfo db, TableInfo table, ColumnInfo column) => $"/databases/{db.Id}/tables/{table.Id}?column={column.Id}";
+    private static string ColumnHref(DatabaseView db, TableInfo table, ColumnInfo column) => $"/databases/{db.Id}/tables/{table.Id}?column={column.Id}";
 
-    private static string DomainHref(DatabaseInfo db, DomainInfo domain) => $"/databases/{db.Id}/diagram?domain={domain.Id}";
+    private static string DomainHref(DatabaseView db, DomainView domain) => $"/databases/{db.Id}/diagram?domain={domain.Id}";
 
     // --- Clavier ---
 
@@ -407,16 +436,16 @@
         _ => Icons.Material.Filled.TableChart
     };
 
-    private static FavoriteItem FavoriteItemOf(DatabaseInfo db) => new("database", db.Id, db.Name, $"/databases/{db.Id}");
+    private static FavoriteItem FavoriteItemOf(DatabaseView db) => new("database", db.Id, db.Name, $"/databases/{db.Id}");
 
-    private static FavoriteItem FavoriteItemOf(DatabaseInfo db, TableInfo table) =>
+    private static FavoriteItem FavoriteItemOf(DatabaseView db, TableInfo table) =>
         new("table", table.Id, $"{table.Name} ({db.Name})", $"/databases/{db.Id}/tables/{table.Id}");
 
-    private bool FavoriteDb(DatabaseInfo db) => Workspace.ToggleFavorite(FavoriteItemOf(db));
+    private bool FavoriteDb(DatabaseView db) => Workspace.ToggleFavorite(FavoriteItemOf(db));
 
-    private bool FavoriteTable(DatabaseInfo db, TableInfo table) => Workspace.ToggleFavorite(FavoriteItemOf(db, table));
+    private bool FavoriteTable(DatabaseView db, TableInfo table) => Workspace.ToggleFavorite(FavoriteItemOf(db, table));
 
-    private bool FavoriteDomain(DatabaseInfo db, DomainInfo domain) =>
+    private bool FavoriteDomain(DatabaseView db, DomainView domain) =>
         Workspace.ToggleFavorite(new FavoriteItem("domain", domain.Id, $"{domain.Name} ({db.Name})", $"/databases/{db.Id}/diagram?domain={domain.Id}"));
 
     private RenderFragment FavoriteButton(FavoriteItem item) => builder =>
@@ -452,7 +481,7 @@
     }
 
     /// <summary>Une table glissée depuis l'arbre est rangée dans le domaine ; « Annuler » l'en retire.</summary>
-    private async Task DropOnDomainAsync(DatabaseInfo db, DomainInfo domain)
+    private async Task DropOnDomainAsync(DatabaseView db, DomainView domain)
     {
         var dragged = _draggedTable;
         _draggedTable = null;
@@ -487,7 +516,7 @@
         }
     }
 
-    private async Task RemoveFromDomainAsync(DatabaseInfo db, DomainInfo domain, string tableId, string name)
+    private async Task RemoveFromDomainAsync(DatabaseView db, DomainView domain, string tableId, string name)
     {
         var place = domain.Tables.FirstOrDefault(t => t.TableId == tableId);
         try

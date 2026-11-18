@@ -209,6 +209,28 @@ public class ClientTableTabTests : ShellTestBase
     }
 
     [BunitFact]
+    public void The_menu_also_offers_a_native_excel_workbook_and_a_printable_pdf_version()
+    {
+        Override = r => r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath.Contains("/export/")
+            ? r.RequestUri.AbsolutePath.EndsWith("/xlsx") ? new HttpResponseMessage(System.Net.HttpStatusCode.OK) { Content = new ByteArrayContent([80, 75, 3, 4]) } : FakeApi.Json("<html></html>")
+            : null;
+        var page = OpenDatabase();
+        page.Find(".export-menu button").Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(Popovers!.FindAll(".export-xlsx")));
+
+        Popovers!.Find(".export-xlsx").Click();
+        page.WaitForAssertion(() => Assert.Contains(Api.Requests, r => r.RequestUri!.AbsolutePath == "/api/v1/DatabaseInfo/d1/export/xlsx"));
+        var download = Ctx.JSInterop.Invocations.Single(i => i.Identifier == "granitdb.downloadBase64");
+        Assert.Equal("Boutique-documentation.xlsx", download.Arguments[0]);
+        Assert.Equal(Convert.ToBase64String([80, 75, 3, 4]), download.Arguments[2]);
+
+        page.Find(".export-menu button").Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(Popovers!.FindAll(".export-pdf")));
+        Popovers!.Find(".export-pdf").Click();
+        page.WaitForAssertion(() => Assert.Contains(Ctx.JSInterop.Invocations, i => i.Identifier == "granitdb.openPrintable"));
+    }
+
+    [BunitFact]
     public void The_action_row_of_a_database_may_wrap_but_no_button_label_does()
     {
         var page = OpenDatabase();

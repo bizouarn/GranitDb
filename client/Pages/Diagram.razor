@@ -266,14 +266,14 @@
                 {
                     <MudPaper Class="pa-3 mt-3" id="impact">
                         <MudText Typo="Typo.h6">Impact de @Describe(_impact.Root)</MudText>
-                        @if (_impact.Dependents.Length == 0 && _impact.Dependencies.Length == 0)
+                        @if (_impact.Dependents.Count == 0 && _impact.Dependencies.Count == 0)
                         {
                             <MudText>Aucune relation : rien ne dépend de cet élément dans le catalogue, et il ne dépend de rien.</MudText>
                         }
                         <MudGrid>
                             <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.subtitle2" Color="Color.Error">Modifier cet élément peut casser (@_impact.Dependents.Length)</MudText>
-                                @if (_impact.Dependents.Length == 0)
+                                <MudText Typo="Typo.subtitle2" Color="Color.Error">Modifier cet élément peut casser (@_impact.Dependents.Count)</MudText>
+                                @if (_impact.Dependents.Count == 0)
                                 {
                                     <MudText Typo="Typo.body2">Rien ne le référence.</MudText>
                                 }
@@ -285,8 +285,8 @@
                                 </MudList>
                             </MudItem>
                             <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.subtitle2" Color="Color.Info">Dépend de (@_impact.Dependencies.Length)</MudText>
-                                @if (_impact.Dependencies.Length == 0)
+                                <MudText Typo="Typo.subtitle2" Color="Color.Info">Dépend de (@_impact.Dependencies.Count)</MudText>
+                                @if (_impact.Dependencies.Count == 0)
                                 {
                                     <MudText Typo="Typo.body2">Ne référence rien.</MudText>
                                 }
@@ -311,9 +311,9 @@
     /// <summary>Domaine à afficher à l'ouverture (lien depuis l'explorateur ou un favori).</summary>
     [SupplyParameterFromQuery(Name = "domain")] public string? DomainParam { get; set; }
 
-    private DatabaseInfo? _database;
+    private DatabaseView? _database;
     private TableInfo[] _tables = [];
-    private DomainInfo[] _domains = [];
+    private DomainView[] _domains = [];
     private string? _domainId;
     private readonly HashSet<string> _visible = [];
     private ErDiagram _diagram = ErDiagram.Build([]);
@@ -357,12 +357,12 @@
         new("Diagramme", href: null, disabled: true)
     ];
 
-    private DomainInfo? CurrentDomain => _domainId == null ? null : _domains.FirstOrDefault(d => d.Id == _domainId);
+    private DomainView? CurrentDomain => _domainId == null ? null : _domains.FirstOrDefault(d => d.Id == _domainId);
 
     private HashSet<string> Members => CurrentDomain?.Tables.Select(t => t.TableId).ToHashSet() ?? [];
 
     /// <summary>Les domaines dont le nom contient le texte cherché (tous quand la recherche est vide).</summary>
-    private List<DomainInfo> VisibleDomains => string.IsNullOrWhiteSpace(_domainSearch)
+    private List<DomainView> VisibleDomains => string.IsNullOrWhiteSpace(_domainSearch)
         ? _domains.ToList()
         : _domains.Where(d => d.Name.Contains(_domainSearch.Trim(), StringComparison.CurrentCultureIgnoreCase)).ToList();
 
@@ -500,7 +500,7 @@
         ? SaveDomainSettingsAsync(d, hiddenRelations: DomainRelations.Select(r => r.Id).ToHashSet())
         : Task.CompletedTask;
 
-    private async Task SaveDomainSettingsAsync(DomainInfo domain, bool? showNeighbors = null, IEnumerable<string>? hiddenRelations = null)
+    private async Task SaveDomainSettingsAsync(DomainView domain, bool? showNeighbors = null, IEnumerable<string>? hiddenRelations = null)
     {
         try
         {
@@ -599,13 +599,13 @@
         if (e.Key == "Enter") await CreateDomainAsync();
     }
 
-    private void StartRename(DomainInfo domain)
+    private void StartRename(DomainView domain)
     {
         _renaming = domain.Id;
         _renameText = domain.Name;
     }
 
-    private async Task OnRenameKey(KeyboardEventArgs e, DomainInfo domain)
+    private async Task OnRenameKey(KeyboardEventArgs e, DomainView domain)
     {
         if (e.Key == "Escape")
         {
@@ -627,7 +627,7 @@
         }
     }
 
-    private async Task DeleteDomainAsync(DomainInfo domain)
+    private async Task DeleteDomainAsync(DomainView domain)
     {
         try
         {
@@ -654,7 +654,7 @@
         }
     }
 
-    private static string? DomainStyle(DomainInfo domain)
+    private static string? DomainStyle(DomainView domain)
     {
         return string.IsNullOrEmpty(domain.Color) ? null : $"border-left: 4px solid {domain.Color};";
     }
@@ -681,7 +681,7 @@
     ///     Dépose la table accrochée sur un domaine : elle y est rangée et, si on regardait un autre domaine dont elle
     ///     faisait partie, elle en est retirée (un déplacement).
     /// </summary>
-    private async Task DropAsync(DomainInfo target)
+    private async Task DropAsync(DomainView target)
     {
         var tableId = _draggedTable;
         _draggedTable = null;
@@ -723,7 +723,7 @@
         {
             await Api.SaveLayoutAsync(domain.Id, [(node.Id, node.X, node.Y)]);
             var index = domain.Tables.FindIndex(t => t.TableId == node.Id);
-            if (index >= 0) domain.Tables[index] = new DomainTable(node.Id, node.X, node.Y);
+            if (index >= 0) domain.Tables[index] = new DomainTableView { TableId = node.Id, X = node.X, Y = node.Y };
         }
         catch (ApiException ex)
         {
@@ -829,7 +829,7 @@
         _dependencies = Ids(impact?.Dependencies);
     }
 
-    private static HashSet<string> Ids(ImpactNode[]? nodes)
+    private static HashSet<string> Ids(IEnumerable<ImpactNode>? nodes)
     {
         var ids = new HashSet<string>();
         foreach (var node in nodes ?? [])

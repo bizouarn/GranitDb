@@ -178,13 +178,17 @@ table.grid tr:hover td{background:#f8fafb}
 .erd .center .box{stroke:var(--primary800);stroke-width:2}
 .menu-btn{display:none}
 @media(max-width:800px){.layout{flex-direction:column;height:auto}.side{width:100%;max-height:50vh}.content{padding:14px}}
-@media print{.side{display:none}.content{overflow:visible}}
+@media print{.side,.no-print{display:none}.content{overflow:visible}.print-sheet{break-before:page}.print-sheet:first-of-type{break-before:auto}}
+.print-view .side{display:none}.print-view .layout{display:block;height:auto}.print-view .content{overflow:visible;height:auto}
+.print-bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #ccc;padding:10px 0;margin-bottom:12px;display:flex;gap:12px;align-items:center}
+.print-bar button{font:inherit;padding:6px 14px;cursor:pointer}
+.print-link{display:block;margin-top:6px;font-size:12px}
 </style>
 </head>
 <body>
 <div class="layout">
   <nav class="side">
-    <div class="side-head"><a href="#/" id="dbname"></a><small id="dbtype"></small></div>
+    <div class="side-head"><a href="#/" id="dbname"></a><small id="dbtype"></small><a class="print-link" href="#/print">Version imprimable (PDF)</a></div>
     <div class="search"><input id="q" type="search" placeholder="Rechercher une table ou une colonne…" aria-label="Rechercher"></div>
     <div class="tree" id="tree"></div>
   </nav>
@@ -495,9 +499,29 @@ function mark(){
   Array.prototype.forEach.call(tree.querySelectorAll('a'), function(a){ a.classList.toggle('active', a.getAttribute('href') === cur); });
 }
 
+// Version imprimable : toute la documentation à la suite, une table par page. Le PDF s'obtient avec « Enregistrer au format PDF »
+// de la fenêtre d'impression du navigateur.
+function printAll(){
+  var m = el('div');
+  var bar = el('div', {class: 'print-bar no-print'}, [
+    el('button', {type: 'button', text: 'Imprimer / Enregistrer en PDF'}),
+    el('span', {text: D.tables.length + ' table(s) — choisissez « Enregistrer au format PDF » comme imprimante.'}),
+    link('#/', 'Retour à la documentation')
+  ]);
+  bar.firstChild.addEventListener('click', function(){ window.print(); });
+  m.appendChild(bar);
+  var first = el('section', {class: 'print-sheet'}); first.appendChild(home()); m.appendChild(first);
+  D.tables.slice().sort(function(a, b){ return a.name.localeCompare(b.name); }).forEach(function(t){
+    var s = el('section', {class: 'print-sheet'}); s.appendChild(tablePage(t.id)); m.appendChild(s);
+  });
+  return m;
+}
+
 function route(){
   var h = location.hash.replace(/^#\/?/, ''), parts = h.split('/'), main = document.getElementById('main'), page;
-  if (parts[0] === 'table') page = tablePage(parts[1]);
+  document.body.classList.toggle('print-view', parts[0] === 'print');
+  if (parts[0] === 'print') page = printAll();
+  else if (parts[0] === 'table') page = tablePage(parts[1]);
   else if (parts[0] === 'domain') page = domainPage(parts[1]);
   else page = home();
   main.textContent = ''; main.appendChild(page); main.scrollTop = 0;

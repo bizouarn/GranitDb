@@ -103,7 +103,7 @@
 @code {
     private readonly List<BreadcrumbItem> _crumbs = [new("Bases", href: "/"), new("Webhooks", href: null, disabled: true)];
     private WebhookView[] _hooks = [];
-    private DatabaseInfo[] _databases = [];
+    private DatabaseView[] _databases = [];
     private WebhookDelivery[] _deliveries = [];
     private readonly Dictionary<string, WebhookDelivery> _testResult = new();
     private string? _open, _error;

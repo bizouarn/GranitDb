@@ -63,7 +63,7 @@ public class DatabaseImportService(
                 {
                     var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, displayName, ct);
                     var database = sync.Database;
-                    database.Description = description;
+                    database.Description = string.IsNullOrWhiteSpace(description) ? null : description;
                     database.SourcePath = keepFile ? kept = Keep(temp) : null;
                     await repo.UpdateAsync(id, database, ct);
                     return new ImportResult(database, sync);
@@ -157,7 +157,7 @@ public class DatabaseImportService(
         {
             var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, name, ct);
             var database = sync.Database;
-            database.Description = description;
+            database.Description = string.IsNullOrWhiteSpace(description) ? null : description;
             database.SourcePath = full;
             await repo.UpdateAsync(id, database, ct);
             return new ImportResult(database, sync);
@@ -436,6 +436,31 @@ public class DatabaseImportService(
         var final = Path.GetFullPath(Path.Combine(Options.SourcesDirectory, $"{Guid.NewGuid()}.db"));
         File.Copy(temp, final);
         return final;
+    }
+
+    /// <summary>
+    ///     Supprime du dossier des sources les fichiers que plus aucune base ne référence (arrêt brutal entre la copie et
+    ///     l'enregistrement, fichiers temporaires restants). Les fichiers de moins d'une heure sont laissés : un import peut
+    ///     être en cours. Renvoie le nombre de fichiers supprimés.
+    /// </summary>
+    public async Task<int> CleanOrphanFilesAsync(CancellationToken ct = default)
+    {
+        var dir = Options.SourcesDirectory;
+        if (!Directory.Exists(dir)) return 0;
+        var referenced = (await repository.GetAllAsync<DatabaseInfo>(ct))
+            .Select(d => d.SourcePath).Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => Path.GetFullPath(p!)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var limit = DateTime.UtcNow.AddHours(-1);
+        var removed = 0;
+        foreach (var file in Directory.EnumerateFiles(dir))
+        {
+            var extension = Path.GetExtension(file);
+            if (extension is not (".db" or ".tmp")) continue;
+            if (referenced.Contains(Path.GetFullPath(file)) || File.GetLastWriteTimeUtc(file) > limit) continue;
+            DeleteQuietly(file);
+            removed++;
+        }
+        return removed;
     }
 
     private static void DeleteQuietly(string path)

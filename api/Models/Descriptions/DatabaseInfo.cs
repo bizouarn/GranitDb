@@ -1,12 +1,11 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 using GranitDB.API.Models.Descriptions.Base;
-using GranitDb.Interfaces;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Databases")]
-public class DatabaseInfo : InfoBase, IDatabaseInfo
+public class DatabaseInfo : InfoBase
 {
     public string Name { get; set; } = "";
 

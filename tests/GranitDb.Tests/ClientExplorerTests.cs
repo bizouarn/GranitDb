@@ -137,7 +137,7 @@ public class ClientExplorerTests : ShellTestBase
 
         page.WaitForAssertion(() => Assert.Equal(["Boutique"], page.FindAll("[data-db]").Select(n => n.GetAttribute("data-db")!).ToArray()));
         Assert.Equal(["orders"], page.FindAll("[data-table]").Select(n => n.GetAttribute("data-table")!).ToArray());
-        Assert.True(WasSent(HttpMethod.Get, "/api/v1/TableInfo/database/d2")); // RH aussi a été lu pour chercher
+        Assert.True(WasSent(HttpMethod.Get, "/api/v1/TableInfo/database/d2?summary=true")); // RH aussi a été lu pour chercher
         Assert.Empty(page.FindAll("[data-domain]")); // pas de collections pendant une recherche
     }
 
@@ -332,12 +332,12 @@ public class ClientExplorerTests : ShellTestBase
     {
         var page = Open();
         ExpandDb(page, "Boutique");
-        var tables = Requests(HttpMethod.Get, "/api/v1/TableInfo/database/d1").Count();
+        var tables = Requests(HttpMethod.Get, "/api/v1/TableInfo/database/d1?summary=true").Count();
         var list = Requests(HttpMethod.Get, "/api/v1/DatabaseInfo").Count();
 
         State.NotifyCatalogChanged("d2"); // une base fermée : rien à relire
         State.NotifyCatalogChanged("d1");
-        page.WaitForAssertion(() => Assert.Equal(tables + 1, Requests(HttpMethod.Get, "/api/v1/TableInfo/database/d1").Count()));
+        page.WaitForAssertion(() => Assert.Equal(tables + 1, Requests(HttpMethod.Get, "/api/v1/TableInfo/database/d1?summary=true").Count()));
         Assert.Equal(list, Requests(HttpMethod.Get, "/api/v1/DatabaseInfo").Count());
 
         State.NotifyCatalogChanged();
@@ -385,5 +385,47 @@ public class ClientExplorerTests : ShellTestBase
         page.Find("[data-db='Boutique'] button[aria-label='Diagramme de Boutique']").Click();
 
         Assert.EndsWith("/databases/d1/diagram", Nav.Uri);
+    }
+
+    [BunitFact]
+    public void The_explorer_asks_for_the_light_summary_and_reads_the_columns_of_a_table_only_when_it_is_opened()
+    {
+        Override = r => r.RequestUri!.AbsolutePath switch
+        {
+            "/api/v1/TableInfo/database/d1" => FakeApi.Json("""[{"id":"t1","name":"orders","tableType":"Table","databaseId":"d1","columns":[]}]"""),
+            "/api/v1/TableInfo/t1/columns" => FakeApi.Json("""[{"id":"c1","name":"id","dataType":"INTEGER","isPrimaryKey":true,"position":0},{"id":"c2","name":"total","dataType":"REAL","position":1}]"""),
+            _ => null
+        };
+        var page = Open();
+
+        ExpandDb(page, "Boutique");
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("[data-table='orders']")));
+        Assert.Contains(Api.Requests, r => r.RequestUri!.PathAndQuery == "/api/v1/TableInfo/database/d1?summary=true");
+        Assert.DoesNotContain(Api.Requests, r => r.RequestUri!.AbsolutePath.EndsWith("/columns"));
+
+        page.Find("[data-table='orders'] button.chev").Click();
+
+        page.WaitForAssertion(() => Assert.Equal(["id", "total"], page.FindAll("[data-column]").Select(n => n.GetAttribute("data-column")!).ToArray()));
+        page.Find("[data-table='orders'] button.chev").Click(); // replier
+        page.Find("[data-table='orders'] button.chev").Click(); // rouvrir : pas de seconde lecture
+        Assert.Single(Api.Requests.Where(r => r.RequestUri!.AbsolutePath.EndsWith("/columns")));
+    }
+
+    [BunitFact]
+    public void A_database_with_hundreds_of_tables_shows_them_by_pages()
+    {
+        var tables = string.Join(",", Enumerable.Range(0, 650).Select(i => $$"""{"id":"t{{i}}","name":"table_{{i:000}}","tableType":"Table","databaseId":"d1","columns":[]}"""));
+        Override = r => r.RequestUri!.AbsolutePath == "/api/v1/TableInfo/database/d1" ? FakeApi.Json($"[{tables}]") : null;
+        var page = Open();
+
+        ExpandDb(page, "Boutique");
+
+        page.WaitForAssertion(() => Assert.Equal(300, page.FindAll("[data-table]").Count));
+        Assert.Contains("300 tables affichées sur 650", page.Markup);
+        page.Find(".show-more-tables").Click();
+        Assert.Equal(600, page.FindAll("[data-table]").Count);
+        page.Find(".show-more-tables").Click();
+        Assert.Equal(650, page.FindAll("[data-table]").Count);
+        Assert.Empty(page.FindAll(".show-more-tables"));
     }
 }

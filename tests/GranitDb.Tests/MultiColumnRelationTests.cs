@@ -114,6 +114,39 @@ public sealed class MultiColumnRelationTests : IDisposable
     }
 
     [Fact]
+    public async Task The_excel_export_is_a_real_workbook_with_one_row_per_column_and_one_per_composite_relation()
+    {
+        var db = await ImportAsync(CompositeDb());
+        var response = await _client.GetAsync($"{V1}/DatabaseInfo/{db}/export/xlsx");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", response.Content.Headers.ContentType!.MediaType);
+        using var zip = new System.IO.Compression.ZipArchive(await response.Content.ReadAsStreamAsync());
+        string Read(string name) { using var r = new StreamReader(zip.GetEntry(name)!.Open()); return r.ReadToEnd(); }
+        var workbook = Read("xl/workbook.xml");
+        foreach (var sheet in new[] { "Tables", "Colonnes", "Relations", "Index" }) Assert.Contains($"name=\"{sheet}\"", workbook);
+        var columns = Read("xl/worksheets/sheet2.xml");
+        Assert.Contains("<t xml:space=\"preserve\">pa</t>", columns);
+        Assert.Equal(1 + 7, System.Text.RegularExpressions.Regex.Matches(columns, "<row ").Count); // en-tête + 1 + 2 + 4 colonnes
+        var relations = Read("xl/worksheets/sheet3.xml");
+        Assert.Contains("pa, pb", relations); // la clé composite tient sur une seule ligne
+        Assert.Equal(1 + 2, System.Text.RegularExpressions.Regex.Matches(relations, "<row ").Count);
+        Assert.DoesNotContain("<f>", columns); // jamais de formule
+    }
+
+    [Fact]
+    public async Task The_html_export_has_a_printable_version_for_pdf()
+    {
+        var db = await ImportAsync(CompositeDb());
+
+        var html = await _client.GetStringAsync($"{V1}/DatabaseInfo/{db}/export/html");
+
+        Assert.Contains("function printAll", html);
+        Assert.Contains("href=\"#/print\"", html);
+        Assert.Contains("@media print", html);
+    }
+
+    [Fact]
     public async Task Documentation_import_creates_a_multi_column_relation_and_hides_it_unless_drawn()
     {
         var db = await ImportAsync(CompositeDb(declared: false));

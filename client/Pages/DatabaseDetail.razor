@@ -69,6 +69,8 @@
                     <MudMenuItem OnClick="ExportHtmlAsync" Class="export-html">HTML autonome (documentation complète)</MudMenuItem>
                     <MudMenuItem OnClick="ExportMarkdownAsync" Class="export-markdown">Markdown</MudMenuItem>
                     <MudMenuItem OnClick="ExportCsvAsync" Class="export-csv">CSV (dictionnaire des colonnes)</MudMenuItem>
+                    <MudMenuItem OnClick="ExportXlsxAsync" Class="export-xlsx">Excel (.xlsx : tables, colonnes, relations, index)</MudMenuItem>
+                    <MudMenuItem OnClick="ExportPdfAsync" Class="export-pdf">PDF (version imprimable à enregistrer)</MudMenuItem>
                 </MudMenu>
                 <DeleteDatabaseButton Database="_database" Size="Size.Small" />
             </div>
@@ -387,11 +389,11 @@
     /// <summary>Colonne mise en évidence (lien depuis l'explorateur ou la palette).</summary>
     [SupplyParameterFromQuery(Name = "column")] public string? ColumnId { get; set; }
 
-    private DatabaseInfo? _database;
+    private DatabaseView? _database;
     private TableInfo[] _tables = [];
     private Dictionary<string, string> _columnLabels = new();
     private TagLinkView[] _tagLinks = [];
-    private DomainInfo[] _domains = [];
+    private DomainView[] _domains = [];
     private CompletenessReport? _completeness;
     private SyncPreview? _preview;
     private readonly HashSet<string> _open = [];
@@ -419,8 +421,8 @@
     // Index des compléments, reconstruits seulement quand le tableau source est remplacé (évite un balayage par table).
     private TagLinkView[]? _tagSource;
     private ILookup<(string, string), TagLinkView> _tagIndex = Array.Empty<TagLinkView>().ToLookup(l => (l.EntityType, l.EntityId));
-    private DomainInfo[]? _domainSource;
-    private ILookup<string, DomainInfo> _domainIndex = Array.Empty<DomainInfo>().ToLookup(d => d.Id);
+    private DomainView[]? _domainSource;
+    private ILookup<string, DomainView> _domainIndex = Array.Empty<DomainView>().ToLookup(d => d.Id);
     private CompletenessReport? _completenessSource;
     private Dictionary<string, TableCompleteness> _completenessIndex = new();
     private bool _loading = true;
@@ -591,7 +593,7 @@
         return _tagIndex[(type, id)].ToArray();
     }
 
-    private IEnumerable<DomainInfo> DomainsOf(string tableId)
+    private IEnumerable<DomainView> DomainsOf(string tableId)
     {
         if (!ReferenceEquals(_domainSource, _domains))
         {
@@ -881,6 +883,33 @@
     private Task ExportMarkdownAsync() => ExportFileAsync("markdown", "md", "text/markdown");
 
     private Task ExportCsvAsync() => ExportFileAsync("csv", "csv", "text/csv");
+
+    private async Task ExportXlsxAsync()
+    {
+        try
+        {
+            var content = await Api.ExportXlsxBase64Async(_database!.Id);
+            await JS.InvokeVoidAsync("granitdb.downloadBase64", $"{_database.Name}-documentation.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", content);
+        }
+        catch (Exception e) when (e is ApiException or JSException or HttpRequestException)
+        {
+            Notifier.Show("Export impossible : " + e.Message);
+        }
+    }
+
+    /// <summary>PDF : on ouvre la documentation HTML en version imprimable ; « Enregistrer au format PDF » vient du navigateur.</summary>
+    private async Task ExportPdfAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("granitdb.openPrintable", await Api.ExportAsync(_database!.Id, "html"));
+        }
+        catch (Exception e) when (e is ApiException or JSException or HttpRequestException)
+        {
+            Notifier.Show("Export impossible : " + e.Message);
+        }
+    }
 
     private async Task ExportFileAsync(string format, string extension, string mime)
     {

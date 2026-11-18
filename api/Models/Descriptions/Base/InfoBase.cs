@@ -1,8 +1,6 @@
-using GranitDb.Interfaces;
-
 namespace GranitDB.API.Models.Descriptions.Base;
 
-public class InfoBase : IInfoBase
+public class InfoBase
 {
     public string Id { get; set; } = "";
 

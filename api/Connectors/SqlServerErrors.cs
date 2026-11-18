@@ -27,6 +27,7 @@ public static class SqlServerErrors
             e.Message.Contains("réseau", StringComparison.OrdinalIgnoreCase) ||
             e.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase))
             return "Serveur injoignable ou sans réponse : vérifiez le nom, le port, le pare-feu et que le serveur accepte les connexions TCP.";
-        return $"Connexion SQL Server impossible : {e.Message}";
+        // Le message du pilote peut citer le serveur ou la base : il reste dans les journaux, pas dans la réponse.
+        return $"Connexion SQL Server impossible (erreur {e.Number}) : consultez le journal de l'API pour le détail.";
     }
 }

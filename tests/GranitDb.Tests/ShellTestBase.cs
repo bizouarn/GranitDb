@@ -81,7 +81,10 @@ public abstract class ShellTestBase : IAsyncLifetime
     {
         if (Override(request) is { } custom) return custom;
         var path = request.RequestUri!.AbsolutePath;
-        if (request.Method != HttpMethod.Get) return FakeApi.Json("{}");
+        // Comme l'API : une création (POST sur la collection) répond 201, les autres écritures 200.
+        if (request.Method != HttpMethod.Get)
+            return FakeApi.Json("{}", request.Method == HttpMethod.Post && System.Text.RegularExpressions.Regex.IsMatch(path,
+                "^/api/v1/(DomainInfo|RelationInfo|TagInfo|Webhooks|ColumnInfo|TableInfo|DatabaseInfo)$") ? HttpStatusCode.Created : HttpStatusCode.OK);
         return path switch
         {
             "/api/v1/DatabaseInfo" => FakeApi.Json(Databases),

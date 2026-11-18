@@ -1,11 +1,10 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using GranitDB.API.Models.Descriptions.Base;
-using GranitDb.Interfaces;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Columns")]
-public class ColumnInfo : InfoBase, IColumnInfo
+public class ColumnInfo : InfoBase
 {
     public string DatabaseId { get; set; } = ""; // Foreign key to DatabaseInfo
 

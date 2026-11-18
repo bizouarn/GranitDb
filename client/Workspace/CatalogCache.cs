@@ -12,7 +12,8 @@ public sealed class CatalogCache : IDisposable
     private readonly ApiClient _api;
     private readonly WorkspaceState _workspace;
     private readonly Dictionary<string, Task<TableInfo[]>> _tables = [];
-    private readonly Dictionary<string, Task<DomainInfo[]>> _domains = [];
+    private readonly Dictionary<string, Task<DomainView[]>> _domains = [];
+    private readonly Dictionary<string, Task<ColumnInfo[]>> _columns = [];
 
     public CatalogCache(ApiClient api, WorkspaceState workspace)
     {
@@ -36,7 +37,7 @@ public sealed class CatalogCache : IDisposable
         }
     }
 
-    public Task<DomainInfo[]> GetDomainsAsync(string databaseId)
+    public Task<DomainView[]> GetDomainsAsync(string databaseId)
     {
         lock (_domains)
         {
@@ -46,9 +47,26 @@ public sealed class CatalogCache : IDisposable
         }
     }
 
+    /// <summary>
+    ///     Donne à une table du résumé ses colonnes (lues une fois, à la demande) ; sans effet si elle les a déjà.
+    ///     Évite de charger les colonnes des centaines de tables d'une grosse base pour n'en montrer que quelques-unes.
+    /// </summary>
+    public async Task EnsureColumnsAsync(TableInfo table)
+    {
+        if (table.Columns.Count > 0) return;
+        Task<ColumnInfo[]> task;
+        lock (_columns)
+        {
+            if (!_columns.TryGetValue(table.Id, out task!))
+                _columns[table.Id] = task = _api.GetColumnsAsync(table.Id);
+        }
+
+        table.Columns = (await task).OrderBy(c => c.Position).ToList();
+    }
+
     private async Task<TableInfo[]> LoadTablesAsync(string databaseId)
     {
-        return (await _api.GetTablesAsync(databaseId)).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        return (await _api.GetTableSummariesAsync(databaseId)).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
     }
 
     /// <summary>Oublie ce qui est connu d'une base (de toutes si <c>null</c>) : la prochaine lecture sera fraîche.</summary>
@@ -58,6 +76,11 @@ public sealed class CatalogCache : IDisposable
         {
             if (databaseId == null) _tables.Clear();
             else _tables.Remove(databaseId);
+        }
+
+        lock (_columns)
+        {
+            _columns.Clear();
         }
 
         lock (_domains)

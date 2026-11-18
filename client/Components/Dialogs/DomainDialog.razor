@@ -103,10 +103,10 @@
     [Parameter, EditorRequired] public TableInfo[] Tables { get; set; } = [];
 
     /// <summary>Les domaines de la base, pour refuser un nom déjà pris.</summary>
-    [Parameter] public DomainInfo[] Domains { get; set; } = [];
+    [Parameter] public DomainView[] Domains { get; set; } = [];
 
     /// <summary>Le domaine à modifier ; absent : un nouveau domaine.</summary>
-    [Parameter] public DomainInfo? Existing { get; set; }
+    [Parameter] public DomainView? Existing { get; set; }
 
     /// <summary>Tables proposées d'office à la création (par exemple celles déjà cochées dans le diagramme).</summary>
     [Parameter] public IEnumerable<string>? InitialTables { get; set; }

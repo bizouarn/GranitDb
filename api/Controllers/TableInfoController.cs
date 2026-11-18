@@ -49,11 +49,11 @@ public class TableInfoController(ICatalogRepository repository) : BaseDbInfoCont
 
     /// <summary>
     ///     Les tables d'une base, avec colonnes et relations. Filtres <c>name</c> et <c>tableType</c> ; pagination
-    ///     facultative (<c>skip</c>/<c>take</c>, total dans <c>X-Total-Count</c>). 404 si la base n'a aucune table.
+    ///     facultative (<c>skip</c>/<c>take</c>, total dans <c>X-Total-Count</c>) ; <c>summary=true</c> : sans colonnes ni relations. 404 si la base n'a aucune table.
     /// </summary>
     [HttpGet("database/{databaseId}")]
     public async Task<IActionResult> GetTablesByDatabaseId(string databaseId, [FromQuery] int? skip,
-        [FromQuery] int? take, CancellationToken ct)
+        [FromQuery] int? take, [FromQuery] bool summary, CancellationToken ct)
     {
         var filters = (await ReadAllFiltersAsync(ct)).Where(f => f.Property != nameof(TableInfo.DatabaseId)).ToList();
         filters.Add(new CatalogFilter(nameof(TableInfo.DatabaseId), databaseId));
@@ -76,7 +76,9 @@ public class TableInfoController(ICatalogRepository repository) : BaseDbInfoCont
         // Sans filtre ni page, une base sans table est « introuvable » ; une page vide au-delà de la fin reste vide.
         if (tables.Count == 0 && skip is null or 0 && filters.Count == 1)
             return NotFound();
-        await FillAsync(tables, ct);
+        // Résumé : noms et types seulement, sans colonnes, index ni relations (explorateur, panneau de détail) ; les colonnes
+        // d'une table se lisent à l'ouverture (<c>{id}/columns</c>).
+        if (!summary) await FillAsync(tables, ct);
         return Ok(tables);
     }
 

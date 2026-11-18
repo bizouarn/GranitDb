@@ -4,10 +4,8 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY client/GranitDb.Client.csproj client/
-COPY interfaces/GranitDb.Interfaces.csproj interfaces/
 RUN dotnet restore client/GranitDb.Client.csproj
 COPY client/ client/
-COPY interfaces/ interfaces/
 RUN dotnet publish client/GranitDb.Client.csproj -c Release -o /app/publish
 
 FROM nginx:alpine

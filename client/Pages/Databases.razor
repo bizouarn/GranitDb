@@ -104,7 +104,7 @@
 
     private const int PageSize = 12;
 
-    private DatabaseInfo[] _databases = [];
+    private DatabaseView[] _databases = [];
     private int _page = 1;
     private int _pageCount = 1;
     private bool _loading = true;
@@ -112,7 +112,7 @@
     private string? _error;
     private string? _loadError;
 
-    private Capabilities _capabilities = new(false, false);
+    private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false };
 
     protected override async Task OnInitializedAsync()
     {

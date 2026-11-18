@@ -16,7 +16,6 @@ Catalogue de métadonnées de bases de données : on décrit bases, tables, colo
 |---|---|
 | `api/` | API ASP.NET Core (contrôleurs, accès au catalogue Dapper, connecteurs de sources, migrations) |
 | `client/` | Interface Blazor WebAssembly + MudBlazor (PWA) |
-| `interfaces/` | Interfaces `I*Info` partagées |
 | `tests/GranitDb.Tests` | Tests xUnit (API, synchronisation, pages bUnit) |
 | `work-doc/` | État des lieux et feuille de route |
 

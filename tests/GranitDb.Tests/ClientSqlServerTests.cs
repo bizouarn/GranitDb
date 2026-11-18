@@ -11,7 +11,7 @@ namespace GranitDb.Tests;
 /// <summary>Client HTTP : capacités et connexion à un serveur SQL Server.</summary>
 public class ClientSqlServerApiTests
 {
-    private static GranitDb.Client.Models.SqlServerConnection Connection() => new()
+    private static GranitDb.Client.Models.SqlServerConnectionInput Connection() => new()
     {
         Server = "srv", Port = 1444, Database = "Boutique", User = "lecteur", Password = "s3cret", Schemas = ["dbo"], Name = "Distante"
     };
@@ -68,11 +68,11 @@ public class ClientSqlServerApiTests
     {
         var api = new FakeApi
         {
-            Respond = _ => FakeApi.Json("""{"database":{"id":"d5","name":"Distante","type":"SqlServer","canResync":true,"sourceLabel":"srv:1444 / Boutique"},"sync":{"tablesAdded":3,"columnsAdded":9}}""", HttpStatusCode.Created)
+            Respond = r => FakeApi.Json("""{"database":{"id":"d5","name":"Distante","type":"SqlServer","canResync":true,"sourceLabel":"srv:1444 / Boutique"},"sync":{"tablesAdded":3,"columnsAdded":9}}""", r.Method == HttpMethod.Post ? HttpStatusCode.Created : HttpStatusCode.OK)
         };
 
         var imported = await api.Client.ImportSqlServerAsync(Connection());
-        await api.Client.UpdateSqlServerConnectionAsync("a/b c", Connection());
+        await api.Client.UpdateSqlServerConnectionInputAsync("a/b c", Connection());
 
         Assert.Equal("d5", imported.Database.Id);
         Assert.True(imported.Database.CanResync);
@@ -103,7 +103,7 @@ public class ClientConnectSqlServerTests : ShellTestBase
             if (path == "/api/v1/Capabilities") return FakeApi.Json($$"""{"allowSqlServerSources":{{(_enabled ? "true" : "false")}},"allowLocalPaths":false}""");
             if (r.Method == HttpMethod.Post && path == "/api/v1/import/sqlserver/test") return FakeApi.Json(_testResult);
             if (path.StartsWith("/api/v1/import/sqlserver") && r.Method != HttpMethod.Get)
-                return _importResponse ?? FakeApi.Json("""{"database":{"id":"d5","name":"Boutique","type":"SqlServer","canResync":true},"sync":{"tablesAdded":3,"tablesRemoved":1,"columnsAdded":9}}""", HttpStatusCode.Created);
+                return _importResponse ?? FakeApi.Json("""{"database":{"id":"d5","name":"Boutique","type":"SqlServer","canResync":true},"sync":{"tablesAdded":3,"tablesRemoved":1,"columnsAdded":9}}""", r.Method == HttpMethod.Post ? HttpStatusCode.Created : HttpStatusCode.OK);
             return null;
         };
     }

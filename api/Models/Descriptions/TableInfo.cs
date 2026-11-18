@@ -1,11 +1,10 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using GranitDB.API.Models.Descriptions.Base;
-using GranitDb.Interfaces;
 
 namespace GranitDB.API.Models.Descriptions;
 
 [Table("Tables")]
-public class TableInfo : InfoBase, ITableInfo
+public class TableInfo : InfoBase
 {
     public string Name { get; set; } = "";
 
@@ -18,8 +17,4 @@ public class TableInfo : InfoBase, ITableInfo
     [NotMapped] public List<ColumnInfo> Columns { get; set; } = [];
 
     [NotMapped] public List<IndexInfo> Indexes { get; set; } = [];
-
-    IReadOnlyList<IRelationInfo> ITableInfo.Relations => Relations;
-    IReadOnlyList<IColumnInfo> ITableInfo.Columns => Columns;
-    IReadOnlyList<IIndexInfo> ITableInfo.Indexes => Indexes;
 }

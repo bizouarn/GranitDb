@@ -16,7 +16,7 @@ Le README ne contient que le titre. L'intention ci-dessus est déduite du code.
 |---|---|---|
 | `api/` | ASP.NET Core 8, Dapper.Contrib, Swashbuckle, `Gabi.Base` | API REST + synchronisation du schéma |
 | `client/` | Blazor WASM 8, MudBlazor 8.3 | Interface (PWA) |
-| `interfaces/` | net10.0 | Interfaces partagées `I*Info` |
+| `interfaces/` | — | Supprimé (2026-11-18) : plus aucune interface n'était utilisée comme type ; le contrat client/API passe par OpenAPI |
 | `InitV1.sql` | T-SQL | Schéma du catalogue |
 | `WebApp/` | — | Dossier vide, non suivi par git |
 
@@ -89,4 +89,4 @@ Historique : 5 commits (`first commit`, `Init API`, `Add API object CRUD`, `Init
 - Cible produit : outil interne d'équipe ou service multi-tenant avec bases « publiques » (`IsPublic`) ?
 - Quels moteurs supporter ? Seul SQL Server est implémenté ; `Type` mentionne PostgreSQL/MySQL et un contrôleur d'upload SQLite existe.
 - Les descriptions sont-elles éditées uniquement dans le catalogue, ou aussi réécrites vers la base source ?
-- Conserver le projet `interfaces` partagé ou générer un client typé depuis OpenAPI ?
+- ~~Conserver le projet `interfaces` partagé ou générer un client typé depuis OpenAPI ?~~ Tranché : client généré, projet `interfaces` supprimé.

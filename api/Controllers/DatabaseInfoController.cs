@@ -48,6 +48,15 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
         return snapshot == null ? NotFound() : File(System.Text.Encoding.UTF8.GetBytes(DocumentationTextExporters.ToCsv(snapshot)), "text/csv; charset=utf-8", "colonnes.csv");
     }
 
+    /// <summary>Documentation en classeur Excel natif (.xlsx) : onglets Tables, Colonnes, Relations et Index.</summary>
+    [HttpGet("{id}/export/xlsx")]
+    public async Task<IActionResult> ExportXlsx(string id, CancellationToken ct)
+    {
+        var snapshot = await HtmlDocumentationExporter.LoadAsync(repository, id, ct);
+        return snapshot == null ? NotFound() : File(XlsxExporter.ToXlsx(snapshot),
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "documentation.xlsx");
+    }
+
     /// <summary>Relit la source conservée (fichier SQLite, connexion SQL Server enregistrée) et met le catalogue à jour.</summary>
     [HttpPost("{id}/sync")]
     public async Task<IActionResult> Sync(string id, CancellationToken ct)
