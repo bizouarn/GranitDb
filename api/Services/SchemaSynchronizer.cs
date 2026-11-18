@@ -150,13 +150,18 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
         }
 
         var relationsCreated = 0;
-        foreach (var fk in schema.ForeignKeys)
+        // Une clé composite (même Constraint) donne une seule relation : sa première paire, puis les suivantes à part.
+        foreach (var group in schema.ForeignKeys.GroupBy(fk => fk.Constraint == null ? (object)fk : (fk.Table, fk.Constraint)))
         {
-            if (!columnIds.TryGetValue((fk.RefTable, fk.RefColumn), out var firstId) ||
-                !columnIds.TryGetValue((fk.Table, fk.Column), out var secondId))
-                continue;
+            var pairs = group.Select(fk => columnIds.TryGetValue((fk.RefTable, fk.RefColumn), out var first) &&
+                                           columnIds.TryGetValue((fk.Table, fk.Column), out var second)
+                    ? (First: first, Second: second)
+                    : ((string First, string Second)?)null)
+                .Where(p => p != null).Select(p => p!.Value).ToList();
+            if (pairs.Count == 0) continue;
+            var (firstId, secondId) = pairs[0];
             keptEdits.Remove((firstId, secondId), out var previous); // une seule fois : les doublons n'ont pas le même Id
-            await repository.CreateAsync(new RelationInfo
+            var relation = await repository.CreateAsync(new RelationInfo
             {
                 Id = previous?.Id ?? "",
                 FirstId = firstId,
@@ -165,6 +170,11 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
                 Description = previous?.Description,
                 MetaInfo = RelationInfo.AutoMarker
             }, ct);
+            for (var i = 1; i < pairs.Count; i++)
+                await repository.CreateAsync(new RelationColumnInfo
+                {
+                    RelationId = relation.Id, FirstId = pairs[i].First, SecondId = pairs[i].Second, Position = i
+                }, ct);
             relationsCreated++;
         }
 

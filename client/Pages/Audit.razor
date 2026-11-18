@@ -1,0 +1,149 @@
+@page "/audit"
+@using GranitDb.Client.api
+@using GranitDb.Client.Components
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+
+<PageTitle>Journal d'audit</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <MudText Typo="Typo.h4" Class="mb-1">Journal d'audit</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+        Qui a modifié quoi et quand : chaque requête d'écriture et chaque export, du plus récent au plus ancien. Le contenu des requêtes n'est jamais gardé.
+    </MudText>
+
+    @if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
+    }
+
+    <MudPaper Class="pa-3 mb-3 audit-filters" Outlined="true">
+        <form @onsubmit="ApplyAsync" @onsubmit:preventDefault="true">
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                <label class="native-select"><span class="native-select-label">Auteur</span>
+                    <input class="audit-actor" type="text" @bind="_actor" @bind:event="oninput" /></label>
+                <NativeSelect Label="Méthode" Value="@_method" ValueChanged="@(v => _method = v)" Class="audit-method">
+                    <option value="">Toutes</option>
+                    @foreach (var method in Methods)
+                    {
+                        <option value="@method">@method</option>
+                    }
+                </NativeSelect>
+                <label class="native-select"><span class="native-select-label">Code</span>
+                    <input class="audit-status" type="number" min="100" max="599" @bind="_status" @bind:event="oninput" /></label>
+                <label class="native-select"><span class="native-select-label">Ressource</span>
+                    <input class="audit-controller" type="text" placeholder="DatabaseInfo…" @bind="_controller" @bind:event="oninput" /></label>
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="audit-apply">Filtrer</MudButton>
+                <MudButton Size="Size.Small" OnClick="ResetAsync" Class="audit-reset">Effacer</MudButton>
+            </MudStack>
+        </form>
+    </MudPaper>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_page.Items.Length == 0)
+    {
+        <MudText Typo="Typo.body2" Class="audit-empty" Style="color: var(--mud-palette-text-secondary)">Aucune entrée : ni modification ni export ne correspond. Effacez les filtres, ou modifiez une description pour voir apparaître la première ligne.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true" Class="audit-table">
+            <thead>
+            <tr><th>Date (UTC)</th><th>Auteur</th><th>Méthode</th><th>Chemin</th><th>Code</th><th>Élément</th><th>IP</th></tr>
+            </thead>
+            <tbody>
+            @foreach (var entry in _page.Items)
+            {
+                <tr data-audit="@entry.Id">
+                    <td>@entry.At.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                    <td>@(entry.Actor ?? "—")</td>
+                    <td>@entry.Method</td>
+                    <td class="audit-path">@entry.Path</td>
+                    <td><MudChip T="string" Size="Size.Small" Color="@StatusColor(entry.Status)">@entry.Status</MudChip></td>
+                    <td>@(entry.EntityId ?? "")</td>
+                    <td>@(entry.Ip ?? "")</td>
+                </tr>
+            }
+            </tbody>
+        </MudSimpleTable>
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+            <MudButton Size="Size.Small" Disabled="@(_skip == 0)" OnClick="PreviousAsync" Class="audit-previous">Précédent</MudButton>
+            <MudText Typo="Typo.body2" Class="audit-range">@(_skip + 1)–@(_skip + _page.Items.Length) sur @_page.Total</MudText>
+            <MudButton Size="Size.Small" Disabled="@(_skip + _page.Items.Length >= _page.Total)" OnClick="NextAsync" Class="audit-next">Suivant</MudButton>
+            <MudSpacer />
+            <MudButton Size="Size.Small" OnClick="LoadAsync" StartIcon="@Icons.Material.Filled.Refresh" Class="audit-refresh">Actualiser</MudButton>
+        </MudStack>
+    }
+</MudContainer>
+
+@code {
+    private const int PageSize = 50;
+    private static readonly string[] Methods = ["POST", "PUT", "PATCH", "DELETE", "GET"];
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Bases", href: "/"), new("Journal d'audit", href: null, disabled: true)];
+    private Page<AuditEntry> _page = new([], 0);
+    private string? _actor, _method, _controller;
+    private int? _status;
+    private int _skip;
+    private string? _error;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Workspace.Describe(Navigation.Uri, "Journal d'audit");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _page = await Api.GetAuditAsync(new AuditFilter(_actor, _method, _status, _controller), _skip, PageSize);
+            _error = null;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Le journal n'a pas pu être lu : l'API ne répond pas.";
+        }
+
+        _loading = false;
+    }
+
+    private Task ApplyAsync()
+    {
+        _skip = 0;
+        return LoadAsync();
+    }
+
+    private Task ResetAsync()
+    {
+        _actor = _method = _controller = null;
+        _status = null;
+        return ApplyAsync();
+    }
+
+    private Task PreviousAsync()
+    {
+        _skip = Math.Max(0, _skip - PageSize);
+        return LoadAsync();
+    }
+
+    private Task NextAsync()
+    {
+        _skip += PageSize;
+        return LoadAsync();
+    }
+
+    private static Color StatusColor(int status) => status >= 500 ? Color.Error : status >= 400 ? Color.Warning : Color.Success;
+}

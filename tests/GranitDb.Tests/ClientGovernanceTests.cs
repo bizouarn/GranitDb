@@ -181,6 +181,9 @@ public class ClientDetailGovernanceTests : IAsyncLifetime
     private string _database = """{"id":"db","name":"Boutique","type":"Sqlite","description":"Ma boutique","canResync":true}""";
     private string _preview = """{"changes":[],"hasChanges":false,"losesDocumentation":0}""";
 
+    /// <summary>Le fournisseur de fenêtres : le contenu d'une fenêtre ouverte y est rendu, pas dans la page.</summary>
+    private readonly IRenderedComponent<MudBlazor.MudDialogProvider> _dialogs;
+
     public ClientDetailGovernanceTests()
     {
         _ctx.JSInterop.Mode = JSRuntimeMode.Loose;
@@ -188,6 +191,7 @@ public class ClientDetailGovernanceTests : IAsyncLifetime
         _ctx.Services.AddGranitWorkspace();
         _ctx.Services.AddScoped(_ => _api.Client);
         _ctx.Render<MudBlazor.MudPopoverProvider>();
+        _dialogs = _ctx.Render<MudBlazor.MudDialogProvider>();
         _api.Respond = Serve;
     }
 
@@ -529,42 +533,124 @@ public class ClientDetailGovernanceTests : IAsyncLifetime
         Assert.Contains("customers.id → orders.customer_id (One-to-One)", page.Find("#t-t0 [data-relation='r1']").TextContent);
     }
 
-    [BunitFact]
-    public void A_manual_relation_is_added_from_a_column_of_the_table_to_a_referenced_column()
+    private void OpenRelationDialog(IRenderedComponent<DatabaseDetail> page)
     {
-        var page = Open();
-
         page.Find("#t-t1 button.relation-add").Click();
-        Assert.True(page.Find("#t-t1 button.relation-form-save").HasAttribute("disabled"));
-        page.Find("#t-t1 .relation-form-column select").Change("c3");
-        page.Find("#t-t1 .relation-form-target select").Change("c0");
-        page.Find("#t-t1 .relation-form-type select").Change("Many-to-Many");
-        page.Find("#t-t1 button.relation-form-save").Click();
+        _dialogs.WaitForAssertion(() => Assert.NotEmpty(_dialogs.FindAll(".relation-dialog")));
+    }
 
-        page.WaitForAssertion(() => Assert.True(Sent(HttpMethod.Post, "/api/v1/RelationInfo", true)));
-        var (_, body) = Sent(HttpMethod.Post, "/api/v1/RelationInfo");
-        Assert.Equal("c0", body.GetProperty("firstId").GetString()); // la colonne référencée
-        Assert.Equal("c3", body.GetProperty("secondId").GetString()); // la colonne de la table, qui référence
-        Assert.Equal("Many-to-Many", body.GetProperty("relationType").GetString());
-        page.WaitForAssertion(() => Assert.Contains(Notices.Toasts, t => t.Message == "Relation ajoutée."));
-        Assert.Empty(page.FindAll("#t-t1 .relation-form"));
+    private void FillRelation(string sourceColumn = "c3", string targetTable = "t0", string targetColumn = "c1")
+    {
+        _dialogs.Find(".relation-dialog-target-table select").Change(targetTable);
+        _dialogs.Find("[data-pair='0'] .relation-dialog-pair-source select").Change(sourceColumn);
+        _dialogs.Find("[data-pair='0'] .relation-dialog-pair-target select").Change(targetColumn);
     }
 
     [BunitFact]
-    public void A_refused_relation_shows_the_server_message_and_keeps_the_form()
+    public void A_manual_relation_is_added_from_a_dialog_with_a_preview_before_saving()
+    {
+        var page = Open();
+
+        OpenRelationDialog(page);
+        Assert.Equal("t1", _dialogs.Find(".relation-dialog-source-table select").GetAttribute("value")); // on part de la table courante
+        Assert.True(_dialogs.Find("button.relation-dialog-save").HasAttribute("disabled"));
+        FillRelation();
+        _dialogs.Find(".relation-dialog-type select").Change("Many-to-Many");
+        Assert.Contains("pointe vers", _dialogs.Find(".relation-dialog-preview").TextContent);
+        Assert.False(_dialogs.Find("button.relation-dialog-save").HasAttribute("disabled"));
+        _dialogs.Find("button.relation-dialog-save").Click();
+
+        page.WaitForAssertion(() => Assert.True(Sent(HttpMethod.Post, "/api/v1/RelationInfo", true)));
+        var (_, body) = Sent(HttpMethod.Post, "/api/v1/RelationInfo");
+        Assert.Equal("c1", body.GetProperty("firstId").GetString()); // la colonne référencée
+        Assert.Equal("c3", body.GetProperty("secondId").GetString()); // la colonne de la table, qui référence
+        Assert.Equal("Many-to-Many", body.GetProperty("relationType").GetString());
+        page.WaitForAssertion(() => Assert.Contains(Notices.Toasts, t => t.Message == "Relation ajoutée."));
+        _dialogs.WaitForAssertion(() => Assert.Empty(_dialogs.FindAll(".relation-dialog")));
+    }
+
+    [BunitFact]
+    public void A_manual_relation_is_modified_in_the_same_dialog_and_a_detected_one_has_no_such_button()
+    {
+        var page = Open();
+        Assert.Empty(page.FindAll("#t-t1 [data-relation='r1'] button.relation-modify")); // détectée : colonnes non modifiables
+
+        page.Find("#t-t1 [data-relation='r2'] button.relation-modify").Click();
+        _dialogs.WaitForAssertion(() => Assert.NotEmpty(_dialogs.FindAll(".relation-dialog")));
+        Assert.Equal("t0", _dialogs.Find(".relation-dialog-target-table select").GetAttribute("value")); // préremplie
+        Assert.Equal("c3", _dialogs.Find("[data-pair='0'] .relation-dialog-pair-source select").GetAttribute("value"));
+        _dialogs.Find(".relation-dialog-type select").Change("One-to-Many");
+        _dialogs.Find(".relation-dialog-description").Input("  Une référence par commande  ");
+        _dialogs.Find("button.relation-dialog-save").Click();
+
+        page.WaitForAssertion(() => Assert.True(Sent(HttpMethod.Put, "/api/v1/RelationInfo/r2", true)));
+        var (_, body) = Sent(HttpMethod.Put, "/api/v1/RelationInfo/r2");
+        Assert.Equal("One-to-Many", body.GetProperty("relationType").GetString());
+        Assert.Equal("Une référence par commande", body.GetProperty("description").GetString());
+        Assert.Equal("c0", body.GetProperty("firstId").GetString());
+        Assert.Equal(0, body.GetProperty("extraColumns").GetArrayLength()); // liste envoyée : la relation est remplacée en entier
+        page.WaitForAssertion(() => Assert.Contains(Notices.Toasts, t => t.Message == "Relation modifiée."));
+    }
+
+    [BunitFact]
+    public void A_composite_relation_takes_several_pairs_and_sends_the_extra_ones()
+    {
+        var page = Open();
+        OpenRelationDialog(page);
+        FillRelation();
+
+        _dialogs.Find("button.relation-dialog-add-pair").Click();
+        _dialogs.Find("[data-pair='1'] .relation-dialog-pair-source select").Change("c2");
+        _dialogs.Find("[data-pair='1'] .relation-dialog-pair-target select").Change("c0");
+        Assert.Contains("(", _dialogs.Find(".relation-dialog-preview").TextContent);
+        _dialogs.Find("button.relation-dialog-save").Click();
+
+        page.WaitForAssertion(() => Assert.True(Sent(HttpMethod.Post, "/api/v1/RelationInfo", true)));
+        var extra = Sent(HttpMethod.Post, "/api/v1/RelationInfo").Item2.GetProperty("extraColumns").EnumerateArray().Single();
+        Assert.Equal("c0", extra.GetProperty("firstId").GetString());
+        Assert.Equal("c2", extra.GetProperty("secondId").GetString());
+    }
+
+    [BunitFact]
+    public void The_dialog_warns_about_a_duplicate_before_anything_is_sent()
+    {
+        var page = Open();
+        OpenRelationDialog(page);
+
+        FillRelation(sourceColumn: "c2", targetTable: "t0", targetColumn: "c0"); // r1 relie déjà customers.id à orders.customer_id
+
+        Assert.Contains("déjà reliées", _dialogs.Find(".relation-dialog-problem").TextContent);
+        Assert.True(_dialogs.Find("button.relation-dialog-save").HasAttribute("disabled"));
+        Assert.False(Sent(HttpMethod.Post, "/api/v1/RelationInfo", true));
+    }
+
+    [BunitFact]
+    public void A_refused_relation_shows_the_server_message_and_keeps_the_dialog_open()
     {
         _override = r => r.Method == HttpMethod.Post && r.RequestUri!.AbsolutePath.EndsWith("/RelationInfo")
-            ? FakeApi.Json("""{"title":"Ces deux colonnes sont déjà reliées.","status":400}""", HttpStatusCode.BadRequest)
+            ? FakeApi.Json("""{"title":"Relation refusée par le serveur.","status":400}""", HttpStatusCode.BadRequest)
             : null;
         var page = Open();
-        page.Find("#t-t1 button.relation-add").Click();
-        page.Find("#t-t1 .relation-form-column select").Change("c3");
-        page.Find("#t-t1 .relation-form-target select").Change("c0");
+        OpenRelationDialog(page);
+        FillRelation();
 
-        page.Find("#t-t1 button.relation-form-save").Click();
+        _dialogs.Find("button.relation-dialog-save").Click();
 
-        page.WaitForAssertion(() => Assert.Contains("déjà reliées", page.Markup));
-        Assert.NotEmpty(page.FindAll("#t-t1 .relation-form"));
+        _dialogs.WaitForAssertion(() => Assert.Contains("Relation refusée par le serveur.", _dialogs.Find(".relation-dialog-error").TextContent));
+        Assert.NotEmpty(_dialogs.FindAll(".relation-dialog"));
+    }
+
+    [BunitFact]
+    public void Escape_style_cancel_closes_the_dialog_without_saving()
+    {
+        var page = Open();
+        OpenRelationDialog(page);
+        FillRelation();
+
+        _dialogs.Find("button.relation-dialog-cancel").Click();
+
+        _dialogs.WaitForAssertion(() => Assert.Empty(_dialogs.FindAll(".relation-dialog")));
+        Assert.False(Sent(HttpMethod.Post, "/api/v1/RelationInfo", true));
     }
 
     // --- Aperçu de synchronisation ---

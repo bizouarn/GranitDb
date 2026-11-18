@@ -41,7 +41,13 @@ public record ErEdge(
     string ReferencingColumnId,
     string ReferencedTableId,
     string ReferencedColumnId,
-    string RelationType);
+    string RelationType,
+    IReadOnlyList<(string ReferencingColumnId, string ReferencedColumnId)>? ExtraPairs = null)
+{
+    /// <summary>Toutes les paires de colonnes (qui référence, référencée) : une seule pour une relation simple.</summary>
+    public IEnumerable<(string Referencing, string Referenced)> Pairs() =>
+        new[] { (ReferencingColumnId, ReferencedColumnId) }.Concat(ExtraPairs ?? []);
+}
 
 /// <summary>Tracé d'une relation : points d'attache et courbe de Bézier.</summary>
 public record ErRoute(double X1, double Y1, double X2, double Y2, string Path, bool Vertical = false);
@@ -83,7 +89,7 @@ public class ErDiagram
     ///     Les tables de <paramref name="frontier" /> (vue d'un domaine) ne montrent que les colonnes de leurs relations.
     /// </summary>
     public static ErDiagram Build(IEnumerable<TableInfo> tables, ISet<string>? visible = null,
-        ISet<string>? frontier = null, bool relatedColumnsOnly = false)
+        ISet<string>? frontier = null, bool relatedColumnsOnly = false, ISet<string>? hiddenRelations = null)
     {
         var chosen = tables.Where(t => visible == null || visible.Contains(t.Id)).OrderBy(t => t.Name, StringComparer.Ordinal)
             .ToList();
@@ -93,12 +99,15 @@ public class ErDiagram
         // Chaque relation est portée par les deux tables qu'elle touche : on la garde une fois.
         var edges = chosen.SelectMany(t => t.Relations).GroupBy(r => r.Id).Select(g => g.First())
             .Where(r => tableOfColumn.ContainsKey(r.FirstId) && tableOfColumn.ContainsKey(r.SecondId))
+            .Where(r => hiddenRelations == null || !hiddenRelations.Contains(r.Id))
             .Select(r => new ErEdge(r.Id, tableOfColumn[r.SecondId], r.SecondId, tableOfColumn[r.FirstId], r.FirstId,
-                r.RelationType))
+                r.RelationType,
+                r.ExtraColumns.Where(p => tableOfColumn.ContainsKey(p.FirstId) && tableOfColumn.ContainsKey(p.SecondId))
+                    .Select(p => (p.SecondId, p.FirstId)).ToList()))
             .OrderBy(e => e.RelationId, StringComparer.Ordinal).ToList();
 
-        var foreignKeys = edges.Select(e => e.ReferencingColumnId).ToHashSet();
-        var related = edges.SelectMany(e => new[] { e.ReferencingColumnId, e.ReferencedColumnId }).ToHashSet();
+        var foreignKeys = edges.SelectMany(e => e.Pairs().Select(p => p.Referencing)).ToHashSet();
+        var related = edges.SelectMany(e => e.Pairs().SelectMany(p => new[] { p.Referencing, p.Referenced })).ToHashSet();
         var nodes = chosen.Select(t =>
         {
             var isFrontier = frontier?.Contains(t.Id) == true;
@@ -208,16 +217,29 @@ public class ErDiagram
         return (Nodes.Max(n => n.X + n.Width) + Margin, Nodes.Max(n => n.Y + n.Height) + Margin);
     }
 
+    /// <summary>
+    ///     Les autres colonnes des relations multi-colonnes qui contiennent <paramref name="columnId" /> : choisir une
+    ///     colonne d'une clé composite en montre toutes les colonnes.
+    /// </summary>
+    public IReadOnlySet<string> SiblingColumns(string columnId)
+    {
+        return Edges.Where(e => e.ExtraPairs is { Count: > 0 } && e.Pairs().Any(p => p.Referencing == columnId || p.Referenced == columnId))
+            .SelectMany(e => e.Pairs().SelectMany(p => new[] { p.Referencing, p.Referenced }))
+            .Where(c => c != columnId).ToHashSet();
+    }
+
     /// <summary>Tracé d'une relation, de la ligne de la colonne qui référence à celle de la colonne référencée.</summary>
     public ErRoute? Route(ErEdge edge)
     {
         var from = Node(edge.ReferencingTableId);
         var to = Node(edge.ReferencedTableId);
         if (from == null || to == null) return null;
-        var fromRow = Math.Max(0, IndexOf(from, edge.ReferencingColumnId));
-        var toRow = Math.Max(0, IndexOf(to, edge.ReferencedColumnId));
-        var y1 = from.RowY(fromRow);
-        var y2 = to.RowY(toRow);
+        // Relation multi-colonnes : un seul tracé, qui part du milieu des lignes de toutes ses colonnes.
+        var fromRows = edge.Pairs().Select(p => from.RowY(Math.Max(0, IndexOf(from, p.Referencing)))).ToList();
+        var toRows = edge.Pairs().Select(p => to.RowY(Math.Max(0, IndexOf(to, p.Referenced)))).ToList();
+        var multi = fromRows.Count > 1;
+        var y1 = fromRows.Average();
+        var y2 = toRows.Average();
 
         // Séparation verticale plus grande que l'horizontale : liens orthogonaux bas -> haut, comme dans Dataedo.
         var hGap = Math.Max(to.X - (from.X + from.Width), from.X - (to.X + to.Width));
@@ -260,12 +282,33 @@ public class ErDiagram
         if (sideBySide)
         {
             var xm = (x1 + x2) / 2;
-            return new ErRoute(x1, y1, x2, y2, string.Create(CultureInfo.InvariantCulture,
-                $"M {x1:0.#} {y1:0.#} L {xm:0.#} {y1:0.#} L {xm:0.#} {y2:0.#} L {x2:0.#} {y2:0.#}"));
+            var path = string.Create(CultureInfo.InvariantCulture,
+                $"M {x1:0.#} {y1:0.#} L {xm:0.#} {y1:0.#} L {xm:0.#} {y2:0.#} L {x2:0.#} {y2:0.#}");
+            if (multi) path += Brackets(x1, x2, fromRows, toRows);
+            return new ErRoute(x1, y1, x2, y2, path);
         }
 
         return new ErRoute(x1, y1, x2, y2, string.Create(CultureInfo.InvariantCulture,
             $"M {x1:0.#} {y1:0.#} C {c1:0.#} {y1:0.#}, {c2:0.#} {y2:0.#}, {x2:0.#} {y2:0.#}"));
+    }
+
+    /// <summary>
+    ///     Relation multi-colonnes : un trait court de chaque ligne de colonne vers une barre verticale, à chaque
+    ///     extrémité (le tracé principal part du milieu de la barre).
+    /// </summary>
+    private static string Brackets(double x1, double x2, IReadOnlyList<double> fromRows, IReadOnlyList<double> toRows)
+    {
+        var path = new StringBuilder();
+        void Side(double x, IReadOnlyList<double> rows, double toward)
+        {
+            var bar = x + Math.Sign(toward - x) * 8;
+            foreach (var y in rows) path.Append(CultureInfo.InvariantCulture, $" M {x:0.#} {y:0.#} L {bar:0.#} {y:0.#}");
+            path.Append(CultureInfo.InvariantCulture, $" M {bar:0.#} {rows.Min():0.#} L {bar:0.#} {rows.Max():0.#}");
+        }
+
+        Side(x1, fromRows, x2);
+        Side(x2, toRows, x1);
+        return path.ToString();
     }
 
     /// <summary>Point d'attache sur le bord haut ou bas, réparti selon la relation pour que les liens ne se superposent pas.</summary>
@@ -383,8 +426,9 @@ public class ErDiagram
                 "Many-to-Many" => "}o--o{",
                 _ => "||--o{"
             };
-            var label = Node(edge.ReferencingTableId)!.Rows.FirstOrDefault(r => r.ColumnId == edge.ReferencingColumnId)?.Name
-                        ?? "references";
+            var label = string.Join(", ", edge.Pairs().Select(p =>
+                Node(edge.ReferencingTableId)!.Rows.FirstOrDefault(r => r.ColumnId == p.Referencing)?.Name).Where(n => n != null));
+            if (label.Length == 0) label = "references";
             text.Append("    ").Append(names[edge.ReferencedTableId]).Append(' ').Append(link).Append(' ')
                 .Append(names[edge.ReferencingTableId]).Append(" : \"").Append(label.Replace("\"", "'")).Append("\"\n");
         }

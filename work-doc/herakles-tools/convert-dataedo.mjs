@@ -26,29 +26,54 @@ const text = html => {
   return s ? s.slice(0, 4000) : null;
 };
 
-const tables = [], relations = [], byId = new Map();
+const tables = [], relations = [], byId = new Map(), columnsById = new Map();
 for (const t of load('d4t.json.js').tables) {
   const o = load(t.id + '.json.js');
   // Dataedo nomme parfois « table (libellé) » : le vrai nom est dans le résumé, le libellé sert de description de secours.
   const real = o.summary?.find(x => x.field === 'Name')?.value ?? o.name;
   const caption = real !== o.name && o.name.startsWith(real) ? o.name.slice(real.length).replace(/^s*(|)s*$/g, '') : null;
   byId.set(t.id, real);
+  for (const c of o.columns || []) columnsById.set(String(c.id).replace(/^column-/, ''), { table: real, column: c.name });
   tables.push({
     name: real,
     description: text(o.description) ?? caption,
     columns: (o.columns || []).map(c => ({ name: c.name, description: text(c.description) })).filter(c => c.description)
   });
-  for (const r of o.relations || [])
-    for (const k of (r.constraints || []).filter(k => k.foreign_column && k.primary_column))
-      relations.push({
-        table: r.foreign_table, column: k.foreign_column, refTable: r.primary_table, refColumn: k.primary_column,
-        relationType: r.pk_cardinality === 'mx' && r.fk_cardinality === 'mx' ? 'Many-to-Many' : 'One-to-Many',
-        description: text(r.title) || text(r.description)
-      });
+  // Une relation Dataedo = une clé, qui peut avoir plusieurs colonnes (constraints) : une seule relation, première
+  // paire puis `extra` pour les suivantes.
+  for (const r of o.relations || []) {
+    const ks = (r.constraints || []).filter(k => k.foreign_column && k.primary_column);
+    if (!ks.length) continue;
+    relations.push({
+      table: r.foreign_table, column: ks[0].foreign_column, refTable: r.primary_table, refColumn: ks[0].primary_column,
+      ...(ks.length > 1 ? { extra: ks.slice(1).map(k => ({ column: k.foreign_column, refColumn: k.primary_column })) } : {}),
+      relationType: r.pk_cardinality === 'mx' && r.fk_cardinality === 'mx' ? 'Many-to-Many' : 'One-to-Many',
+      description: text(r.title) || text(r.description)
+    });
+  }
 }
 
 // Le plan Dataedo est un SVG : chaque table est <g data-table-id="123" ... transform="translate(x,y)">, le tout décalé
 // par un <g transform="translate(dx,dy)"> global.
+// Relations réellement tracées dans le plan : <polyline data-relation data-relation-pk-column-ids data-relation-fk-column-ids>.
+// (Dataedo ne trace qu'une sélection des relations existant entre les tables d'un domaine.)
+function drawnRelations(svg) {
+  if (!svg) return null;
+  const out = new Map();
+  for (const m of svg.matchAll(/<polyline[^>]*data-relation-pk-column-ids="([^"]*)"[^>]*data-relation-fk-column-ids="([^"]*)"/g)) {
+    const pk = m[1].split(',').map(x => columnsById.get(x.trim())), fk = m[2].split(',').map(x => columnsById.get(x.trim()));
+    // Un tracé = une relation, éventuellement multi-colonnes (une paire pk/fk par colonne).
+    const pairs = pk.map((p, i) => [p, fk[i]]).filter(([p, f]) => p && f);
+    if (!pairs.length) continue;
+    const [[p0, f0], ...rest] = pairs;
+    out.set(pairs.map(([p, f]) => `${f.table}.${f.column}>${p.table}.${p.column}`).join('|'), {
+      table: f0.table, column: f0.column, refTable: p0.table, refColumn: p0.column,
+      ...(rest.length ? { extra: rest.map(([p, f]) => ({ column: f.column, refColumn: p.column })) } : {})
+    });
+  }
+  return [...out.values()];
+}
+
 function placements(svg) {
   if (!svg) return [];
   const shift = /<\/defs><g transform="translate\((-?[\d.]+),\s*(-?[\d.]+)\)"/.exec(svg);
@@ -70,7 +95,8 @@ for (const f of fs.readdirSync(dir).filter(f => /^data_area\d+\.json\.js$/.test(
     name: a.title.replace(/\s*\(\*\)\s*$/, ''),
     description: text(a.description),
     tables: a.area_links.filter(l => l.type === 'TABLE').map(l => l.object_name),
-    layout: placements(a.erd)
+    layout: placements(a.erd),
+    drawnRelations: drawnRelations(a.erd)
   });
 }
 

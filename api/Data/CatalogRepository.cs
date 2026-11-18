@@ -286,6 +286,23 @@ public class CatalogRepository : ICatalogRepository
         }, ct);
     }
 
+    public async Task RecordHistoryAsync<T>(string entityId, string field, string? oldValue, string? newValue,
+        string? changedBy = null, CancellationToken ct = default) where T : InfoBase
+    {
+        using var lease = await LeaseAsync(ct);
+        await lease.Connection.ExecuteAsync(new CommandDefinition(
+            """
+            INSERT INTO "History" ("Id", "EntityType", "EntityId", "Field", "OldValue", "NewValue", "ChangedAt", "ChangedBy")
+            VALUES (@Id, @EntityType, @EntityId, @Field, @OldValue, @NewValue, @ChangedAt, @ChangedBy)
+            """,
+            new
+            {
+                Id = Guid.NewGuid().ToString(), EntityType = KindOf<T>(), EntityId = entityId, Field = field,
+                OldValue = oldValue, NewValue = newValue, ChangedAt = DateTime.UtcNow,
+                ChangedBy = string.IsNullOrWhiteSpace(changedBy) ? null : changedBy.Trim()[..Math.Min(changedBy.Trim().Length, 255)]
+            }, lease.Transaction, cancellationToken: ct));
+    }
+
     public async Task<IReadOnlyList<HistoryEntry>> GetHistoryAsync(string? entityId, int skip, int take,
         CancellationToken ct = default)
     {
@@ -363,12 +380,22 @@ public class CatalogRepository : ICatalogRepository
         CancellationToken ct = default)
     {
         using var lease = await LeaseAsync(ct);
-        return (await lease.Connection.QueryAsync<RelationInfo>(new CommandDefinition(
+        var relations = (await lease.Connection.QueryAsync<RelationInfo>(new CommandDefinition(
             """
             SELECT * FROM "Relations"
             WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @databaseId)
                OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @databaseId)
             """, new { databaseId }, lease.Transaction, cancellationToken: ct))).AsList();
+        var extras = (await lease.Connection.QueryAsync<RelationColumnInfo>(new CommandDefinition(
+            """
+            SELECT * FROM "RelationColumns"
+            WHERE "RelationId" IN (SELECT "Id" FROM "Relations"
+                WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @databaseId))
+            ORDER BY "Position"
+            """, new { databaseId }, lease.Transaction, cancellationToken: ct))).ToLookup(e => e.RelationId);
+        foreach (var relation in relations)
+            relation.ExtraColumns = extras[relation.Id].Select(e => new RelationColumnPair(e.FirstId, e.SecondId)).ToList();
+        return relations;
     }
 
     public async Task<T> CreateAsync<T>(T info, CancellationToken ct = default) where T : InfoBase
@@ -406,6 +433,7 @@ public class CatalogRepository : ICatalogRepository
         if (typeof(T) == typeof(DatabaseInfo))
             cascade =
             [
+                """DELETE FROM "DomainHiddenRelations" WHERE "DomainId" IN (SELECT "Id" FROM "Domains" WHERE "DatabaseId" = @id)""",
                 """DELETE FROM "DomainTables" WHERE "DomainId" IN (SELECT "Id" FROM "Domains" WHERE "DatabaseId" = @id)""",
                 """DELETE FROM "Domains" WHERE "DatabaseId" = @id""",
                 """
@@ -413,6 +441,7 @@ public class CatalogRepository : ICatalogRepository
                     OR ("EntityType" = 'table' AND "EntityId" IN (SELECT "Id" FROM "Tables" WHERE "DatabaseId" = @id))
                     OR ("EntityType" = 'column' AND "EntityId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id))
                 """,
+                """DELETE FROM "RelationColumns" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id))""",
                 """DELETE FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id)""",
                 """DELETE FROM "Indexes" WHERE "DatabaseId" = @id""",
                 """DELETE FROM "Columns" WHERE "DatabaseId" = @id""",
@@ -421,11 +450,13 @@ public class CatalogRepository : ICatalogRepository
         else if (typeof(T) == typeof(TableInfo))
             cascade =
             [
+                """DELETE FROM "DomainHiddenRelations" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id))""",
                 """DELETE FROM "DomainTables" WHERE "TableId" = @id""",
                 """
                 DELETE FROM "TagLinks" WHERE ("EntityType" = 'table' AND "EntityId" = @id)
                     OR ("EntityType" = 'column' AND "EntityId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id))
                 """,
+                """DELETE FROM "RelationColumns" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id))""",
                 """DELETE FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id)""",
                 """DELETE FROM "Indexes" WHERE "TableId" = @id""",
                 """DELETE FROM "Columns" WHERE "TableId" = @id"""
@@ -433,11 +464,24 @@ public class CatalogRepository : ICatalogRepository
         else if (typeof(T) == typeof(ColumnInfo))
             cascade =
             [
+                """DELETE FROM "DomainHiddenRelations" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id)""",
                 """DELETE FROM "TagLinks" WHERE "EntityType" = 'column' AND "EntityId" = @id""",
+                """DELETE FROM "RelationColumns" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id)""",
+                """DELETE FROM "RelationColumns" WHERE "FirstId" = @id OR "SecondId" = @id""",
                 """DELETE FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id"""
             ];
         else if (typeof(T) == typeof(DomainInfo))
-            cascade = ["""DELETE FROM "DomainTables" WHERE "DomainId" = @id"""];
+            cascade =
+            [
+                """DELETE FROM "DomainHiddenRelations" WHERE "DomainId" = @id""",
+                """DELETE FROM "DomainTables" WHERE "DomainId" = @id"""
+            ];
+        else if (typeof(T) == typeof(RelationInfo))
+            cascade =
+            [
+                """DELETE FROM "DomainHiddenRelations" WHERE "RelationId" = @id""",
+                """DELETE FROM "RelationColumns" WHERE "RelationId" = @id"""
+            ];
         else if (typeof(T) == typeof(TagInfo))
             cascade = ["""DELETE FROM "TagLinks" WHERE "TagId" = @id"""];
         else

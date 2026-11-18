@@ -20,6 +20,12 @@ builder.Services.AddDataProtection().SetApplicationName("GranitDb")
     .PersistKeysToFileSystem(new DirectoryInfo(catalogSection.ResolveKeysDirectory()));
 builder.Services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 builder.Services.AddSingleton<SchemaSynchronizer>();
+builder.Services.Configure<WebhookOptions>(builder.Configuration.GetSection(WebhookOptions.Section));
+builder.Services.Configure<AuditOptions>(builder.Configuration.GetSection(AuditOptions.Section));
+builder.Services.AddSingleton<AuditLog>();
+builder.Services.AddSingleton<WebhookStore>();
+builder.Services.AddSingleton<WebhookDispatcher>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<WebhookDispatcher>());
 builder.Services.AddSingleton<DatabaseImportService>();
 
 var corsPolicy = "_myAllowSpecificOrigins";
@@ -61,6 +67,8 @@ foreach (var source in catalogOptions.StartupSources)
         startupLogger.LogError(e, "Synchronisation de la source {Id} impossible", source.Id);
     }
 
+// Avant le gestionnaire d'erreurs : le journal voit le code de réponse définitif.
+app.UseMiddleware<AuditMiddleware>();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())

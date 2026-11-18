@@ -21,7 +21,18 @@ public class DomainView
     public string? Color { get; set; }
     public string? Description { get; set; }
     public string? MetaInfo { get; set; }
+    public bool ShowNeighbors { get; set; }
+    public List<string> HiddenRelations { get; set; } = [];
     public List<DomainTableView> Tables { get; set; } = [];
+}
+
+/// <summary>Réglages d'affichage d'un domaine ; ce qui est absent n'est pas modifié.</summary>
+public class DomainSettingsInput
+{
+    public bool? ShowNeighbors { get; set; }
+
+    /// <summary>Remplace la liste des relations masquées (identifiants de relations).</summary>
+    public List<string>? HiddenRelations { get; set; }
 }
 
 /// <summary>Place d'une table dans le diagramme d'un domaine.</summary>
@@ -77,8 +88,43 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
         var ids = domains.Select(d => d.Id).ToList();
         var links = (await Repository.GetAllAsync<DomainTableInfo>([CatalogFilter.In("DomainId", ids)], ct))
             .ToLookup(l => l.DomainId);
+        var hidden = (await Repository.GetAllAsync<DomainHiddenRelationInfo>([CatalogFilter.In("DomainId", ids)], ct))
+            .ToLookup(h => h.DomainId);
         return Ok(domains.OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase)
-            .Select(d => ToView(d, links[d.Id])).ToList());
+            .Select(d => ToView(d, links[d.Id], hidden[d.Id])).ToList());
+    }
+
+    /// <summary>Règle ce que le diagramme du domaine montre : tables voisines, relations masquées.</summary>
+    [HttpPut("{id}/settings")]
+    public async Task<IActionResult> Settings(string id, [FromBody] DomainSettingsInput input, CancellationToken ct)
+    {
+        return await Repository.InTransactionAsync<IActionResult>(async repo =>
+        {
+            var domain = await repo.GetAsync<DomainInfo>(id, ct);
+            if (domain == null) return NotFound();
+            if (input.ShowNeighbors != null && input.ShowNeighbors != domain.ShowNeighbors)
+            {
+                domain.ShowNeighbors = input.ShowNeighbors.Value;
+                await repo.UpdateAsync(id, domain, ct);
+            }
+
+            if (input.HiddenRelations != null)
+            {
+                var wanted = input.HiddenRelations.Where(r => !string.IsNullOrWhiteSpace(r)).ToHashSet();
+                var current = await repo.FindAsync<DomainHiddenRelationInfo>(nameof(DomainHiddenRelationInfo.DomainId), id, ct);
+                foreach (var old in current.Where(h => !wanted.Contains(h.RelationId)))
+                    await repo.DeleteAsync<DomainHiddenRelationInfo>(old.Id, ct);
+                var kept = current.Select(h => h.RelationId).ToHashSet();
+                foreach (var relationId in wanted.Where(r => !kept.Contains(r)))
+                {
+                    var relation = await repo.GetAsync<RelationInfo>(relationId, ct);
+                    if (relation == null) throw new GranitExceptions($"La relation {relationId} n'existe pas.");
+                    await repo.CreateAsync(new DomainHiddenRelationInfo { DomainId = id, RelationId = relationId }, ct);
+                }
+            }
+
+            return Ok(await ViewAsync(repo, domain, ct));
+        }, ct);
     }
 
     /// <summary>
@@ -155,15 +201,18 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
 
     private static async Task<DomainView> ViewAsync(ICatalogRepository repository, DomainInfo domain, CancellationToken ct)
     {
-        return ToView(domain, await repository.FindAsync<DomainTableInfo>(nameof(DomainTableInfo.DomainId), domain.Id, ct));
+        return ToView(domain, await repository.FindAsync<DomainTableInfo>(nameof(DomainTableInfo.DomainId), domain.Id, ct),
+            await repository.FindAsync<DomainHiddenRelationInfo>(nameof(DomainHiddenRelationInfo.DomainId), domain.Id, ct));
     }
 
-    private static DomainView ToView(DomainInfo domain, IEnumerable<DomainTableInfo> links)
+    private static DomainView ToView(DomainInfo domain, IEnumerable<DomainTableInfo> links,
+        IEnumerable<DomainHiddenRelationInfo> hidden)
     {
         return new DomainView
         {
             Id = domain.Id, DatabaseId = domain.DatabaseId, Name = domain.Name, Color = domain.Color,
-            Description = domain.Description, MetaInfo = domain.MetaInfo,
+            Description = domain.Description, MetaInfo = domain.MetaInfo, ShowNeighbors = domain.ShowNeighbors,
+            HiddenRelations = hidden.Select(h => h.RelationId).OrderBy(r => r, StringComparer.Ordinal).ToList(),
             Tables = links.OrderBy(l => l.TableId, StringComparer.Ordinal)
                 .Select(l => new DomainTableView(l.TableId, l.X, l.Y)).ToList()
         };

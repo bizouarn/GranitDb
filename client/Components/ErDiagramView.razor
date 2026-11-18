@@ -5,6 +5,7 @@
 @{
     var (width, height) = Diagram.Size();
     var touched = Dependents.Union(Dependencies).ToHashSet();
+    var siblings = SelectedColumnId == null ? new HashSet<string>() : Diagram.SiblingColumns(SelectedColumnId);
 }
 <div class="er-scroll">
     <svg class="er-svg" width="@N(width * Zoom)" height="@N(height * Zoom)" viewBox="0 0 @N(width) @N(height)"
@@ -47,7 +48,7 @@
                 {
                     var row = node.Rows[i];
                     var y = node.HeaderHeight + (i + 0.5) * ErDiagram.RowHeight + 4;
-                    var rowState = RowStateOf(row.ColumnId);
+                    var rowState = RowStateOf(row.ColumnId) + (siblings.Contains(row.ColumnId) ? " er-sibling" : "");
                     <g class="@($"er-row{rowState}")" data-column="@row.Name"
                        @onpointerup="() => EndDrag(node, row)" @onpointerup:stopPropagation="true">
                         <rect x="1" y="@N(node.HeaderHeight + i * ErDiagram.RowHeight)" width="@N(node.Width - 2)" height="@N(ErDiagram.RowHeight)" class="er-row-bg" />
@@ -92,6 +93,9 @@
     ///     la cible d'un dépôt.
     /// </summary>
     [Parameter] public EventCallback<ErNode> OnDragLeave { get; set; }
+
+    /// <summary>Clic dans le vide du dessin (hors de toute table) : la sélection peut être levée.</summary>
+    [Parameter] public EventCallback OnClearSelection { get; set; }
 
     [Parameter] public EventCallback<string> OnSelectTable { get; set; }
 
@@ -163,7 +167,10 @@
     {
         var drag = _drag;
         _drag = null;
-        if (drag is { Moved: true }) await OnNodeMoved.InvokeAsync(drag.Node);
+        if (drag is { Moved: true })
+            await OnNodeMoved.InvokeAsync(drag.Node);
+        else if (drag == null)
+            await OnClearSelection.InvokeAsync(); // le relâchement d'un clic sur une table ne remonte pas jusqu'ici
     }
 
     private async Task LeaveAsync()

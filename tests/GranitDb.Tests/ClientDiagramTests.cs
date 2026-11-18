@@ -338,6 +338,57 @@ public class ClientDiagramPageTests : IAsyncLifetime
     }
 
     [BunitFact]
+    public void Clicking_the_empty_background_clears_the_selection_and_the_legend()
+    {
+        var page = Open();
+        var customers = page.Find("g.er-node[data-table='customers']");
+        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#impact")));
+        Assert.NotEmpty(page.FindAll(".er-legend"));
+        Assert.Contains("Élément choisi", page.Find(".er-legend").TextContent);
+
+        page.Find("svg.er-svg").PointerUp(new PointerEventArgs { ClientX = 900, ClientY = 900 });
+
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll("#impact")));
+        Assert.Empty(page.FindAll(".er-legend"));
+        Assert.DoesNotContain("er-selected", page.Find("g.er-node[data-table='customers']").ClassName);
+        Assert.Empty(page.FindAll("path.er-edge-active"));
+    }
+
+    [BunitFact]
+    public void The_legend_button_clears_the_selection_too()
+    {
+        var page = Open();
+        var customers = page.Find("g.er-node[data-table='customers']");
+        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-legend-clear")));
+
+        page.Find(".er-legend-clear").Click();
+
+        Assert.Empty(page.FindAll(".er-legend"));
+        Assert.Empty(page.FindAll("#impact"));
+    }
+
+    [BunitFact]
+    public void Dragging_a_table_does_not_clear_the_selection()
+    {
+        var page = Open();
+        var customers = page.Find("g.er-node[data-table='customers']");
+        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#impact")));
+
+        var orders = page.Find("g.er-node[data-table='orders']");
+        orders.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 80, ClientY = 80 });
+        page.Find("svg.er-svg").PointerUp(new PointerEventArgs { ClientX = 80, ClientY = 80 });
+
+        Assert.NotEmpty(page.FindAll("#impact"));
+    }
+
+    [BunitFact]
     public void Clicking_a_column_shows_the_impact_of_that_column()
     {
         var page = Open();

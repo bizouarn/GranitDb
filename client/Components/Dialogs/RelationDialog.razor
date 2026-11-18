@@ -1,0 +1,256 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject Client Api
+
+@* Fenêtre « Nouvelle relation » / « Modifier la relation » : table de départ (celle dont des colonnes pointent vers…),
+   table d'arrivée, paires de colonnes (une seule, ou plusieurs pour une clé composite), type et description.
+   Les règles du serveur (doublons, colonnes de tables incohérentes) sont dites avant l'envoi. *@
+<MudDialog>
+    <DialogContent>
+        <form id="relation-dialog-form" class="relation-dialog" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                    Dites quelles colonnes d'une table <b>pointent vers</b> quelles colonnes d'une autre table
+                    (par exemple <i>orders.customer_id</i> pointe vers <i>customers.id</i>).
+                </MudText>
+
+                <div class="relation-dialog-side">
+                    <MudText Typo="Typo.subtitle2">Table de départ (celle qui pointe)</MudText>
+                    <input class="relation-dialog-source-filter" type="search" placeholder="Rechercher une table…" aria-label="Rechercher la table de départ"
+                           @bind="_sourceFilter" @bind:event="oninput" />
+                    <NativeSelect Label="Table de départ" Value="@_sourceTable" ValueChanged="SourceTableChanged" Class="relation-dialog-source-table">
+                        <option value="">Choisir…</option>
+                        @foreach (var table in Matching(_sourceFilter, _sourceTable))
+                        {
+                            <option value="@table.Id">@table.Name</option>
+                        }
+                    </NativeSelect>
+                </div>
+
+                <div class="relation-dialog-side">
+                    <MudText Typo="Typo.subtitle2">Table d'arrivée (celle qui est pointée)</MudText>
+                    <input class="relation-dialog-target-filter" type="search" placeholder="Rechercher une table…" aria-label="Rechercher la table d'arrivée"
+                           @bind="_targetFilter" @bind:event="oninput" />
+                    <NativeSelect Label="Table d'arrivée" Value="@_targetTable" ValueChanged="TargetTableChanged" Class="relation-dialog-target-table">
+                        <option value="">Choisir…</option>
+                        @foreach (var table in Matching(_targetFilter, _targetTable))
+                        {
+                            <option value="@table.Id">@table.Name</option>
+                        }
+                    </NativeSelect>
+                </div>
+
+                @if (SourceTable != null && TargetTable != null)
+                {
+                    <div class="relation-dialog-pairs">
+                        <MudText Typo="Typo.subtitle2">Colonnes reliées</MudText>
+                        @for (var i = 0; i < _pairs.Count; i++)
+                        {
+                            var pair = _pairs[i];
+                            var index = i;
+                            <div class="relation-dialog-pair" data-pair="@i">
+                                <NativeSelect Label="@($"Colonne de {SourceTable.Name}")" Value="@pair.Source" ValueChanged="@(v => pair.Source = v)" Class="relation-dialog-pair-source">
+                                    <option value="">Choisir…</option>
+                                    @foreach (var column in SourceTable.Columns.OrderBy(c => c.Position))
+                                    {
+                                        <option value="@column.Id">@column.Name</option>
+                                    }
+                                </NativeSelect>
+                                <span class="relation-dialog-arrow" aria-hidden="true">→</span>
+                                <NativeSelect Label="@($"Colonne de {TargetTable.Name}")" Value="@pair.Target" ValueChanged="@(v => pair.Target = v)" Class="relation-dialog-pair-target">
+                                    <option value="">Choisir…</option>
+                                    @foreach (var column in TargetTable.Columns.OrderBy(c => c.Position))
+                                    {
+                                        <option value="@column.Id">@column.Name</option>
+                                    }
+                                </NativeSelect>
+                                @if (_pairs.Count > 1)
+                                {
+                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="relation-dialog-remove-pair"
+                                                   aria-label="@($"Retirer la paire {i + 1}")" OnClick="@(() => _pairs.RemoveAt(index))" />
+                                }
+                            </div>
+                        }
+                        <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="@(() => _pairs.Add(new PairRow()))"
+                                   Class="relation-dialog-add-pair">Ajouter une paire (clé composite)</MudButton>
+                    </div>
+                }
+
+                <NativeSelect Label="Type de relation" Value="@_type" ValueChanged="@(v => _type = v)" Class="relation-dialog-type">
+                    @foreach (var type in Types)
+                    {
+                        <option value="@type">@type</option>
+                    }
+                </NativeSelect>
+
+                <label class="native-select"><span class="native-select-label">Description (facultatif)</span>
+                    <input class="relation-dialog-description" type="text" maxlength="500" @bind="_description" @bind:event="oninput" /></label>
+
+                @if (Preview is { } preview)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="relation-dialog-preview" role="status">@preview</MudAlert>
+                }
+
+                @foreach (var problem in Problems)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="relation-dialog-problem">@problem</MudAlert>
+                }
+
+                @if (_error != null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="relation-dialog-error">@_error</MudAlert>
+                }
+            </MudStack>
+        </form>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy" Class="relation-dialog-cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="relation-dialog-save">
+            @(Existing == null ? "Ajouter la relation" : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly string[] Types = ["One-to-One", "One-to-Many", "Many-to-Many"];
+
+    private sealed class PairRow
+    {
+        public string? Source { get; set; }
+        public string? Target { get; set; }
+    }
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Les tables de la base (avec colonnes et relations).</summary>
+    [Parameter, EditorRequired] public TableInfo[] Tables { get; set; } = [];
+
+    /// <summary>Table de départ proposée à la création (celle d'où l'on vient).</summary>
+    [Parameter] public string? StartTableId { get; set; }
+
+    /// <summary>Colonne de départ proposée à la création.</summary>
+    [Parameter] public string? StartColumnId { get; set; }
+
+    /// <summary>La relation manuelle à modifier ; absente : une nouvelle relation.</summary>
+    [Parameter] public RelationInfo? Existing { get; set; }
+
+    private string? _sourceTable, _targetTable;
+    private string _sourceFilter = "", _targetFilter = "", _description = "", _type = "One-to-Many";
+    private readonly List<PairRow> _pairs = [new()];
+    private string? _error;
+    private bool _busy;
+
+    private TableInfo? SourceTable => Tables.FirstOrDefault(t => t.Id == _sourceTable);
+    private TableInfo? TargetTable => Tables.FirstOrDefault(t => t.Id == _targetTable);
+
+    protected override void OnInitialized()
+    {
+        if (Existing != null)
+        {
+            string? TableOf(string columnId) => Tables.FirstOrDefault(t => t.Columns.Any(c => c.Id == columnId))?.Id;
+            _targetTable = TableOf(Existing.FirstId);
+            _sourceTable = TableOf(Existing.SecondId);
+            _type = Existing.RelationType;
+            _description = Existing.Description ?? "";
+            _pairs.Clear();
+            foreach (var (first, second) in Existing.Pairs()) _pairs.Add(new PairRow { Source = second, Target = first });
+            return;
+        }
+
+        _sourceTable = StartTableId;
+        if (StartColumnId != null) _pairs[0].Source = StartColumnId;
+    }
+
+    /// <summary>Les tables qui contiennent le texte cherché (la table déjà choisie reste toujours dans la liste).</summary>
+    private IEnumerable<TableInfo> Matching(string filter, string? selected)
+    {
+        var term = filter.Trim();
+        return Tables
+            .Where(t => t.Id == selected || term.Length == 0 || t.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+            .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).Take(200);
+    }
+
+    private void SourceTableChanged(string id)
+    {
+        _sourceTable = id.Length == 0 ? null : id;
+        foreach (var pair in _pairs) pair.Source = null;
+    }
+
+    private void TargetTableChanged(string id)
+    {
+        _targetTable = id.Length == 0 ? null : id;
+        foreach (var pair in _pairs) pair.Target = null;
+    }
+
+    private bool Complete => SourceTable != null && TargetTable != null && _pairs.All(p => !string.IsNullOrEmpty(p.Source) && !string.IsNullOrEmpty(p.Target));
+
+    private IEnumerable<string> Problems
+    {
+        get
+        {
+            if (!Complete) yield break;
+            if (_pairs.Any(p => p.Source == p.Target))
+                yield return "Une colonne ne peut pas pointer vers elle-même.";
+            if (_pairs.Select(p => (p.Source, p.Target)).Distinct().Count() != _pairs.Count)
+                yield return "Une paire de colonnes figure deux fois dans la relation.";
+            var first = _pairs[0];
+            var duplicate = Tables.SelectMany(t => t.Relations).DistinctBy(r => r.Id)
+                .Any(r => r.Id != Existing?.Id &&
+                          ((r.FirstId == first.Target && r.SecondId == first.Source) || (r.FirstId == first.Source && r.SecondId == first.Target)));
+            if (duplicate) yield return "Ces deux colonnes sont déjà reliées.";
+        }
+    }
+
+    private bool CanSave => Complete && !Problems.Any();
+
+    private string ColumnName(TableInfo table, string? id) => table.Columns.FirstOrDefault(c => c.Id == id)?.Name ?? "?";
+
+    private string? Preview
+    {
+        get
+        {
+            if (!Complete) return null;
+            var source = SourceTable!;
+            var target = TargetTable!;
+            var from = string.Join(", ", _pairs.Select(p => ColumnName(source, p.Source)));
+            var to = string.Join(", ", _pairs.Select(p => ColumnName(target, p.Target)));
+            var left = _pairs.Count == 1 ? $"{source.Name}.{from}" : $"{source.Name}.({from})";
+            var right = _pairs.Count == 1 ? $"{target.Name}.{to}" : $"{target.Name}.({to})";
+            var meaning = _type switch
+            {
+                "One-to-One" => $"Une ligne de {source.Name} correspond à une seule ligne de {target.Name}, et inversement.",
+                "Many-to-Many" => $"Plusieurs lignes de {source.Name} peuvent correspondre à plusieurs lignes de {target.Name}.",
+                _ => $"Plusieurs lignes de {source.Name} peuvent pointer vers la même ligne de {target.Name}."
+            };
+            return $"{left} pointe vers {right}. {meaning}";
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanSave) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var text = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim();
+            var extras = _pairs.Skip(1).Select(p => new RelationColumnPair { FirstId = p.Target!, SecondId = p.Source! }).ToList();
+            var first = _pairs[0];
+            if (Existing == null)
+                await Api.CreateRelationAsync(first.Target!, first.Source!, _type, text, extras);
+            else
+                await Api.UpdateRelationAsync(Existing.Id, first.Target!, first.Source!, _type, text, Existing.MetaInfo, extras);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

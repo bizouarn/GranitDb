@@ -51,7 +51,7 @@ public class SqlServerTests(SqlServerFixture sql)
 
         Assert.Equal(CatalogMigrations.All.Count,
             await SqlServerFixture.ScalarAsync<int>(cs, "SELECT MAX(Version) FROM dbo.SchemaVersion"));
-        Assert.Equal(11, await SqlServerFixture.ScalarAsync<int>(cs, "SELECT COUNT(*) FROM sys.foreign_keys"));
+        Assert.Equal(12, await SqlServerFixture.ScalarAsync<int>(cs, "SELECT COUNT(*) FROM sys.foreign_keys"));
         Assert.Equal("nvarchar", await SqlServerFixture.ScalarAsync<string>(cs,
             "SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'Databases' AND COLUMN_NAME = 'Name'"));
         Assert.Equal(1, await SqlServerFixture.ScalarAsync<int>(cs,
@@ -100,7 +100,7 @@ public class SqlServerTests(SqlServerFixture sql)
         Assert.True(column.IsNullable);
         Assert.False(column.IsPrimaryKey);
         Assert.Empty(await repository.GetAllAsync<RelationInfo>());
-        Assert.Equal(11, await SqlServerFixture.ScalarAsync<int>(options.ConnectionString!,
+        Assert.Equal(12, await SqlServerFixture.ScalarAsync<int>(options.ConnectionString!,
             "SELECT COUNT(*) FROM sys.foreign_keys"));
     }
 

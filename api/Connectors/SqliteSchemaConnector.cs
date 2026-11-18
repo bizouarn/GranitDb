@@ -172,7 +172,9 @@ public class SqliteSchemaConnector : ISchemaConnector
             if (to == null && primaryKeys.TryGetValue(row.RefTable, out var pks) && row.Seq < pks.Count)
                 to = pks[(int)row.Seq];
             if (to == null) continue;
-            result.Add(new SourceForeignKey(table, row.From, row.RefTable, to));
+            // Une clé composite : plusieurs lignes de même id (seq 0, 1…).
+            var composite = rows.Count(r => r.Id == row.Id) > 1;
+            result.Add(new SourceForeignKey(table, row.From, row.RefTable, to, composite ? $"{table}#{row.Id}" : null));
         }
 
         return result;

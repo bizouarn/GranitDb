@@ -102,6 +102,11 @@
     fill: var(--mud-palette-primary-hover);
 }
 
+.er-row.er-sibling .er-row-bg {
+    fill: var(--mud-palette-primary-hover);
+    opacity: 0.6;
+}
+
 .er-row.er-dependent .er-row-bg {
     fill: var(--mud-palette-error-hover);
 }

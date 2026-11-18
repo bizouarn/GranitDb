@@ -77,19 +77,23 @@ public class SqlServerSchemaConnector : ISchemaConnector
             await using (var cmd = db.CreateCommand())
             {
                 cmd.CommandText = """
-                    SELECT ps.name, pt.name, pc.name, rs.name, rt.name, rc.name
+                    SELECT ps.name, pt.name, pc.name, rs.name, rt.name, rc.name, fk.name,
+                        (SELECT COUNT(*) FROM sys.foreign_key_columns x WHERE x.constraint_object_id = fkc.constraint_object_id)
                     FROM sys.foreign_key_columns fkc
+                    JOIN sys.foreign_keys fk ON fk.object_id = fkc.constraint_object_id
                     JOIN sys.tables pt ON pt.object_id = fkc.parent_object_id
                     JOIN sys.schemas ps ON ps.schema_id = pt.schema_id
                     JOIN sys.columns pc ON pc.object_id = fkc.parent_object_id AND pc.column_id = fkc.parent_column_id
                     JOIN sys.tables rt ON rt.object_id = fkc.referenced_object_id
                     JOIN sys.schemas rs ON rs.schema_id = rt.schema_id
                     JOIN sys.columns rc ON rc.object_id = fkc.referenced_object_id AND rc.column_id = fkc.referenced_column_id
+                    ORDER BY fkc.constraint_object_id, fkc.constraint_column_id
                     """;
                 await using var r = await cmd.ExecuteReaderAsync(ct);
                 while (await r.ReadAsync(ct))
                     foreignKeys.Add(new SourceForeignKey(Qualify(r.GetString(0), r.GetString(1)), r.GetString(2),
-                        Qualify(r.GetString(3), r.GetString(4)), r.GetString(5)));
+                        Qualify(r.GetString(3), r.GetString(4)), r.GetString(5),
+                        r.GetInt32(7) > 1 ? $"{Qualify(r.GetString(0), r.GetString(1))}#{r.GetString(6)}" : null));
             }
 
             // Index hors clé primaire, colonnes incluses (INCLUDE) exclues, dans l'ordre de la clé.

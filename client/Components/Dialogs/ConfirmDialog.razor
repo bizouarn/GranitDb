@@ -1,0 +1,55 @@
+@* Confirmation commune : dit ce qui sera perdu, et demande de retaper un nom pour ce qui ne s'annule pas. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="2" Class="confirm-dialog">
+            <MudText Class="confirm-dialog-message">@Message</MudText>
+            @if (!string.IsNullOrWhiteSpace(Consequence))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="confirm-dialog-consequence">@Consequence</MudAlert>
+            }
+            @if (!string.IsNullOrEmpty(RequireTyped))
+            {
+                <MudTextField @bind-Value="_typed" Immediate="true" Dense="true" AutoFocus="true" Class="confirm-dialog-typed"
+                              Label="@($"Retapez {RequireTyped} pour confirmer")" OnKeyDown="OnKeyDown" />
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Class="confirm-dialog-cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="@(Danger ? Color.Error : Color.Primary)" OnClick="Confirm" Disabled="@(!Matches)"
+                   Class="confirm-dialog-confirm">@ConfirmText</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>La question (« Supprimer le webhook … ? »).</summary>
+    [Parameter, EditorRequired] public string Message { get; set; } = "";
+
+    /// <summary>Ce qui sera perdu, dit en clair (nombre d'éléments, absence de retour possible).</summary>
+    [Parameter] public string? Consequence { get; set; }
+
+    [Parameter] public string ConfirmText { get; set; } = "Confirmer";
+
+    /// <summary>Texte à retaper pour activer la confirmation (pour ce qui ne s'annule pas).</summary>
+    [Parameter] public string? RequireTyped { get; set; }
+
+    [Parameter] public bool Danger { get; set; } = true;
+
+    private string _typed = "";
+
+    private bool Matches => string.IsNullOrEmpty(RequireTyped) || string.Equals(_typed.Trim(), RequireTyped, StringComparison.OrdinalIgnoreCase);
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private void Confirm()
+    {
+        if (Matches) MudDialog.Close(DialogResult.Ok(true));
+    }
+
+    private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") Confirm();
+    }
+}

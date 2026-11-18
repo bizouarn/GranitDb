@@ -43,6 +43,21 @@ public class SqliteImportController(DatabaseImportService import) : ControllerBa
         return result == null ? NotFound() : Ok(ImportView.From(result));
     }
 
+    /// <summary>
+    ///     Aperçu du remplacement du fichier d'une base : ce qui serait ajouté, modifié ou supprimé (et la documentation
+    ///     qui serait perdue). Ne modifie rien et ne conserve pas le fichier.
+    /// </summary>
+    [HttpPost("{id}/preview")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(long.MaxValue)]
+    public async Task<IActionResult> PreviewReplace(string id, IFormFile file, CancellationToken ct = default)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Aucun fichier n'a été envoyé.");
+        await using var stream = file.OpenReadStream();
+        var preview = await import.PreviewReplaceSqliteAsync(id, stream, ct);
+        return preview == null ? NotFound() : Ok(preview);
+    }
+
     /// <summary>Documente un fichier SQLite présent sur le serveur (désactivé par défaut).</summary>
     [HttpPost("local")]
     public async Task<IActionResult> Local([FromBody] LocalSqliteRequest request, CancellationToken ct)

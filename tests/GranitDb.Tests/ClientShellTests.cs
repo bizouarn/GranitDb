@@ -550,7 +550,7 @@ public class ClientCommandPaletteTests : ShellTestBase
         Override = r => r.RequestUri!.AbsolutePath == "/api/v1/Search" ? FakeApi.Json("[]") : null;
         var palette = Open();
 
-        Type(palette, "w"); // aucune commande ni base ne contient « w », et un seul caractère ne lance pas de recherche
+        Type(palette, "z"); // aucune commande ni base ne contient « z », et un seul caractère ne lance pas de recherche
 
         Assert.Contains("Aucun résultat.", palette.Find(".palette-empty").TextContent);
         Type(palette, "zzzqq"); // à partir de 2 caractères, la recherche dans tout le catalogue est toujours proposée

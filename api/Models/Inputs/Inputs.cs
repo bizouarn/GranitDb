@@ -145,6 +145,12 @@ public class RelationInput : InfoInput<RelationInfo>, IValidatableObject
         ErrorMessage = "RelationType doit valoir One-to-One, One-to-Many ou Many-to-Many.")]
     public string RelationType { get; set; } = "";
 
+    /// <summary>
+    ///     Paires suivantes d'une relation multi-colonnes (la première est <c>FirstId</c>/<c>SecondId</c>), dans l'ordre.
+    ///     Absent à la modification : inchangé ; liste vide : la relation redevient simple.
+    /// </summary>
+    public List<RelationColumnPair>? ExtraColumns { get; set; }
+
     /// <summary>Le marqueur des relations détectées appartient à la synchronisation : on ne le pose ni ne l'enlève.</summary>
     protected override string? ResolveMetaInfo(string? current)
     {
@@ -179,11 +185,15 @@ public class DomainInput : InfoInput<DomainInfo>
     [RegularExpression("^#[0-9a-fA-F]{6}$", ErrorMessage = "Color doit être de la forme #rrggbb.")]
     public string? Color { get; set; }
 
+    /// <summary>Absent : le réglage actuel du domaine est conservé (un renommage n'efface pas le choix des voisines).</summary>
+    public bool? ShowNeighbors { get; set; }
+
     protected override void ApplySpecific(DomainInfo entity)
     {
         entity.DatabaseId = DatabaseId;
         entity.Name = Name.Trim();
         entity.Color = Color;
+        if (ShowNeighbors != null) entity.ShowNeighbors = ShowNeighbors.Value;
     }
 }
 

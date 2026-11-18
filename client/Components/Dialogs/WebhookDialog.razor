@@ -1,0 +1,118 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject Client Api
+
+@* Fenêtre « Nouveau webhook » / « Modifier le webhook » : adresse, secret, base surveillée, événements expliqués. *@
+<MudDialog>
+    <DialogContent>
+        <form id="webhook-dialog-form" class="webhook-dialog" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                    GranitDb appelle cette adresse en POST (JSON) quand l'un des événements choisis survient. Avec un secret,
+                    chaque envoi est signé (HMAC-SHA256) pour que le destinataire vérifie qu'il vient bien d'ici.
+                </MudText>
+                <label class="native-select"><span class="native-select-label">Adresse (URL)</span>
+                    <input class="webhook-form-url" type="url" required placeholder="https://…" @bind="_form.Url" @bind:event="oninput" /></label>
+                @if (!UrlLooksValid)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning" Class="webhook-dialog-url-hint">L'adresse doit commencer par http:// ou https://.</MudText>
+                }
+                <label class="native-select"><span class="native-select-label">Secret de signature @(Existing != null ? "(vide : inchangé)" : "(facultatif)")</span>
+                    <input class="webhook-form-secret" type="password" autocomplete="off" @bind="_secret" @bind:event="oninput" /></label>
+                <NativeSelect Label="Base surveillée" Value="@(_form.DatabaseId ?? "")" ValueChanged="@(v => _form.DatabaseId = v.Length == 0 ? null : v)" Class="webhook-form-database">
+                    <option value="">Toutes les bases</option>
+                    @foreach (var db in Databases)
+                    {
+                        <option value="@db.Id">@db.Name</option>
+                    }
+                </NativeSelect>
+                <fieldset class="webhook-dialog-events">
+                    <legend class="native-select-label">Événements</legend>
+                    @foreach (var (name, label, help) in EventNames)
+                    {
+                        var eventName = name;
+                        <label class="webhook-event" title="@help"><input type="checkbox" data-event="@eventName" checked="@_form.Events.Contains(eventName)"
+                            @onchange="e => ToggleEvent(eventName, e.Value is true)" /> <b>@label</b> — <span>@help</span></label>
+                    }
+                </fieldset>
+                <label class="webhook-event"><input class="webhook-form-active" type="checkbox" checked="@_form.IsActive"
+                    @onchange="e => _form.IsActive = e.Value is true" /> Actif (décochez pour mettre en pause sans supprimer)</label>
+                <label class="native-select"><span class="native-select-label">Description (facultatif)</span>
+                    <input class="webhook-form-description" type="text" maxlength="500" @bind="_form.Description" @bind:event="oninput" /></label>
+                @if (_error != null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="webhook-dialog-error">@_error</MudAlert>
+                }
+            </MudStack>
+        </form>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy" Class="webhook-cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="webhook-save">Enregistrer</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private static readonly (string Name, string Label, string Help)[] EventNames =
+    [
+        ("schema.changed", "Schéma modifié", "une resynchronisation a changé des tables, colonnes ou index"),
+        ("database.imported", "Base importée", "une nouvelle base vient d'être ajoutée au catalogue"),
+        ("database.deleted", "Base supprimée", "une base a été retirée du catalogue")
+    ];
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public WebhookView? Existing { get; set; }
+
+    [Parameter, EditorRequired] public DatabaseInfo[] Databases { get; set; } = [];
+
+    private WebhookForm _form = new();
+    private string? _secret, _error;
+    private bool _busy;
+
+    private bool UrlLooksValid => string.IsNullOrWhiteSpace(_form.Url) ||
+                                  _form.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                                  _form.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_form.Url) && UrlLooksValid && _form.Events.Count > 0;
+
+    protected override void OnInitialized()
+    {
+        if (Existing == null) return;
+        _form = new WebhookForm
+        {
+            Url = Existing.Url, DatabaseId = Existing.DatabaseId, Events = Existing.Events.ToList(), IsActive = Existing.IsActive,
+            Description = Existing.Description
+        };
+    }
+
+    private void ToggleEvent(string name, bool on)
+    {
+        _form.Events.Remove(name);
+        if (on) _form.Events.Add(name);
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanSave) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            // Secret : absent = inchangé (modification) ; saisi = remplacé.
+            _form.Secret = string.IsNullOrEmpty(_secret) ? null : _secret;
+            await Api.SaveWebhookAsync(Existing?.Id, _form);
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

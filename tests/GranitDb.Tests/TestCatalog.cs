@@ -22,7 +22,10 @@ public sealed class TestCatalog : IDisposable
         Synchronizer = new SchemaSynchronizer(Repository);
         Connectors = [new SqliteSchemaConnector(), new SqlServerSchemaConnector()];
         Protector = new DataProtectionSecretProtector(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
-        Importer = new DatabaseImportService(Repository, Synchronizer, Connectors, wrapped, Protector);
+        Webhooks = new WebhookDispatcher(new WebhookStore(Factory), Protector,
+            Microsoft.Extensions.Options.Options.Create(new GranitDB.API.Options.WebhookOptions()),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<WebhookDispatcher>.Instance);
+        Importer = new DatabaseImportService(Repository, Synchronizer, Connectors, wrapped, Protector, Webhooks);
         Repository.InitializeAsync().GetAwaiter().GetResult();
     }
 
@@ -34,6 +37,7 @@ public sealed class TestCatalog : IDisposable
     public ISchemaConnector[] Connectors { get; }
     public DatabaseImportService Importer { get; }
     public ISecretProtector Protector { get; }
+    public WebhookDispatcher Webhooks { get; }
 
     public void Dispose()
     {

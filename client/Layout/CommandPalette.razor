@@ -146,6 +146,9 @@
                 () => Go($"/search?q={Uri.EscapeDataString(term)}")));
         Action("Importer une base SQLite", "accueil", () => Go("/"));
         Action("Aller à l'accueil", null, () => Go("/"));
+        Action("Gérer les étiquettes et les domaines", "renommer, colorer, supprimer", () => Go("/manage"));
+        Action("Ouvrir le journal d'audit", "qui a modifié quoi", () => Go("/audit"));
+        Action("Gérer les webhooks", "notifications de changement de schéma", () => Go("/webhooks"));
         Action("Connecter un serveur SQL Server", "documenter une base du serveur", () => Go("/import/sqlserver"));
         if (CurrentDatabaseId is { } current)
         {

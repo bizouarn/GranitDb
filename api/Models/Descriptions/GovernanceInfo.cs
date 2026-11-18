@@ -13,6 +13,18 @@ public class DomainInfo : InfoBase
 
     /// <summary>Couleur d'affichage (#rrggbb), facultative.</summary>
     public string? Color { get; set; }
+
+    /// <summary>Le diagramme montre aussi, en pointillés, les tables d'autres domaines reliées à celles du domaine.</summary>
+    public bool ShowNeighbors { get; set; }
+}
+
+/// <summary>Relation que le diagramme d'un domaine ne dessine pas (le choix est propre au domaine).</summary>
+[Table("DomainHiddenRelations")]
+public class DomainHiddenRelationInfo : InfoBase
+{
+    public string DomainId { get; set; } = "";
+
+    public string RelationId { get; set; } = "";
 }
 
 /// <summary>Appartenance d'une table à un domaine, avec sa place mémorisée dans le diagramme du domaine.</summary>

@@ -49,6 +49,10 @@ public interface ICatalogRepository
     Task<T?> ModifyAsync<T>(string id, Action<T> apply, CancellationToken ct = default, string? changedBy = null)
         where T : InfoBase;
 
+    /// <summary>Ajoute une ligne à l'historique (ex : « Deleted » à la suppression d'une base, qui n'est pas une modification de texte).</summary>
+    Task RecordHistoryAsync<T>(string entityId, string field, string? oldValue, string? newValue,
+        string? changedBy = null, CancellationToken ct = default) where T : InfoBase;
+
     /// <summary>Historique des modifications, du plus récent au plus ancien, éventuellement d'une seule entité.</summary>
     Task<IReadOnlyList<GranitDB.API.Models.HistoryEntry>> GetHistoryAsync(string? entityId, int skip, int take,
         CancellationToken ct = default);

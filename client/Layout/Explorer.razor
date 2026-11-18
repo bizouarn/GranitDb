@@ -17,6 +17,13 @@
                       aria-label="Filtrer l'explorateur" Class="explorer-filter" />
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" aria-label="Recharger l'explorateur" Title="Recharger"
                        OnClick="ReloadAsync" />
+        @* Un menu libellé plutôt que des icônes seules : on sait où l'on va avant de cliquer. *@
+        <MudMenu Label="Gérer" StartIcon="@Icons.Material.Filled.Tune" Size="Size.Small" Variant="Variant.Text" Dense="true" Class="manage-menu"
+                 aria-label="Gérer le catalogue">
+            <MudMenuItem Icon="@Icons.Material.Filled.Sell" Href="/manage" Class="manage-link">Étiquettes et domaines</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.Webhook" Href="/webhooks" Class="webhooks-link">Webhooks</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Filled.History" Href="/audit" Class="audit-link">Journal d'audit</MudMenuItem>
+        </MudMenu>
     </div>
 
     @if (_loadError != null)

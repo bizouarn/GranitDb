@@ -127,4 +127,41 @@ public sealed class DocumentationImportTests : IDisposable
         var missing = await _client.PostAsJsonAsync($"{V1}/import/documentation/nope", Doc());
         Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
     }
+
+    [Fact]
+    public async Task Relations_the_documentation_does_not_draw_are_hidden_in_the_domain_only()
+    {
+        var db = await ImportDbAsync();
+        object Body(object? drawn) => new
+        {
+            domains = new[] { new { name = "Ventes", tables = new[] { "customers", "orders" }, drawnRelations = drawn } }
+        };
+
+        // Sans liste de relations tracées, rien n'est masqué.
+        Assert.Equal(0, (await PostAsync(db, Body(null))).GetProperty("relationsHidden").GetInt32());
+        var shown = (await _client.GetFromJsonAsync<JsonElement>($"{V1}/DomainInfo/database/{db}")).EnumerateArray().Single();
+        Assert.Empty(shown.GetProperty("hiddenRelations").EnumerateArray());
+
+        // Une liste vide : la clé étrangère orders -> customers n'est pas tracée, elle est masquée.
+        var result = await PostAsync(db, Body(Array.Empty<object>()));
+        Assert.Equal(1, result.GetProperty("relationsHidden").GetInt32());
+        var domain = (await _client.GetFromJsonAsync<JsonElement>($"{V1}/DomainInfo/database/{db}")).EnumerateArray().Single();
+        Assert.Single(domain.GetProperty("hiddenRelations").EnumerateArray());
+
+        // Relancé, rien de plus ; la relation reste dans le catalogue.
+        Assert.Equal(0, (await PostAsync(db, Body(Array.Empty<object>()))).GetProperty("relationsHidden").GetInt32());
+        var tables = await _client.GetFromJsonAsync<JsonElement>($"{V1}/TableInfo/database/{db}");
+        Assert.Contains(tables.EnumerateArray(), t => t.GetProperty("relations").GetArrayLength() > 0);
+    }
+
+    [Fact]
+    public async Task A_drawn_relation_stays_visible()
+    {
+        var db = await ImportDbAsync();
+        var drawn = new[] { new { table = "orders", column = "customer_id", refTable = "customers", refColumn = "id" } };
+
+        var result = await PostAsync(db, new { domains = new[] { new { name = "Ventes", tables = new[] { "customers", "orders" }, drawnRelations = drawn } } });
+
+        Assert.Equal(0, result.GetProperty("relationsHidden").GetInt32());
+    }
 }

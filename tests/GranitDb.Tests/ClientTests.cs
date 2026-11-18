@@ -301,7 +301,7 @@ public class ClientPagesTests : IAsyncLifetime
         Assert.True(rows.IndexOf("id") < rows.IndexOf("customer_id"));
         Assert.Contains("ix_orders_customer (customer_id)", page.Markup);
         Assert.Contains("unique", page.Markup);
-        Assert.Contains("customers.id → orders.customer_id (One-to-Many)", page.Markup);
+        Assert.Contains("customers.id → orders.customer_id (One-to-Many)", page.Find("[data-relation='r1']").TextContent);
     }
 
     [BunitFact]

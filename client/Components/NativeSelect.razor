@@ -4,7 +4,7 @@
     {
         <span class="native-select-label">@Label</span>
     }
-    <select value="@Value" @onchange="OnChange" aria-label="@(AriaLabel ?? Label)">
+    <select @ref="_select" value="@Value" @onchange="OnChange" @onblur="OnBlur" @onkeydown="OnKeyDown" aria-label="@(AriaLabel ?? Label)">
         @ChildContent
     </select>
 </label>
@@ -21,6 +21,27 @@
     [Parameter] public EventCallback<string> ValueChanged { get; set; }
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>La liste prend le focus à son affichage (pour une liste qui s'ouvre au clic, en place).</summary>
+    [Parameter] public bool AutoFocus { get; set; }
+
+    /// <summary>La liste perd le focus, ou Échap est pressé.</summary>
+    [Parameter] public EventCallback OnBlur { get; set; }
+
+    private ElementReference _select;
+    private bool _focused;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!AutoFocus || _focused) return;
+        _focused = true;
+        await _select.FocusAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await OnBlur.InvokeAsync();
+    }
 
     private Task OnChange(ChangeEventArgs e)
     {

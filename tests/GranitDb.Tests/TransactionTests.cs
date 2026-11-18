@@ -53,6 +53,10 @@ internal sealed class FailingRepository(ICatalogRepository inner, Func<string, b
         return inner.ModifyAsync(id, apply, ct, changedBy);
     }
 
+    public Task RecordHistoryAsync<T>(string entityId, string field, string? oldValue, string? newValue,
+        string? changedBy = null, CancellationToken ct = default) where T : InfoBase
+        => inner.RecordHistoryAsync<T>(entityId, field, oldValue, newValue, changedBy, ct);
+
     public Task<IReadOnlyList<GranitDB.API.Models.HistoryEntry>> GetHistoryAsync(string? entityId, int skip, int take,
         CancellationToken ct = default) => inner.GetHistoryAsync(entityId, skip, take, ct);
 
@@ -198,7 +202,7 @@ public class TransactionTests : IDisposable
     {
         var failing = new FailingRepository(_env.Repository, op => op == "update DatabaseInfo");
         var options = Options.Create(_env.Options);
-        var importer = new DatabaseImportService(failing, new SchemaSynchronizer(failing), _env.Connectors, options, _env.Protector);
+        var importer = new DatabaseImportService(failing, new SchemaSynchronizer(failing), _env.Connectors, options, _env.Protector, _env.Webhooks);
         await using var content = new MemoryStream(File.ReadAllBytes(_env.CreateSampleDb()));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -219,7 +223,7 @@ public class TransactionTests : IDisposable
             return false;
         });
         var importer = new DatabaseImportService(cancelling, new SchemaSynchronizer(cancelling), _env.Connectors,
-            Options.Create(_env.Options), _env.Protector);
+            Options.Create(_env.Options), _env.Protector, _env.Webhooks);
         await using var content = new MemoryStream(File.ReadAllBytes(_env.CreateSampleDb()));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>

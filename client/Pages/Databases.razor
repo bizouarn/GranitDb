@@ -1,6 +1,7 @@
 @page "/"
 @page "/databases"
 @using GranitDb.Client.api
+@using GranitDb.Client.Components
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
 @inject Client Api
@@ -83,6 +84,9 @@
                             <MudButton Href="@($"/databases/{db.Id}")" Color="Color.Primary">Ouvrir</MudButton>
                             <MudButton Href="@($"/databases/{db.Id}/diagram")">Diagramme</MudButton>
                         </MudCardActions>
+                        <div class="px-2 pb-2 d-flex justify-end">
+                            <DeleteDatabaseButton Database="db" Size="Size.Small" OnDeleted="LoadPageAsync" />
+                        </div>
                     </MudCard>
                 </MudItem>
             }

@@ -132,8 +132,10 @@ public static class SchemaDiffer
             return $"{referencing.Table}.{referencing.Column} → {referenced.Table}.{referenced.Column}";
         }
 
+        // Une clé composite est une seule relation, repérée par sa première paire (comme à la synchronisation).
         var wanted = schema.ForeignKeys
             .Where(fk => sourceColumnSet.Contains((fk.Table, fk.Column)) && sourceColumnSet.Contains((fk.RefTable, fk.RefColumn)))
+            .GroupBy(fk => fk.Constraint == null ? (object)fk : (fk.Table, fk.Constraint)).Select(g => g.First())
             .Select(fk => ((fk.RefTable, fk.RefColumn), (fk.Table, fk.Column))).Distinct().ToList();
         var current = new HashSet<((string, string), (string, string))>();
         foreach (var relation in relations)

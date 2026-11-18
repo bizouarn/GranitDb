@@ -1,0 +1,205 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject Client Api
+
+@* Fenêtre « Nouveau domaine » / « Modifier le domaine » : nom, couleur et tables choisies dans deux listes (disponibles / dans le
+   domaine), avec recherche, ajout de toutes les tables trouvées (par préfixe de nom) et le nombre de relations qui apparaîtront. *@
+<MudDialog>
+    <DialogContent>
+        <form id="domain-dialog-form" class="domain-dialog" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                    Un domaine regroupe des tables qui parlent du même sujet ; son diagramme ne montre que ces tables.
+                </MudText>
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End">
+                    <label class="native-select" style="flex: 1"><span class="native-select-label">Nom du domaine</span>
+                        <input class="domain-dialog-name" type="text" maxlength="100" required @bind="_name" @bind:event="oninput" /></label>
+                    <label class="native-select"><span class="native-select-label">Couleur</span>
+                        <input class="domain-dialog-color color-input" type="color" aria-label="Couleur du domaine" value="@(_color ?? "#757575")"
+                               @onchange="e => _color = e.Value?.ToString()" /></label>
+                </MudStack>
+                @if (NameTaken)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="domain-dialog-problem">Un domaine porte déjà ce nom dans cette base.</MudAlert>
+                }
+
+                <div class="domain-dialog-lists">
+                    <div class="domain-dialog-list" data-list="available">
+                        <MudText Typo="Typo.subtitle2">Tables disponibles (@Available.Count)</MudText>
+                        <input class="domain-dialog-search" type="search" placeholder="Nom ou préfixe de table…" aria-label="Rechercher une table à ajouter"
+                               @bind="_search" @bind:event="oninput" />
+                        <div class="domain-dialog-scroll">
+                            @foreach (var table in Available.Take(Limit))
+                            {
+                                var current = table;
+                                <div class="domain-dialog-row" data-available="@table.Name">
+                                    <span>@table.Name</span>
+                                    <MudSpacer />
+                                    <MudButton Size="Size.Small" OnClick="() => _members.Add(current.Id)" Class="domain-dialog-add" aria-label="@($"Ajouter {table.Name}")">Ajouter</MudButton>
+                                </div>
+                            }
+                            @if (Available.Count > Limit)
+                            {
+                                <MudText Typo="Typo.caption">… et @(Available.Count - Limit) autre(s) : précisez la recherche.</MudText>
+                            }
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(_search) && Available.Count > 0)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="AddAllFound" Class="domain-dialog-add-all">Ajouter les @Available.Count table(s) trouvée(s)</MudButton>
+                        }
+                    </div>
+
+                    <div class="domain-dialog-list" data-list="members">
+                        <MudText Typo="Typo.subtitle2">Dans le domaine (@Members.Count)</MudText>
+                        <div class="domain-dialog-scroll">
+                            @foreach (var table in Members)
+                            {
+                                var current = table;
+                                <div class="domain-dialog-row" data-member="@table.Name">
+                                    <span>@table.Name</span>
+                                    <MudSpacer />
+                                    <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => _members.Remove(current.Id)" Class="domain-dialog-remove" aria-label="@($"Retirer {table.Name}")">Retirer</MudButton>
+                                </div>
+                            }
+                            @if (Members.Count == 0)
+                            {
+                                <MudText Typo="Typo.caption" Class="domain-dialog-empty">Aucune table : choisissez-en dans la liste de gauche.</MudText>
+                            }
+                        </div>
+                        @if (Members.Count > 0)
+                        {
+                            <MudButton Size="Size.Small" OnClick="_members.Clear" Class="domain-dialog-clear">Tout retirer</MudButton>
+                        }
+                    </div>
+                </div>
+
+                <MudAlert Severity="Severity.Info" Dense="true" Class="domain-dialog-preview" role="status">
+                    @Members.Count table@(Members.Count > 1 ? "s" : "") dans ce domaine, @RelationCount relation@(RelationCount > 1 ? "s" : "") entre elles@(RelationCount > 0 ? " (le diagramme les dessinera ; vous pourrez en masquer)" : "").
+                </MudAlert>
+
+                @if (_error != null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="domain-dialog-error">@_error</MudAlert>
+                }
+            </MudStack>
+        </form>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy" Class="domain-dialog-cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="domain-dialog-save">
+            @(Existing == null ? "Créer le domaine" : "Enregistrer")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private const int Limit = 40;
+
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string DatabaseId { get; set; } = "";
+
+    /// <summary>Les tables de la base (avec leurs relations).</summary>
+    [Parameter, EditorRequired] public TableInfo[] Tables { get; set; } = [];
+
+    /// <summary>Les domaines de la base, pour refuser un nom déjà pris.</summary>
+    [Parameter] public DomainInfo[] Domains { get; set; } = [];
+
+    /// <summary>Le domaine à modifier ; absent : un nouveau domaine.</summary>
+    [Parameter] public DomainInfo? Existing { get; set; }
+
+    /// <summary>Tables proposées d'office à la création (par exemple celles déjà cochées dans le diagramme).</summary>
+    [Parameter] public IEnumerable<string>? InitialTables { get; set; }
+
+    private string _name = "", _search = "";
+    private string? _color, _error;
+    private readonly HashSet<string> _members = [];
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        if (Existing != null)
+        {
+            _name = Existing.Name;
+            _color = Existing.Color;
+            foreach (var link in Existing.Tables) _members.Add(link.TableId);
+        }
+        else if (InitialTables != null)
+        {
+            foreach (var id in InitialTables) _members.Add(id);
+        }
+    }
+
+    private List<TableInfo> Members => Tables.Where(t => _members.Contains(t.Id)).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    private List<TableInfo> Available
+    {
+        get
+        {
+            var term = _search.Trim();
+            return Tables.Where(t => !_members.Contains(t.Id) && (term.Length == 0 || t.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase)))
+                .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+    }
+
+    private void AddAllFound()
+    {
+        foreach (var table in Available) _members.Add(table.Id);
+        _search = "";
+    }
+
+    /// <summary>Relations dont les deux extrémités sont dans des tables du domaine.</summary>
+    private int RelationCount
+    {
+        get
+        {
+            var tableOf = Tables.SelectMany(t => t.Columns.Select(c => (Column: c.Id, Table: t.Id))).ToDictionary(x => x.Column, x => x.Table);
+            return Tables.Where(t => _members.Contains(t.Id)).SelectMany(t => t.Relations).DistinctBy(r => r.Id)
+                .Count(r => tableOf.TryGetValue(r.FirstId, out var a) && tableOf.TryGetValue(r.SecondId, out var b) &&
+                            _members.Contains(a) && _members.Contains(b));
+        }
+    }
+
+    private bool NameTaken => !string.IsNullOrWhiteSpace(_name) &&
+                              Domains.Any(d => d.Id != Existing?.Id && string.Equals(d.Name, _name.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_name) && !NameTaken;
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanSave) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var name = _name.Trim();
+            string id;
+            HashSet<string> before;
+            if (Existing == null)
+            {
+                id = (await Api.CreateDomainAsync(DatabaseId, name, _color)).Id;
+                before = [];
+            }
+            else
+            {
+                id = Existing.Id;
+                before = Existing.Tables.Select(t => t.TableId).ToHashSet();
+                if (name != Existing.Name || _color != Existing.Color) await Api.UpdateDomainAsync(Existing, name, _color);
+            }
+
+            foreach (var table in _members.Where(t => !before.Contains(t))) await Api.AddTableToDomainAsync(id, table);
+            foreach (var table in before.Where(t => !_members.Contains(t))) await Api.RemoveTableFromDomainAsync(id, table);
+            MudDialog.Close(DialogResult.Ok(id));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

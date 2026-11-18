@@ -30,7 +30,8 @@ public class DatabaseImportService(
     SchemaSynchronizer synchronizer,
     IEnumerable<ISchemaConnector> connectors,
     IOptions<CatalogOptions> options,
-    ISecretProtector protector)
+    ISecretProtector protector,
+    WebhookDispatcher webhooks)
 {
     private static readonly byte[] SqliteHeader = "SQLite format 3\0"u8.ToArray();
 
@@ -58,7 +59,7 @@ public class DatabaseImportService(
             try
             {
                 // Tout ou rien : une erreur ou une annulation ne laisse pas de base à moitié importée.
-                return await repository.InTransactionAsync(async repo =>
+                var imported = await repository.InTransactionAsync(async repo =>
                 {
                     var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, displayName, ct);
                     var database = sync.Database;
@@ -67,6 +68,8 @@ public class DatabaseImportService(
                     await repo.UpdateAsync(id, database, ct);
                     return new ImportResult(database, sync);
                 }, ct);
+                NotifyImported(imported);
+                return imported;
             }
             catch
             {
@@ -113,7 +116,26 @@ public class DatabaseImportService(
             }
 
             if (previous != null && IsManagedFile(previous)) DeleteQuietly(previous);
+            NotifySchemaChange(result.Sync);
             return result;
+        }
+        finally
+        {
+            DeleteQuietly(temp);
+        }
+    }
+
+    /// <summary>Ce que ferait <see cref="ReplaceSqliteAsync" /> avec ce fichier, sans rien modifier ni conserver. <c>null</c> si la base n'existe pas.</summary>
+    public async Task<SyncPreview?> PreviewReplaceSqliteAsync(string id, Stream content, CancellationToken ct = default)
+    {
+        var database = await repository.GetAsync<DatabaseInfo>(id, ct);
+        if (database == null) return null;
+        EnsureSqlite(database);
+        var temp = await SaveTempAsync(content, ct);
+        try
+        {
+            var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(temp, ct);
+            return await SchemaDiffer.DiffAsync(repository, id, schema, ct);
         }
         finally
         {
@@ -131,7 +153,7 @@ public class DatabaseImportService(
         var full = Path.GetFullPath(path);
         var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(full, ct);
         var id = Guid.NewGuid().ToString();
-        return await repository.InTransactionAsync(async repo =>
+        var imported = await repository.InTransactionAsync(async repo =>
         {
             var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, name, ct);
             var database = sync.Database;
@@ -140,6 +162,8 @@ public class DatabaseImportService(
             await repo.UpdateAsync(id, database, ct);
             return new ImportResult(database, sync);
         }, ct);
+        NotifyImported(imported);
+        return imported;
     }
 
     /// <summary>Relit la source enregistrée d'une base (fichier SQLite conservé) et met à jour le catalogue.</summary>
@@ -148,6 +172,7 @@ public class DatabaseImportService(
         var read = await ReadSourceAsync(id, ct);
         if (read == null) return null;
         var sync = await synchronizer.SyncAsync(id, read.Value.Schema, ct: ct);
+        NotifySchemaChange(sync);
         return new ImportResult(sync.Database, sync);
     }
 
@@ -244,7 +269,7 @@ public class DatabaseImportService(
         var (schema, secret) = await ReadForImportAsync(input, ct);
         var id = Guid.NewGuid().ToString();
         var name = string.IsNullOrWhiteSpace(input.Name) ? schema.DatabaseName : input.Name.Trim();
-        return await repository.InTransactionAsync(async repo =>
+        var imported = await repository.InTransactionAsync(async repo =>
         {
             var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, name, ct);
             var database = sync.Database;
@@ -255,6 +280,8 @@ public class DatabaseImportService(
             await repo.UpdateAsync(id, database, ct);
             return new ImportResult(database, sync);
         }, ct);
+        NotifyImported(imported);
+        return imported;
     }
 
     /// <summary>Remplace la connexion d'une base SQL Server (mot de passe changé, autre schéma…) et la resynchronise.</summary>
@@ -268,7 +295,7 @@ public class DatabaseImportService(
             throw new InvalidSourceException($"Cette base est de type {existing.Type}, pas SqlServer.");
 
         var (schema, secret) = await ReadForImportAsync(input, ct);
-        return await repository.InTransactionAsync(async repo =>
+        var replaced = await repository.InTransactionAsync(async repo =>
         {
             var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, ct: ct);
             var database = sync.Database;
@@ -277,6 +304,8 @@ public class DatabaseImportService(
             await repo.UpdateAsync(id, database, ct);
             return new ImportResult(database, sync);
         }, ct);
+        NotifySchemaChange(replaced.Sync);
+        return replaced;
     }
 
     private async Task<(SourceSchema Schema, string Secret)> ReadForImportAsync(SqlServerConnectionInput input, CancellationToken ct)
@@ -295,7 +324,57 @@ public class DatabaseImportService(
     public async Task<SyncResult> SyncSourceAsync(StartupSource source, CancellationToken ct = default)
     {
         var schema = await Connector(source.Type).ReadSchemaAsync(source.Source, ct);
-        return await synchronizer.SyncAsync(source.Id, schema, source.Name, ct);
+        var result = await synchronizer.SyncAsync(source.Id, schema, source.Name, ct);
+        NotifySchemaChange(result);
+        return result;
+    }
+
+    /// <summary>Prévient les webhooks (sans filtre de base : la base vient d'être créée) qu'une base a été importée.</summary>
+    private void NotifyImported(ImportResult imported) =>
+        webhooks.Enqueue(WebhookEvents.DatabaseImported, imported.Database.Id, new
+        {
+            database = new { id = imported.Database.Id, name = imported.Database.Name, type = imported.Database.Type },
+            tables = imported.Sync.TablesAdded
+        });
+
+    /// <summary>
+    ///     Prévient les webhooks quand une resynchronisation a changé le schéma documenté. Les relations recréées à chaque
+    ///     synchronisation ne comptent pas : seuls tables, colonnes et index font un changement.
+    /// </summary>
+    private void NotifySchemaChange(SyncResult sync)
+    {
+        if (sync.TablesAdded + sync.TablesRemoved + sync.ColumnsAdded + sync.ColumnsUpdated + sync.ColumnsRemoved +
+            sync.IndexesAdded + sync.IndexesRemoved == 0) return;
+        webhooks.Enqueue(WebhookEvents.SchemaChanged, sync.Database.Id, new
+        {
+            database = new { id = sync.Database.Id, name = sync.Database.Name },
+            changes = new
+            {
+                tablesAdded = sync.TablesAdded, tablesRemoved = sync.TablesRemoved, columnsAdded = sync.ColumnsAdded,
+                columnsUpdated = sync.ColumnsUpdated, columnsRemoved = sync.ColumnsRemoved, indexesAdded = sync.IndexesAdded,
+                indexesRemoved = sync.IndexesRemoved
+            }
+        });
+    }
+
+    /// <summary>
+    ///     Retire la base du catalogue (tables, colonnes, relations, domaines, étiquettes liés) et la note dans
+    ///     l'historique ; le fichier source que le serveur conservait est supprimé aussi. La base source n'est jamais touchée.
+    /// </summary>
+    public async Task<bool> DeleteDatabaseAsync(string id, string? actor, CancellationToken ct = default)
+    {
+        var database = await repository.GetAsync<DatabaseInfo>(id, ct);
+        if (database == null) return false;
+        var deleted = await repository.InTransactionAsync(async repo =>
+        {
+            if (!await repo.DeleteAsync<DatabaseInfo>(id, ct)) return false;
+            await repo.RecordHistoryAsync<DatabaseInfo>(id, "Deleted", database.Name, null, actor, ct);
+            return true;
+        }, ct);
+        if (deleted && !string.IsNullOrWhiteSpace(database.SourcePath) && IsManagedFile(database.SourcePath))
+            DeleteQuietly(database.SourcePath);
+        if (deleted) webhooks.Enqueue(WebhookEvents.DatabaseDeleted, id, new { database = new { id, name = database.Name } });
+        return deleted;
     }
 
     private static void EnsureSqlite(DatabaseInfo database)

@@ -1,0 +1,222 @@
+@page "/manage"
+@using GranitDb.Client.api
+@using GranitDb.Client.Components
+@using GranitDb.Client.Components.Dialogs
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+@inject IDialogService Dialogs
+
+<PageTitle>Étiquettes et domaines</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <MudText Typo="Typo.h4" Class="mb-1">Étiquettes et domaines</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+        Renommez, colorez ou supprimez les étiquettes (communes à toutes les bases) et les domaines de chaque base.
+        Cliquez un nom pour le modifier ; il s'enregistre en le quittant.
+    </MudText>
+
+    @if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
+    }
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else
+    {
+        <MudPaper Class="pa-4 mb-4" Outlined="true" id="manage-tags">
+            <MudText Typo="Typo.h6">Étiquettes (@_tags.Length)</MudText>
+            @if (_tags.Length == 0)
+            {
+                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucune étiquette : posez-en une depuis une base, une table ou une colonne.</MudText>
+            }
+            @foreach (var tag in _tags)
+            {
+                var current = tag;
+                <div class="manage-row" data-tag="@tag.Name">
+                    <input type="color" class="color-input" aria-label="@($"Couleur de l'étiquette {tag.Name}")"
+                           value="@(tag.Color ?? "#757575")" @onchange="e => SetTagColorAsync(current, e.Value?.ToString())" />
+                    <InlineText Value="@tag.Name" Multiline="false" Silent="true" Placeholder="Nom" Label="Nom de l'étiquette"
+                                OnSave="@RenameTagHandler(current)" />
+                    <MudSpacer />
+                    @if (tag.Color != null)
+                    {
+                        <MudButton Size="Size.Small" OnClick="() => SetTagColorAsync(current, null)">Sans couleur</MudButton>
+                    }
+                    @if (_confirm == tag.Id)
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" OnClick="() => DeleteTagAsync(current)" Class="confirm-delete">Retirer partout</MudButton>
+                        <MudButton Size="Size.Small" OnClick="() => _confirm = null">Annuler</MudButton>
+                    }
+                    else
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => _confirm = current.Id" Class="delete-tag">Supprimer</MudButton>
+                    }
+                </div>
+            }
+        </MudPaper>
+
+        @foreach (var db in _databases)
+        {
+            var domains = _domains.GetValueOrDefault(db.Id) ?? [];
+            <MudPaper Class="pa-4 mb-4" Outlined="true" data-database="@db.Name">
+                <MudStack Row="true" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.h6">Domaines de @db.Name (@domains.Length)</MudText>
+                    <MudSpacer />
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => NewDomainAsync(db)" Class="new-domain">Nouveau domaine</MudButton>
+                </MudStack>
+                @if (domains.Length == 0)
+                {
+                    <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucun domaine : créez-en un pour regrouper les tables d'un même sujet.</MudText>
+                }
+                @foreach (var domain in domains)
+                {
+                    var current = domain;
+                    <div class="manage-row" data-domain="@domain.Name">
+                        <input type="color" class="color-input" aria-label="@($"Couleur du domaine {domain.Name}")"
+                               value="@(domain.Color ?? "#757575")" @onchange="e => SetDomainColorAsync(current, e.Value?.ToString())" />
+                        <InlineText Value="@domain.Name" Multiline="false" Silent="true" Placeholder="Nom" Label="Nom du domaine"
+                                    OnSave="@RenameDomainHandler(current)" />
+                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@domain.Tables.Count table(s)</MudText>
+                        <MudSpacer />
+                        <MudButton Size="Size.Small" Href="@($"/databases/{db.Id}/diagram?domain={domain.Id}")">Diagramme</MudButton>
+                        @if (domain.Color != null)
+                        {
+                            <MudButton Size="Size.Small" OnClick="() => SetDomainColorAsync(current, null)">Sans couleur</MudButton>
+                        }
+                        <MudButton Size="Size.Small" OnClick="() => EditDomainAsync(current)" Class="edit-tables">Modifier le domaine</MudButton>
+                        @if (_confirm == domain.Id)
+                        {
+                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" OnClick="() => DeleteDomainAsync(current)" Class="confirm-delete">Supprimer le domaine</MudButton>
+                            <MudButton Size="Size.Small" OnClick="() => _confirm = null">Annuler</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => _confirm = current.Id" Class="delete-domain">Supprimer</MudButton>
+                        }
+                    </div>
+                }
+                @if (domains.Length > 0)
+                {
+                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">Supprimer un domaine ne supprime pas ses tables.</MudText>
+                }
+            </MudPaper>
+        }
+    }
+</MudContainer>
+
+@code {
+    private readonly List<BreadcrumbItem> _crumbs = [new("Bases", href: "/"), new("Étiquettes et domaines", href: null, disabled: true)];
+
+    private TagInfo[] _tags = [];
+    private DatabaseInfo[] _databases = [];
+    private Dictionary<string, DomainInfo[]> _domains = new();
+    private string? _confirm;
+    private string? _error;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Workspace.Describe(Navigation.Uri, "Étiquettes et domaines");
+        await LoadAsync();
+        Workspace.Describe(Navigation.Uri, "Étiquettes et domaines");
+        _loading = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        _tags = (await Api.GetTagsAsync()).OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        _databases = (await Api.GetAllDatabaseAsync()).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        var domains = new Dictionary<string, DomainInfo[]>();
+        foreach (var db in _databases) domains[db.Id] = await Api.GetDomainsAsync(db.Id);
+        _domains = domains;
+    }
+
+    /// <summary>Exécute un changement ; une erreur du serveur (nom déjà pris, couleur invalide…) s'affiche en haut de la page.</summary>
+    private async Task RunAsync(Func<Task> change, string? databaseId = null)
+    {
+        try
+        {
+            await change();
+            _error = null;
+            _confirm = null;
+            await LoadAsync();
+            Workspace.NotifyCatalogChanged(databaseId, this);
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+    }
+
+    private Func<string?, Task> RenameTagHandler(TagInfo tag) => text => RenameTagAsync(tag, text);
+
+    private Func<string?, Task> RenameDomainHandler(DomainInfo domain) => text => RenameDomainAsync(domain, text);
+
+    private Task RenameTagAsync(TagInfo tag, string? name) => RunOrThrowAsync(() => Api.UpdateTagAsync(tag, name ?? "", tag.Color));
+
+    private Task SetTagColorAsync(TagInfo tag, string? color) => RunAsync(() => Api.UpdateTagAsync(tag, tag.Name, color));
+
+    private Task DeleteTagAsync(TagInfo tag) => RunAsync(async () =>
+    {
+        await Api.DeleteTagAsync(tag.Id);
+        Notifier.Show($"Étiquette {tag.Name} supprimée de tous les éléments.");
+    });
+
+    private Task RenameDomainAsync(DomainInfo domain, string? name) =>
+        RunOrThrowAsync(() => Api.UpdateDomainAsync(domain, name ?? "", domain.Color), domain.DatabaseId);
+
+    private Task SetDomainColorAsync(DomainInfo domain, string? color) =>
+        RunAsync(() => Api.UpdateDomainAsync(domain, domain.Name, color), domain.DatabaseId);
+
+    private Task DeleteDomainAsync(DomainInfo domain) => RunAsync(async () =>
+    {
+        await Api.DeleteDomainAsync(domain.Id);
+        Notifier.Show($"Domaine {domain.Name} supprimé (ses tables sont intactes).");
+    }, domain.DatabaseId);
+
+    /// <summary>Fenêtre de modification d'un domaine : nom, couleur et tables, comme à la création.</summary>
+    private async Task EditDomainAsync(DomainInfo domain)
+    {
+        var parameters = new DialogParameters<DomainDialog>
+        {
+            { x => x.DatabaseId, domain.DatabaseId }, { x => x.Tables, await Api.GetTablesAsync(domain.DatabaseId) },
+            { x => x.Domains, _domains.GetValueOrDefault(domain.DatabaseId) ?? [] }, { x => x.Existing, domain }
+        };
+        if (await Dialogs.ShowFormAsync("Modifier le domaine", parameters, MaxWidth.Large))
+        {
+            await LoadAsync();
+            Workspace.NotifyCatalogChanged(domain.DatabaseId, this);
+            Notifier.Show("Domaine modifié.");
+        }
+    }
+
+    private async Task NewDomainAsync(DatabaseInfo database)
+    {
+        var parameters = new DialogParameters<DomainDialog>
+        {
+            { x => x.DatabaseId, database.Id }, { x => x.Tables, await Api.GetTablesAsync(database.Id) },
+            { x => x.Domains, _domains.GetValueOrDefault(database.Id) ?? [] }
+        };
+        if (await Dialogs.ShowDataAsync<DomainDialog, string>("Nouveau domaine", parameters, MaxWidth.Large) == null) return;
+        await LoadAsync();
+        Workspace.NotifyCatalogChanged(database.Id, this);
+        Notifier.Show("Domaine créé.");
+    }
+
+    /// <summary>Pour les champs en place : l'erreur remonte au champ, qui l'affiche sous la saisie.</summary>
+    private async Task RunOrThrowAsync(Func<Task> change, string? databaseId = null)
+    {
+        await change();
+        _error = null;
+        await LoadAsync();
+        Workspace.NotifyCatalogChanged(databaseId, this);
+    }
+}

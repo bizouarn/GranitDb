@@ -18,7 +18,7 @@ Jalons **1** (SQLite sans serveur), **2** (fondations : migrations, Docker, CI),
 
 **Prochain jalon : 6 (sécurité).** Les jalons ci-dessous sont classés dans l'ordre où les traiter ; leurs numéros sont conservés pour ne pas être confondus avec les jalons 1, 2, 3, 4, 5 et 7 déjà terminés. Depuis les jalons 1 et 2, l'API accepte des uploads de fichiers, expose `docker-compose` sur le réseau et n'a toujours ni authentification ni CORS restreint : elle ne doit pas être joignable hors poste de dev ou réseau de confiance.
 
-Chiffres : 536 tests sous .NET 10 (30 tests SQL Server nécessitent Docker), CI GitHub Actions, pile `docker compose` vérifiée en SQLite et en SQL Server. Catalogue en version 9. L'interface (espace de travail, diagramme, glisser-déposer, édition en place) est couverte par des tests bUnit et de modèle ; sa vérification dans un vrai navigateur reste manuelle.
+Chiffres : 621 tests sous .NET 10 (30 tests SQL Server nécessitent Docker), CI GitHub Actions, pile `docker compose` vérifiée en SQLite et en SQL Server. Catalogue en version 12. L'interface (espace de travail, diagramme, glisser-déposer, édition en place) est couverte par des tests bUnit et de modèle ; sa vérification dans un vrai navigateur reste manuelle.
 
 ---
 
@@ -32,21 +32,22 @@ Chiffres : 536 tests sous .NET 10 (30 tests SQL Server nécessitent Docker), CI 
 - [ ] Mise en œuvre de `IsPublic` : bases publiques lisibles sans compte.
 - [ ] Restreindre CORS aux origines configurées.
 - [ ] Secrets de connexion hors fichier, chiffrés dans le catalogue. _Fait pour les sources SQL Server enregistrées depuis l'interface (chiffrées, jamais renvoyées par l'API, clés dans `Catalog:KeysDirectory`). Reste `Catalog:StartupSources`, dont la chaîne de connexion reste en clair dans la configuration, et le coffre de clés (Key Vault, DPAPI…) pour ne pas laisser les clés en fichiers._
-- [ ] Journal d'audit.
+- [ ] **Journal d'audit : suite** : la page `/audit` du client (filtres, pagination) et la conservation (`Audit:RetentionDays`) sont faites. Reste l'auteur réel une fois l'authentification en place.
 
 ## Jalon 11 — Refonte de l'UI/UX du client (P1)
 
-Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, panneau de détail à droite, palette Ctrl+K, favoris et domaines en collections, accueil guidé, édition en place à enregistrement automatique, confirmations annulables, thème, raccourcis, repères d'accessibilité). Voir le README et [le protocole de validation](02-parcours-utilisateurs.md). Reste ce qui ne peut pas se faire sans utilisateurs ni appareils :
+_Suite détaillée : [roadmap pour rendre les interfaces plus intuitives](04-roadmap-interfaces-intuitives.md) (légendes, vocabulaire, démarrage, saisie en lot, fenêtres de saisie, diagramme, accessibilité, tests utilisateurs)._
+
+Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, panneau de détail à droite, palette Ctrl+K, favoris et domaines en collections, accueil guidé, édition en place à enregistrement automatique, confirmations annulables, thème, raccourcis, repères d'accessibilité). Depuis : **suppression d'une base** (confirmation en retapant son nom, historique, fichier conservé supprimé), **domaines configurables** (tables voisines en option, relations affichées ou masquées par domaine, plan Dataedo importé), **écran Étiquettes et domaines** (`/manage` : renommer, colorer, supprimer) et **aperçu du remplacement d'un fichier SQLite** avant de l'appliquer. Voir le README et [le protocole de validation](02-parcours-utilisateurs.md). Reste ce qui ne peut pas se faire sans utilisateurs ni appareils :
 
 - [ ] **Tests utilisateurs** : dérouler les quatre parcours du [protocole](02-parcours-utilisateurs.md) (importer une base, retrouver une colonne, documenter une table, exporter un diagramme) avec de vraies personnes, puis corriger ce qu'elles n'ont pas trouvé seules.
 - [ ] **Accessibilité vérifiée** : la structure est en place (rôles, étiquettes, focus visible, lien d'évitement, mouvement réduit, contrastes choisis pour 4,5:1) et testée par composants, mais pas encore auditée avec un lecteur d'écran réel ni avec un outil de mesure de contraste.
 - [ ] **Petits écrans** : les tiroirs deviennent des panneaux superposés sous 960 px (explorateur) et 1280 px (détails), mais la disposition n'a pas été essayée sur de vrais téléphones et tablettes.
 - [ ] **Diagramme et barre latérale** : le diagramme s'ouvre dans un onglet et un domaine de l'explorateur l'ouvre sur ce domaine ; la liste des tables à afficher reste dans la page du diagramme (elle n'est pas encore l'arbre de la barre latérale).
-- [ ] **Édition en place des relations et des domaines** : les relations manuelles et les noms de domaine se modifient avec leurs propres champs ; à aligner sur le même geste (clic, saisie, quitter le champ).
-- [ ] **Domaines configurables (tables et relations)** : choisir précisément ce qu'un domaine affiche. Aujourd'hui le diagramme d'un domaine montre ses tables **plus** toutes les tables voisines reliées (en pointillés), si bien que le domaine « Article » (20 tables dans la documentation officielle) en dessine bien davantage. À faire : activer ou désactiver les tables voisines par domaine (par défaut seulement les tables du domaine), retenir par domaine les relations affichées ou masquées (cases à cocher ou clic sur un lien), et conserver ce choix avec la place des tables.
-- [ ] **Supprimer une base documentée** : bouton (avec confirmation explicite) pour retirer une base du catalogue, avec ses tables, colonnes, relations, domaines et étiquettes liés, depuis la liste des bases et la page de la base. L'API sait déjà supprimer en cascade (`DELETE /DatabaseInfo/{id}`) ; le client n'a pas encore l'action. Prévoir l'annulation (ou un avertissement net : une base très documentée, comme l'import Herakles, représente beaucoup de saisie) et ne jamais toucher à la base source.
-- [ ] **Gestion des étiquettes et des domaines** : écran pour renommer, supprimer et colorer les étiquettes et les domaines (l'API sait déjà le faire, le client non).
-- [ ] **Aperçu des différences au remplacement d'un fichier** (`PUT /import/sqlite/{id}`) : aujourd'hui seul « Resynchroniser » montre ce qui va changer avant de l'appliquer.
+- [ ] **Relations affichées par domaine, comme dans Dataedo** : l'import de la documentation masque déjà les relations que le plan d'origine ne trace pas (vérifié sur AYB_MECANIQUE). Reste : (1) pour un domaine neuf, ne rien tracer d'office au-delà des clés étrangères détectées, ou proposer « Masquer les relations indirectes » ; (2) un bouton « Réinitialiser comme dans Dataedo » quand la documentation d'origine est connue.
+- [ ] **Fenêtres de saisie** : _faites : relation (nouvelle / modifier), domaine (nouveau / modifier), webhook, confirmation commune (webhook). Restent la table saisie à la main (modèle à décider), la grille de colonnes, l'étiquette, l'assistant d'import et la confirmation commune partout._ Besoin d'origine : créer et modifier dans des fenêtres dédiées plutôt que dans des formulaires insérés dans la page — relation (recherche des colonnes, paires multi-colonnes, aperçu, contrôle avant envoi), domaine (liste à deux colonnes, ajout en lot), colonnes en grille, webhook, assistant d'import, confirmation commune, et, à décider, la saisie d'une table qui n'existe pas dans la source. Règles communes (focus, Échap, validation en ligne, brouillon, accessibilité) et détail au [lot 9](04-roadmap-interfaces-intuitives.md).
+- [ ] **Éditer les tables d'un domaine** : l'écran de gestion le permet déjà (membres, retrait, recherche, ajout). Reste le même éditeur dans le diagramme, l'ajout en lot (par préfixe de nom, par table liée) et l'aperçu du nombre de relations que le changement fait apparaître.
+- [ ] **Relations multi-colonnes : suite** : le modèle, la synchronisation, l'import, les exports et l'affichage client sont faits. Le surlignage est fait : choisir une colonne d'une clé composite met en évidence toutes les autres dans le diagramme. Reste les analyses d'impact et décomptes de relations masquées comptés par relation (plus par paire).
 
 ## Jalon 8 — Autres moteurs (P2)
 
@@ -55,9 +56,8 @@ Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, p
 
 ## Jalon 9 — Export et intégrations (P2/P3)
 
-- [ ] Export de la documentation : Markdown, HTML statique, PDF, CSV/Excel. **Un export HTML/Markdown autonome complète bien le mode sans serveur.**
+- [ ] **Export de la documentation : suite** : le HTML, le Markdown et le CSV sont faits. Reste le PDF (impression du HTML) et le format Excel natif (le CSV s'ouvre dans Excel).
 - [ ] Client typé généré depuis OpenAPI (remplace le projet `interfaces` si jugé redondant).
-- [ ] Webhooks sur changement de schéma.
 - [ ] Écriture des descriptions vers la base source (propriétés étendues SQL Server / `COMMENT ON`) ; impossible en SQLite, qui n'a pas de commentaires de schéma natifs.
 
 ## Jalon 10 — Fonctions avancées (P3, exploratoire)
@@ -90,8 +90,6 @@ Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, p
 |---|---|
 | Aucune authentification, CORS ouvert à toutes les origines, upload de fichiers accessible à tous | 6 |
 | `StartupSources` stocke les chaînes de connexion SQL Server en clair dans la configuration (une source enregistrée depuis l'interface, elle, est chiffrée) | 6 |
-| L'aperçu des différences n'existe que pour la resynchronisation (`POST /DatabaseInfo/{id}/sync/preview`), pas pour le remplacement d'un fichier (`PUT /import/sqlite/{id}`) | 11 |
-| Les étiquettes et domaines n'ont pas d'écran de gestion complet : pas de renommage ni de couleur d'étiquette dans le client (l'API les gère), ni de couleur de domaine | 11 |
 | Analyse d'impact limitée à la base de l'élément (une relation manuelle entre deux bases n'est pas suivie) ; le diagramme place les tables par couches sans minimiser les croisements de relations | — |
 | Index : seuls les noms de colonnes sont stockés (pas l'ordre ASC/DESC, ni les prédicats d'index partiels, ni les colonnes `INCLUDE`) | 8 |
 

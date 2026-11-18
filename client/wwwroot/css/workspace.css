@@ -459,3 +459,96 @@
     height: 26px;
     border-radius: 6px;
 }
+
+.manage-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .35rem 0;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    flex-wrap: wrap;
+}
+
+.color-input {
+    width: 32px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+}
+
+.relation-item {
+    break-inside: avoid;
+}
+
+.replace-file {
+    position: relative;
+    display: inline-block;
+}
+
+.replace-file-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.domain-editor {
+    margin: .25rem 0 .75rem 1rem;
+    padding: .5rem .75rem;
+    border-left: 3px solid var(--mud-palette-lines-default);
+}
+
+.editor-search {
+    width: 100%;
+    max-width: 24rem;
+    margin: .25rem 0 .5rem;
+    padding: .35rem .5rem;
+    font: inherit;
+    color: inherit;
+    background: transparent;
+    border: 1px solid var(--mud-palette-lines-inputs);
+    border-radius: 4px;
+}
+
+/* Type d'une relation : un texte cliquable (même geste que les descriptions), le crayon apparaît au survol. */
+.relation-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: text;
+}
+
+.relation-edit:hover, .relation-edit:focus-visible {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.relation-pencil {
+    opacity: 0;
+    font-size: 0.9rem !important;
+}
+
+.relation-edit:hover .relation-pencil, .relation-edit:focus-visible .relation-pencil {
+    opacity: 0.7;
+}
+
+.relation-description {
+    margin-left: 4px;
+    font-size: 0.8125rem;
+}
+
+/* Les boutons d'action de la page d'une base ne se coupent jamais sur deux lignes : c'est la rangée qui passe à la ligne. */
+.db-actions .mud-button-root,
+.db-actions .replace-file-button {
+    white-space: nowrap;
+}

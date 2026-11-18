@@ -42,7 +42,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         """;
 
     private string _domains = """
-        [{"id":"d1","databaseId":"db","name":"Ventes","tables":[{"tableId":"t2","x":300,"y":50}]},
+        [{"id":"d1","databaseId":"db","name":"Ventes","showNeighbors":true,"tables":[{"tableId":"t2","x":300,"y":50}]},
          {"id":"d2","databaseId":"db","name":"Facturation","color":"#00aa00","tables":[{"tableId":"t4","x":null,"y":null}]}]
         """;
 
@@ -69,6 +69,45 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         var page = _ctx.Render<Diagram>(p => p.Add(x => x.Id, "db"));
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("g.er-node")));
         return page;
+    }
+
+    private static string[] DomainNames(IRenderedComponent<Diagram> page) =>
+        page.FindAll("[data-domain]").Select(n => n.GetAttribute("data-domain")!).ToArray();
+
+    [BunitFact]
+    public void Domains_can_be_searched_by_name_and_the_search_says_when_nothing_matches()
+    {
+        var page = Open();
+        Assert.Equal(["Ventes", "Facturation"], DomainNames(page));
+
+        page.Find(".domain-search input").Input("fact");
+
+        Assert.Equal(["Facturation"], DomainNames(page));
+        Assert.NotEmpty(page.FindAll(".domain-all")); // « Toutes les tables » reste toujours accessible
+        page.Find(".domain-search input").Input("zzz");
+        Assert.Empty(DomainNames(page));
+        Assert.Contains("Aucun domaine ne contient « zzz »", page.Find(".domain-search-empty").TextContent);
+        page.Find(".domain-search input").Input("");
+        Assert.Equal(["Ventes", "Facturation"], DomainNames(page));
+    }
+
+    [BunitFact]
+    public void The_domains_panel_folds_to_its_title_to_leave_room_for_the_table_list()
+    {
+        var page = Open();
+        Assert.Equal("true", page.Find("button.domains-toggle").GetAttribute("aria-expanded"));
+        Assert.Contains("45vh", page.Find(".table-picker").GetAttribute("style"));
+
+        page.Find("button.domains-toggle").Click();
+
+        Assert.Equal("false", page.Find("button.domains-toggle").GetAttribute("aria-expanded"));
+        Assert.Empty(page.FindAll("[data-domain]"));
+        Assert.Empty(page.FindAll(".domain-search"));
+        Assert.Contains("Toutes les tables", page.Find(".domains-current").TextContent); // le domaine courant reste indiqué
+        Assert.Contains("72vh", page.Find(".table-picker").GetAttribute("style"));
+        Assert.NotEmpty(page.FindAll("[data-table-item]")); // la liste des tables est toujours là
+        page.Find("button.domains-toggle").Click();
+        Assert.Equal(["Ventes", "Facturation"], DomainNames(page));
     }
 
     private static string[] Shown(IRenderedComponent<Diagram> page) =>
@@ -239,7 +278,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     {
         var page = Open();
         _domains = """
-            [{"id":"d1","databaseId":"db","name":"Ventes","tables":[]},{"id":"d3","databaseId":"db","name":"RH","tables":[]}]
+            [{"id":"d1","databaseId":"db","name":"Ventes","showNeighbors":true,"tables":[]},{"id":"d3","databaseId":"db","name":"RH","tables":[]}]
             """;
 
         page.Find(".new-domain-name input").Input("RH");

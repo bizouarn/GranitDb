@@ -16,6 +16,16 @@ public class ClientExplorerTests : ShellTestBase
         return page;
     }
 
+    [BunitFact]
+    public void The_management_pages_are_reached_from_one_labelled_menu_not_from_bare_icons()
+    {
+        var page = Open();
+
+        var menu = page.Find(".manage-menu");
+        Assert.Contains("Gérer", menu.TextContent);
+        Assert.Empty(page.FindAll("a.manage-link")); // rien n'est affiché tant que le menu est fermé
+    }
+
     private static void ExpandDb(IRenderedComponent<Explorer> page, string name)
     {
         page.Find($"[data-db='{name}'] button.chev").Click();

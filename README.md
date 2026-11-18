@@ -58,6 +58,8 @@ Toutes les routes sont sous **`/api/v1`** ; les anciennes routes sans préfixe (
 | `POST /api/v1/import/sqlite`, `PUT /api/v1/import/sqlite/{id}` | Import / ré-import d'un fichier SQLite |
 | `POST /api/v1/import/sqlite/local` | Import par chemin serveur (si `AllowLocalPaths`) |
 | `POST /api/v1/import/sqlserver/test`, `POST /api/v1/import/sqlserver`, `PUT /api/v1/import/sqlserver/{id}` | Tester une connexion SQL Server, documenter la base (connexion enregistrée chiffrée), remplacer la connexion (si `AllowSqlServerSources`) |
+| `GET /api/v1/Audit?actor=&method=&status=&controller=&entityId=&from=&to=` | Journal d'audit : qui a modifié ou exporté quoi, et quand (jamais le contenu des requêtes) |
+| `GET/POST/PUT/DELETE /api/v1/Webhooks`, `POST /Webhooks/{id}/test`, `GET /Webhooks/{id}/deliveries` | Webhooks : une URL appelée en POST (JSON, signé HMAC-SHA256 si un secret est défini) quand une resynchronisation change le schéma (`schema.changed`) , qu'une base est importée (`database.imported`) ou supprimée (`database.deleted`) (ces deux-là sont à demander dans `events`) |
 | `GET /api/v1/Capabilities` | Ce que le serveur autorise (sources SQL Server, chemins locaux) |
 | `POST /api/v1/DatabaseInfo/{id}/sync` | Resynchronise la base depuis sa source |
 | `GET /api/v1/Search?q=terme&limit=25` | Recherche globale |
@@ -80,6 +82,10 @@ Swagger est disponible sur `/swagger` en développement. Les erreurs sont renvoy
 | `AllowSqlServerSources` | `true` | Autorise l'API à se connecter à un serveur SQL Server choisi par l'appelant (voir ci-dessous) |
 | `KeysDirectory` | `<DataDirectory>/keys` | Clés qui chiffrent les connexions enregistrées |
 | `StartupSources` | `[]` | Sources (`Sqlite` ou `SqlServer`) synchronisées au démarrage |
+
+Journal d'audit (section `Audit`) : `RetentionDays` (365 ; 0 garde tout), purge faite au plus une fois par heure à l'écriture.
+
+Webhooks (section `Webhooks`) : `AllowPrivateHosts` (`false` : refuse les adresses locales ou privées — `localhost`, `10.x`, `192.168.x`, `host.docker.internal`… — à ouvrir seulement sur un réseau de confiance), `MaxAttempts` (3), `RetryDelaysMs` (`[1000, 5000]`), `TimeoutSeconds` (5), `DeliveriesKept` (100 par webhook). Chaque envoi porte `X-GranitDb-Event`, `X-GranitDb-Delivery` et, avec un secret, `X-GranitDb-Signature: sha256=<hmac du corps>`.
 
 ## Documenter une base SQL Server
 

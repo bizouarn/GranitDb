@@ -1,6 +1,7 @@
 @page "/databases/{Id}/diagram"
 @using GranitDb.Client.api
 @using GranitDb.Client.Components
+@using GranitDb.Client.Components.Dialogs
 @using GranitDb.Client.Diagram
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
@@ -9,6 +10,7 @@
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
+@inject IDialogService Dialogs
 
 <PageTitle>Diagramme — @(_database?.Name ?? "Base")</PageTitle>
 
@@ -40,16 +42,40 @@
         <MudGrid>
             <MudItem xs="12" md="3">
                 <MudPaper Class="pa-3 mb-3" id="domains">
-                    <MudText Typo="Typo.subtitle1">Domaines</MudText>
+                    @* Le panneau se réduit à son titre pour laisser toute la place à la liste des tables. *@
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                        <MudIconButton Icon="@(_domainsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small"
+                                       Class="domains-toggle" OnClick="() => _domainsOpen = !_domainsOpen"
+                                       aria-expanded="@(_domainsOpen ? "true" : "false")" aria-controls="domains-body"
+                                       aria-label="@(_domainsOpen ? "Réduire le panneau des domaines" : "Déployer le panneau des domaines")"
+                                       title="@(_domainsOpen ? "Réduire pour voir la liste des tables" : "Déployer les domaines")" />
+                        <MudText Typo="Typo.subtitle1">Domaines (@_domains.Length)</MudText>
+                        @if (!_domainsOpen)
+                        {
+                            <MudText Typo="Typo.caption" Class="domains-current" Style="color: var(--mud-palette-text-secondary)">
+                                @(CurrentDomain == null ? "Toutes les tables" : CurrentDomain.Name)
+                            </MudText>
+                        }
+                    </MudStack>
+                    @if (_domainsOpen)
+                    {
+                    <div id="domains-body">
                     <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
                         Un domaine regroupe des tables pour un diagramme lisible. Glissez une table sur un domaine pour l'y ranger.
                     </MudText>
+                    <MudTextField @bind-Value="_domainSearch" Label="Rechercher un domaine" Immediate="true" Clearable="true" Dense="true"
+                                  Class="mb-1 domain-search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
+                    <div class="domain-list">
                     <div class="@($"domain-card domain-all{(_domainId == null ? " domain-selected" : "")}")" role="button" tabindex="0"
                          @onclick="() => SelectDomainAsync(null)">
                         <span>Toutes les tables</span>
                         <MudText Typo="Typo.caption">@_tables.Length</MudText>
                     </div>
-                    @foreach (var domain in _domains)
+                    @if (VisibleDomains.Count == 0 && !string.IsNullOrWhiteSpace(_domainSearch))
+                    {
+                        <MudText Typo="Typo.caption" Class="domain-search-empty">Aucun domaine ne contient « @_domainSearch.Trim() ».</MudText>
+                    }
+                    @foreach (var domain in VisibleDomains)
                     {
                         var current = domain;
                         <div class="@($"domain-card{(_domainId == domain.Id ? " domain-selected" : "")}{(_draggedTable != null ? " domain-target" : "")}")"
@@ -73,15 +99,20 @@
                                           AutoFocus="true" Class="domain-rename-input" OnKeyDown="e => OnRenameKey(e, current)" MaxLength="100" />
                         }
                     }
+                    </div>
                     <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="mt-2">
                         <MudTextField T="string" @bind-Value="_newDomain" Label="Nouveau domaine" Margin="Margin.Dense" Immediate="true"
                                       Class="new-domain-name" MaxLength="100" OnKeyDown="OnNewDomainKey" />
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="new-domain-add" OnClick="CreateDomainAsync"
                                    Disabled="@string.IsNullOrWhiteSpace(_newDomain)">Créer</MudButton>
                     </MudStack>
+                    <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.PlaylistAdd" OnClick="OpenDomainDialogAsync" Class="mt-1 new-domain-dialog"
+                               title="Choisir le nom, la couleur et les tables dans une fenêtre">Nouveau domaine avec ses tables…</MudButton>
                     @if (CurrentDomain != null && _domainCompleteness is { Tables: > 0 } documented)
                     {
                         <MudText Typo="Typo.caption" Class="mt-2 domain-completeness">Documentation du domaine : @documented.Percent %</MudText>
+                    }
+                    </div>
                     }
                 </MudPaper>
 
@@ -112,7 +143,7 @@
                                        Disabled="@(_impact == null)" title="Garde la sélection et les tables liées">Voisines</MudButton>
                         </MudStack>
                     }
-                    <div style="max-height: 45vh; overflow-y: auto;">
+                    <div class="table-picker" style="@($"max-height: {(_domainsOpen ? "45vh" : "72vh")}; overflow-y: auto;")">
                         @foreach (var table in Filtered.Take(PickerLimit))
                         {
                             var current = table;
@@ -141,7 +172,11 @@
                     {
                         <MudCheckBox T="bool" Value="_allColumns" ValueChanged="ToggleAllColumns" Dense="true" Size="Size.Small"
                                      Label="Toutes les colonnes" />
+                        <MudCheckBox T="bool" Value="CurrentDomain.ShowNeighbors" ValueChanged="SetShowNeighborsAsync" Dense="true"
+                                     Size="Size.Small" Label="Tables voisines" Class="show-neighbors" />
                     }
+                    <MudButton Size="Size.Small" Variant="@(_legendOpen ? Variant.Filled : Variant.Outlined)" OnClick="() => _legendOpen = !_legendOpen"
+                               StartIcon="@Icons.Material.Filled.HelpOutline" Class="er-legend-toggle" aria-expanded="@(_legendOpen ? "true" : "false")">Légende</MudButton>
                     <MudSpacer />
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ExportSvgAsync"
                                StartIcon="@Icons.Material.Filled.Download">SVG</MudButton>
@@ -159,14 +194,72 @@
                 }
                 else
                 {
+                    @if (_legendOpen)
+                    {
+                        <div class="er-help" role="note" aria-label="Légende du diagramme">
+                            <span class="er-legend-item"><b>1</b> = clé référencée (le côté « parent »)</span>
+                            <span class="er-legend-item"><b>N</b> = colonne qui référence (le côté « enfant »)</span>
+                            <span class="er-legend-item"><b>PK</b> clé primaire · <b>FK</b> clé étrangère</span>
+                            <span class="er-legend-item"><i class="er-swatch er-swatch-frontier"></i>Table en pointillés : d'un autre domaine, liée à celui-ci</span>
+                            <span class="er-legend-item">Un trait qui part de plusieurs colonnes = une relation multi-colonnes (clé composite)</span>
+                            <span class="er-legend-item">Glisser une table la déplace ; clic = voir ce qu'elle impacte ; Échap ou clic dans le vide = désélectionner</span>
+                        </div>
+                    }
+                    @if (CurrentDomain != null && HiddenInDomain > 0)
+                    {
+                        <div class="er-hidden-banner" role="status">
+                            @HiddenInDomain relation@(HiddenInDomain > 1 ? "s" : "") masquée@(HiddenInDomain > 1 ? "s" : "") dans ce domaine (le dessin est volontairement moins chargé).
+                            <MudButton Size="Size.Small" OnClick="ShowAllRelationsAsync" Class="er-hidden-show">Tout afficher</MudButton>
+                        </div>
+                    }
+                    <div class="er-focus" tabindex="-1" @onkeydown="OnDiagramKey">
                     <ErDiagramView Diagram="_diagram" Zoom="_zoom" SelectedTableId="@_selectedTable" SelectedColumnId="@_selectedColumn"
                                    Dependents="_dependents" Dependencies="_dependencies"
-                                   OnSelectTable="SelectTableAsync" OnSelectColumn="SelectColumnAsync"
+                                   OnSelectTable="SelectTableAsync" OnSelectColumn="SelectColumnAsync" OnClearSelection="ClearSelection"
                                    OnNodeMoved="NodeMovedAsync" OnDragLeave="DragLeave" />
+                    </div>
                     <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
-                        Glissez une table pour la déplacer@(CurrentDomain == null ? "" : " (sa place est mémorisée pour ce domaine)") ; cliquez une table ou une colonne pour voir ce qu'elle impacte.
+                        Glissez une table pour la déplacer@(CurrentDomain == null ? "" : " (sa place est mémorisée pour ce domaine)") .
+                        Cliquez une table ou une colonne pour voir ce qu'elle impacte, cliquez dans le vide pour désélectionner.
                         1 = clé référencée, N = colonne qui référence.
                     </MudText>
+                    @if (_selectedTable != null)
+                    {
+                        <div class="er-legend" role="note" aria-label="Légende de la sélection">
+                            <span class="er-legend-item"><i class="er-swatch er-swatch-selected"></i>Élément choisi</span>
+                            <span class="er-legend-item"><i class="er-swatch er-swatch-dependent"></i>Le référence : peut casser si on modifie l'élément choisi</span>
+                            <span class="er-legend-item"><i class="er-swatch er-swatch-dependency"></i>Référencé par l'élément choisi : il en dépend</span>
+                            @if (_selectedColumn != null && _diagram.SiblingColumns(_selectedColumn).Count > 0)
+                            {
+                                <span class="er-legend-item"><i class="er-swatch er-swatch-sibling"></i>Autres colonnes de la même clé composite</span>
+                            }
+                            <MudButton Size="Size.Small" OnClick="ClearSelection" Class="er-legend-clear">Désélectionner</MudButton>
+                        </div>
+                    }
+                }
+
+                @if (CurrentDomain != null && DomainRelations.Count > 0)
+                {
+                    <MudExpansionPanels Class="mt-3" id="domain-relations">
+                        <MudExpansionPanel Text="@($"Relations du domaine ({DomainRelations.Count - CurrentDomain.HiddenRelations.Count} affichée(s) sur {DomainRelations.Count})")">
+                            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+                                <MudTextField @bind-Value="_relationFilter" Label="Filtrer" Immediate="true" Clearable="true" Dense="true" />
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ShowAllRelationsAsync"
+                                           Disabled="@(CurrentDomain.HiddenRelations.Count == 0)">Tout afficher</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="HideAllRelationsAsync">Tout masquer</MudButton>
+                            </MudStack>
+                            <div style="max-height: 280px; overflow-y: auto;">
+                                @foreach (var relation in DomainRelations.Where(r => string.IsNullOrWhiteSpace(_relationFilter) || r.Label.Contains(_relationFilter, StringComparison.OrdinalIgnoreCase)).Take(300))
+                                {
+                                    var current = relation;
+                                    <div class="relation-item" data-relation="@relation.Label">
+                                        <MudCheckBox T="bool" Value="@(!CurrentDomain.HiddenRelations.Contains(relation.Id))"
+                                                     ValueChanged="@(on => ToggleRelationAsync(current.Id, on))" Dense="true" Size="Size.Small" Label="@relation.Label" />
+                                    </div>
+                                }
+                            </div>
+                        </MudExpansionPanel>
+                    </MudExpansionPanels>
                 }
 
                 @if (_impact != null)
@@ -225,6 +318,8 @@
     private readonly HashSet<string> _visible = [];
     private ErDiagram _diagram = ErDiagram.Build([]);
     private double _zoom = 1;
+    private bool _domainsOpen = true;
+    private string _domainSearch = "";
     private string? _filter;
     private bool _allColumns;
     private const int PickerLimit = 150;
@@ -238,6 +333,16 @@
     private string? _renaming;
     private string _renameText = "";
     private CompletenessReport? _domainCompleteness;
+
+    private bool _legendOpen;
+
+    /// <summary>Relations entre les tables du domaine que son plan ne dessine pas.</summary>
+    private int HiddenInDomain => CurrentDomain == null ? 0 : DomainRelations.Count(r => CurrentDomain.HiddenRelations.Contains(r.Id));
+
+    private void OnDiagramKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape" && _selectedTable != null) ClearSelection();
+    }
 
     private string? _selectedTable;
     private string? _selectedColumn;
@@ -255,6 +360,11 @@
     private DomainInfo? CurrentDomain => _domainId == null ? null : _domains.FirstOrDefault(d => d.Id == _domainId);
 
     private HashSet<string> Members => CurrentDomain?.Tables.Select(t => t.TableId).ToHashSet() ?? [];
+
+    /// <summary>Les domaines dont le nom contient le texte cherché (tous quand la recherche est vide).</summary>
+    private List<DomainInfo> VisibleDomains => string.IsNullOrWhiteSpace(_domainSearch)
+        ? _domains.ToList()
+        : _domains.Where(d => d.Name.Contains(_domainSearch.Trim(), StringComparison.CurrentCultureIgnoreCase)).ToList();
 
     private IEnumerable<TableInfo> Filtered => string.IsNullOrWhiteSpace(_filter)
         ? _tables
@@ -299,8 +409,10 @@
         else
         {
             var members = Members;
-            var frontier = FrontierOf(members);
-            _diagram = ErDiagram.Build(_tables, members.Union(frontier).ToHashSet(), frontier, relatedColumnsOnly: !_allColumns);
+            var hidden = domain.HiddenRelations.ToHashSet();
+            var frontier = domain.ShowNeighbors ? FrontierOf(members, hidden) : [];
+            _diagram = ErDiagram.Build(_tables, members.Union(frontier).ToHashSet(), frontier, relatedColumnsOnly: !_allColumns,
+                hiddenRelations: hidden);
             var placed = 0;
             foreach (var place in domain.Tables.Where(t => t is { X: not null, Y: not null }))
                 if (_diagram.Node(place.TableId) is { } node && !previous.ContainsKey(node.Id))
@@ -310,7 +422,7 @@
                 }
 
             // Les tables voisines n'ont pas de place mémorisée : on les range sous le plan du domaine, sans le recouvrir.
-            if (placed > 0) PlaceFrontierBelow();
+            if (placed > 0 || previous.Count > 0) PlaceFrontierBelow(previous.Keys.ToHashSet());
         }
 
         foreach (var node in _diagram.Nodes)
@@ -322,10 +434,10 @@
             _zoom = Math.Clamp(Math.Round(1000 / Math.Max(1, _diagram.Size().Width), 1), 0.3, 1);
     }
 
-    private void PlaceFrontierBelow()
+    private void PlaceFrontierBelow(ISet<string> alreadyPlaced)
     {
         var own = _diagram.Nodes.Where(n => !n.IsFrontier).ToList();
-        var outside = _diagram.Nodes.Where(n => n.IsFrontier).ToList();
+        var outside = _diagram.Nodes.Where(n => n.IsFrontier && !alreadyPlaced.Contains(n.Id)).ToList();
         if (own.Count == 0 || outside.Count == 0) return;
         var x = ErDiagram.Margin;
         var y = own.Max(n => n.Y + n.Height) + 60;
@@ -346,6 +458,64 @@
         }
     }
 
+    private string? _relationFilter;
+
+    /// <summary>Relations entre les tables affichées du domaine (masquées comprises), pour les cocher ou décocher.</summary>
+    private List<(string Id, string Label)> DomainRelations
+    {
+        get
+        {
+            var domain = CurrentDomain;
+            if (domain == null) return [];
+            var members = Members;
+            var shown = domain.ShowNeighbors ? members.Union(FrontierOf(members, new HashSet<string>())).ToHashSet() : members;
+            var tableOfColumn = new Dictionary<string, (string Table, string Label)>();
+            foreach (var t in _tables.Where(t => shown.Contains(t.Id)))
+                foreach (var c in t.Columns) tableOfColumn[c.Id] = (t.Id, $"{t.Name}.{c.Name}");
+            return _tables.SelectMany(t => t.Relations).GroupBy(r => r.Id).Select(g => g.First())
+                .Where(r => tableOfColumn.ContainsKey(r.FirstId) && tableOfColumn.ContainsKey(r.SecondId))
+                .Select(r => (r.Id, Label: $"{tableOfColumn[r.SecondId].Label} → {tableOfColumn[r.FirstId].Label}"))
+                .OrderBy(r => r.Label, StringComparer.CurrentCultureIgnoreCase).ToList();
+        }
+    }
+
+    private async Task SetShowNeighborsAsync(bool on)
+    {
+        if (CurrentDomain is not { } domain) return;
+        await SaveDomainSettingsAsync(domain, showNeighbors: on);
+    }
+
+    private async Task ToggleRelationAsync(string relationId, bool shown)
+    {
+        if (CurrentDomain is not { } domain) return;
+        var hidden = domain.HiddenRelations.ToHashSet();
+        if (shown) hidden.Remove(relationId);
+        else hidden.Add(relationId);
+        await SaveDomainSettingsAsync(domain, hiddenRelations: hidden);
+    }
+
+    private Task ShowAllRelationsAsync() => CurrentDomain is { } d ? SaveDomainSettingsAsync(d, hiddenRelations: []) : Task.CompletedTask;
+
+    private Task HideAllRelationsAsync() => CurrentDomain is { } d
+        ? SaveDomainSettingsAsync(d, hiddenRelations: DomainRelations.Select(r => r.Id).ToHashSet())
+        : Task.CompletedTask;
+
+    private async Task SaveDomainSettingsAsync(DomainInfo domain, bool? showNeighbors = null, IEnumerable<string>? hiddenRelations = null)
+    {
+        try
+        {
+            await Api.SaveDomainSettingsAsync(domain.Id, showNeighbors, hiddenRelations);
+            if (showNeighbors != null) domain.ShowNeighbors = showNeighbors.Value;
+            if (hiddenRelations != null) domain.HiddenRelations = hiddenRelations.ToList();
+            ClearSelection();
+            Rebuild();
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
     private void ToggleAllColumns(bool on)
     {
         _allColumns = on;
@@ -353,11 +523,11 @@
     }
 
     /// <summary>Tables hors du domaine reliées par une relation à l'une de ses tables.</summary>
-    private HashSet<string> FrontierOf(HashSet<string> members)
+    private HashSet<string> FrontierOf(HashSet<string> members, ISet<string> hidden)
     {
         var tableOfColumn = _tables.SelectMany(t => t.Columns.Select(c => (Column: c.Id, Table: t.Id))).ToDictionary(x => x.Column, x => x.Table);
         var frontier = new HashSet<string>();
-        foreach (var relation in _tables.SelectMany(t => t.Relations))
+        foreach (var relation in _tables.SelectMany(t => t.Relations).Where(r => !hidden.Contains(r.Id)))
         {
             if (!tableOfColumn.TryGetValue(relation.FirstId, out var first) || !tableOfColumn.TryGetValue(relation.SecondId, out var second))
                 continue;
@@ -406,6 +576,22 @@
         {
             ShowError(ex.Message);
         }
+    }
+
+    /// <summary>Fenêtre « Nouveau domaine » : nom, couleur et tables ; les tables affichées en ce moment sont proposées d'office.</summary>
+    private async Task OpenDomainDialogAsync()
+    {
+        var parameters = new DialogParameters<DomainDialog>
+        {
+            { x => x.DatabaseId, Id }, { x => x.Tables, _tables }, { x => x.Domains, _domains },
+            { x => x.InitialTables, CurrentDomain == null ? _visible.ToList() : null }
+        };
+        var created = await Dialogs.ShowDataAsync<DomainDialog, string>("Nouveau domaine", parameters, MaxWidth.Large);
+        if (created == null) return;
+        await ReloadDomainsAsync();
+        Workspace.NotifyCatalogChanged(Id, this);
+        await SelectDomainAsync(created);
+        Notifier.Show("Domaine créé.");
     }
 
     private async Task OnNewDomainKey(KeyboardEventArgs e)

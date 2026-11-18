@@ -3,6 +3,7 @@
 @implements IDisposable
 @using GranitDb.Client.api
 @using GranitDb.Client.Components
+@using GranitDb.Client.Components.Dialogs
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
 @inject Client Api
@@ -10,6 +11,7 @@
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
+@inject IDialogService Dialogs
 
 <PageTitle>@(Title)</PageTitle>
 
@@ -26,7 +28,7 @@
     }
     else
     {
-        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2 db-actions">
             <MudText Typo="Typo.h4">@_database.Name</MudText>
             <MudChip T="string" Size="Size.Small">@_database.Type</MudChip>
             @if (!string.IsNullOrWhiteSpace(_database.SourceLabel))
@@ -49,7 +51,28 @@
                 <MudButton Variant="Variant.Outlined" OnClick="PreviewSyncAsync" Disabled="_syncing"
                            StartIcon="@Icons.Material.Filled.Sync">Resynchroniser</MudButton>
             }
+            @if (_database.Type == "Sqlite" && !Single)
+            {
+                <label class="replace-file">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" Disabled="_syncing" Class="replace-file-button">Remplacer le fichier</MudButton>
+                    <InputFile OnChange="PreviewReplaceAsync" accept=".db,.sqlite,.sqlite3,.db3" class="replace-file-input" aria-label="Remplacer le fichier SQLite de cette base" />
+                </label>
+            }
         </MudStack>
+
+        @if (!Single)
+        {
+            <div class="mb-3 d-flex justify-end gap-2">
+                @* Un seul menu pour les trois formats d'export. *@
+                <MudMenu Label="Exporter" StartIcon="@Icons.Material.Filled.Download" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                         Size="Size.Small" Variant="Variant.Outlined" Dense="true" Class="export-menu" aria-label="Exporter la documentation">
+                    <MudMenuItem OnClick="ExportHtmlAsync" Class="export-html">HTML autonome (documentation complète)</MudMenuItem>
+                    <MudMenuItem OnClick="ExportMarkdownAsync" Class="export-markdown">Markdown</MudMenuItem>
+                    <MudMenuItem OnClick="ExportCsvAsync" Class="export-csv">CSV (dictionnaire des colonnes)</MudMenuItem>
+                </MudMenu>
+                <DeleteDatabaseButton Database="_database" Size="Size.Small" />
+            </div>
+        }
 
         @if (!Single)
         {
@@ -91,7 +114,7 @@
         @if (_preview != null)
         {
             <MudPaper Class="pa-3 mb-3" id="sync-preview">
-                <MudText Typo="Typo.h6">Aperçu de la synchronisation</MudText>
+                <MudText Typo="Typo.h6">@(_pendingFile == null ? "Aperçu de la synchronisation" : $"Aperçu du remplacement par {_pendingName}")</MudText>
                 @if (!_preview.HasChanges)
                 {
                     <MudText Class="mt-1">Le catalogue est déjà à jour : la source n'a pas changé.</MudText>
@@ -130,7 +153,7 @@
                         </tbody>
                     </MudSimpleTable>
                     <MudStack Row="true" Spacing="2" Class="mt-2">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplySyncAsync" Disabled="_syncing">Appliquer la synchronisation</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplySyncAsync" Disabled="_syncing">@(_pendingFile == null ? "Appliquer la synchronisation" : "Remplacer le fichier et synchroniser")</MudButton>
                         <MudButton Variant="Variant.Text" OnClick="ClosePreview" Disabled="_syncing">Annuler</MudButton>
                     </MudStack>
                 }
@@ -279,15 +302,11 @@
                                 {
                                     <MudListItem T="string">
                                         <MudStack Row="true" AlignItems="AlignItems.Center" Class="relation-row" data-relation="@relation.Id">
-                                            <span>@Label(relation.FirstId) → @Label(relation.SecondId) (@relation.RelationType)</span>
-                                            @if (relation.MetaInfo != RelationAutoMarker)
-                                            {
-                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">manuelle</MudChip>
-                                            }
+                                            <span>@RelationLabel(relation)@(" ")</span>
                                             @if (_editingRelation == relation.Id)
                                             {
                                                 <NativeSelect AriaLabel="Type de la relation" Value="@relation.RelationType" ValueChanged="@(type => ChangeRelationTypeAsync(relation, type))"
-                                                                 Class="relation-type">
+                                                              AutoFocus="true" OnBlur="@(() => _editingRelation = null)" Class="relation-type">
                                                     @foreach (var type in RelationTypes)
                                                     {
                                                         <option value="@type">@type</option>
@@ -296,62 +315,39 @@
                                             }
                                             else
                                             {
-                                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="relation-edit"
-                                                               Title="Modifier le type" aria-label="Modifier le type de la relation"
-                                                               OnClick="@(() => _editingRelation = relation.Id)" />
+                                                @* Même geste que les textes : un clic ouvre le champ, le choix s'enregistre, quitter le champ le referme. *@
+                                                <button type="button" class="relation-edit" title="Cliquer pour modifier le type"
+                                                        aria-label="@($"Type de la relation : {relation.RelationType}. Cliquer pour modifier")"
+                                                        @onclick="@(() => _editingRelation = relation.Id)">(@relation.RelationType)<MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="relation-pencil" /></button>
                                             }
                                             @if (relation.MetaInfo != RelationAutoMarker)
                                             {
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" title="Relation saisie à la main : la synchronisation ne la supprime jamais (sauf si une de ses colonnes disparaît)">manuelle</MudChip>
+                                            }
+                                            @if (relation.MetaInfo != RelationAutoMarker)
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.EditNote" Size="Size.Small" Class="relation-modify"
+                                                               Title="Modifier la relation (colonnes, type, description)" aria-label="Modifier la relation"
+                                                               OnClick="@(() => OpenRelationDialogAsync(table, relation))" />
                                                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Class="relation-delete"
                                                                Title="Supprimer la relation" aria-label="Supprimer la relation"
                                                                OnClick="@(() => DeleteRelationAsync(relation))" />
                                             }
                                         </MudStack>
+                                        <div class="relation-description">
+                                            <InlineText Value="@relation.Description" Multiline="false" Placeholder="Ajouter une description de la relation"
+                                                        Label="Description de la relation" OnSave="@RelationDescriptionHandler(relation)" />
+                                        </div>
                                     </MudListItem>
                                 }
                             </MudList>
                             @if (table.Relations.Count == 0)
                             {
-                                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucune relation.</MudText>
+                                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucune relation : ajoutez-en une pour dire quelle colonne pointe vers quelle table.</MudText>
                             }
 
-                            @if (_relationForm == table.Id)
-                            {
-                                <MudPaper Class="pa-2 mt-2 relation-form" Outlined="true">
-                                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
-                                        <NativeSelect Label="Colonne de cette table" Value="@_formColumn" ValueChanged="@(v => _formColumn = v)" Class="relation-form-column">
-                                            <option value="">Choisir…</option>
-                                            @foreach (var column in table.Columns.OrderBy(c => c.Position))
-                                            {
-                                                <option value="@column.Id">@column.Name</option>
-                                            }
-                                        </NativeSelect>
-                                        <MudText>référence</MudText>
-                                        <NativeSelect Label="Colonne référencée" Value="@_formTarget" ValueChanged="@(v => _formTarget = v)" Class="relation-form-target">
-                                            <option value="">Choisir…</option>
-                                            @foreach (var (columnId, label) in _columnLabels.OrderBy(c => c.Value, StringComparer.Ordinal))
-                                            {
-                                                <option value="@columnId">@label</option>
-                                            }
-                                        </NativeSelect>
-                                        <NativeSelect Label="Type" Value="@_formType" ValueChanged="@(v => _formType = v)" Class="relation-form-type">
-                                            @foreach (var type in RelationTypes)
-                                            {
-                                                <option value="@type">@type</option>
-                                            }
-                                        </NativeSelect>
-                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="relation-form-save"
-                                                   Disabled="@(string.IsNullOrEmpty(_formColumn) || string.IsNullOrEmpty(_formTarget))"
-                                                   OnClick="CreateRelationAsync">Ajouter</MudButton>
-                                        <MudButton Size="Size.Small" OnClick="@(() => _relationForm = null)">Annuler</MudButton>
-                                    </MudStack>
-                                </MudPaper>
-                            }
-                            else
-                            {
-                                <MudButton Size="Size.Small" Class="mt-1 relation-add" StartIcon="@Icons.Material.Filled.Add"
-                                           OnClick="@(() => OpenRelationForm(table.Id))">Ajouter une relation</MudButton>
-                            }
+                            <MudButton Size="Size.Small" Class="mt-1 relation-add" StartIcon="@Icons.Material.Filled.Add"
+                                       OnClick="@(() => OpenRelationDialogAsync(table))">Ajouter une relation</MudButton>
                             }
                         </ChildContent>
                     </MudExpansionPanel>
@@ -433,11 +429,6 @@
     private Severity _messageSeverity = Severity.Info;
 
     private string? _editingRelation;
-    private string? _relationForm;
-    private string? _formColumn;
-    private string? _formTarget;
-    private string _formType = "One-to-Many";
-
     private bool Single => TableRoute != null;
 
     private TableInfo? SingleTable => TableRoute == null ? null : _tables.FirstOrDefault(t => t.Id == TableRoute);
@@ -580,6 +571,14 @@
         return _columnLabels.GetValueOrDefault(columnId, columnId);
     }
 
+    /// <summary>« table.colonne → table.colonne » ; une relation multi-colonnes liste toutes ses paires : « (a, b) → (x, y) ».</summary>
+    private string RelationLabel(RelationInfo relation)
+    {
+        if (relation.ExtraColumns.Count == 0) return $"{Label(relation.FirstId)} → {Label(relation.SecondId)}";
+        var pairs = relation.Pairs().ToList();
+        return $"({string.Join(", ", pairs.Select(p => Label(p.First)))}) → ({string.Join(", ", pairs.Select(p => Label(p.Second)))})";
+    }
+
     private static Color PercentColor(int percent) => percent >= 80 ? Color.Success : percent >= 40 ? Color.Warning : Color.Error;
 
     private TagLinkView[] TagsOf(string type, string id)
@@ -620,6 +619,15 @@
     {
         await Api.UpdateDocumentationAsync("DatabaseInfo", Id, text, _database!.MetaInfo);
         _database.Description = text;
+        await AfterSaveAsync(refreshCompleteness: false);
+    }
+
+    private Func<string?, Task> RelationDescriptionHandler(RelationInfo relation) => text => SaveRelationDescriptionAsync(relation, text);
+
+    private async Task SaveRelationDescriptionAsync(RelationInfo relation, string? text)
+    {
+        await Api.UpdateDocumentationAsync("RelationInfo", relation.Id, text, relation.MetaInfo);
+        relation.Description = text;
         await AfterSaveAsync(refreshCompleteness: false);
     }
 
@@ -717,28 +725,18 @@
 
     // --- Relations ---
 
-    private void OpenRelationForm(string tableId)
+    /// <summary>Fenêtre de saisie d'une relation : nouvelle (depuis cette table) ou modification d'une relation manuelle.</summary>
+    private async Task OpenRelationDialogAsync(TableInfo table, RelationInfo? existing = null)
     {
-        _relationForm = tableId;
-        _formColumn = _formTarget = null;
-        _formType = "One-to-Many";
-    }
-
-    private async Task CreateRelationAsync()
-    {
-        try
+        var parameters = new DialogParameters<RelationDialog>
         {
-            // Cette table référence la colonne choisie : la colonne de cette table est « SecondId ».
-            await Api.CreateRelationAsync(_formTarget!, _formColumn!, _formType);
-            _relationForm = null;
-            await LoadTablesAsync();
-            Changed();
-            Notifier.Show("Relation ajoutée.");
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+            { x => x.Tables, _tables }, { x => x.StartTableId, table.Id }, { x => x.Existing, existing }
+        };
+        var saved = await Dialogs.ShowFormAsync(existing == null ? "Nouvelle relation" : "Modifier la relation", parameters, MaxWidth.Medium);
+        if (!saved) return;
+        await LoadTablesAsync();
+        Changed();
+        Notifier.Show(existing == null ? "Relation ajoutée." : "Relation modifiée.");
     }
 
     private async Task ChangeRelationTypeAsync(RelationInfo relation, string type)
@@ -775,7 +773,8 @@
             // Annuler recrée la relation (avec un nouvel identifiant).
             Notifier.Show("Relation supprimée.", Severity.Success, async () =>
             {
-                await Api.CreateRelationAsync(relation.FirstId, relation.SecondId, relation.RelationType, relation.Description);
+                await Api.CreateRelationAsync(relation.FirstId, relation.SecondId, relation.RelationType, relation.Description,
+                    relation.ExtraColumns);
                 await LoadTablesAsync();
                 Changed();
                 await InvokeAsync(StateHasChanged);
@@ -810,6 +809,40 @@
     private void ClosePreview()
     {
         _preview = null;
+        _pendingFile = null;
+    }
+
+    private const long MaxReplaceSize = 100L * 1024 * 1024;
+    private byte[]? _pendingFile;
+    private string _pendingName = "";
+
+    /// <summary>Un fichier est choisi : on montre ce qu'il changerait avant de le remplacer. Le fichier reste en mémoire jusqu'à l'application.</summary>
+    private async Task PreviewReplaceAsync(InputFileChangeEventArgs e)
+    {
+        _syncing = true;
+        try
+        {
+            _message = null;
+            await using var stream = e.File.OpenReadStream(MaxReplaceSize);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            var bytes = buffer.ToArray();
+            _preview = await Api.PreviewReplaceSqliteAsync(Id, bytes, e.File.Name);
+            _pendingFile = bytes;
+            _pendingName = e.File.Name;
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+        catch (IOException)
+        {
+            ShowError("Fichier trop volumineux (100 Mo maximum).");
+        }
+        finally
+        {
+            _syncing = false;
+        }
     }
 
     private async Task ApplySyncAsync()
@@ -817,8 +850,11 @@
         _syncing = true;
         try
         {
-            var summary = await Api.SyncAsync(Id);
+            var summary = _pendingFile == null
+                ? await Api.SyncAsync(Id)
+                : (await Api.ReplaceSqliteAsync(Id, _pendingFile, _pendingName)).Sync;
             _preview = null;
+            _pendingFile = null;
             await LoadTablesAsync();
             await LoadGovernanceAsync();
             Changed();
@@ -838,6 +874,25 @@
     {
         _message = message;
         _messageSeverity = Severity.Error;
+    }
+
+    private Task ExportHtmlAsync() => ExportFileAsync("html", "html", "text/html");
+
+    private Task ExportMarkdownAsync() => ExportFileAsync("markdown", "md", "text/markdown");
+
+    private Task ExportCsvAsync() => ExportFileAsync("csv", "csv", "text/csv");
+
+    private async Task ExportFileAsync(string format, string extension, string mime)
+    {
+        try
+        {
+            var content = await Api.ExportAsync(_database!.Id, format);
+            await JS.InvokeVoidAsync("granitdb.download", $"{_database.Name}-documentation.{extension}", mime, content);
+        }
+        catch (Exception e) when (e is ApiException or JSException)
+        {
+            Notifier.Show("Export impossible : " + e.Message);
+        }
     }
 
     private static string ActionSign(string action) => action switch { "added" => "+", "removed" => "−", _ => "~" };

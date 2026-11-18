@@ -17,6 +17,37 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     /// <summary>Une base se présente par sa vue : ni chemin de fichier, ni connexion enregistrée.</summary>
     protected override object View(DatabaseInfo entity) => DatabaseView.From(entity);
 
+    /// <summary>Supprime la documentation de la base (et son fichier source conservé) ; la base source n'est pas touchée.</summary>
+    [HttpDelete("{id}")]
+    public override async Task<IActionResult> DeleteT(string id, CancellationToken ct)
+    {
+        return await import.DeleteDatabaseAsync(id, Actor, ct) ? NoContent() : NotFound();
+    }
+
+    /// <summary>Documentation de la base en un seul fichier HTML autonome (présentation type Dataedo), à télécharger.</summary>
+    [HttpGet("{id}/export/html")]
+    public async Task<IActionResult> ExportHtml(string id, CancellationToken ct)
+    {
+        var html = await HtmlDocumentationExporter.ExportAsync(repository, id, ct);
+        return html == null ? NotFound() : File(System.Text.Encoding.UTF8.GetBytes(html), "text/html; charset=utf-8", "documentation.html");
+    }
+
+    /// <summary>Documentation en Markdown (un fichier .md : domaines, tables, colonnes, relations, index).</summary>
+    [HttpGet("{id}/export/markdown")]
+    public async Task<IActionResult> ExportMarkdown(string id, CancellationToken ct)
+    {
+        var snapshot = await HtmlDocumentationExporter.LoadAsync(repository, id, ct);
+        return snapshot == null ? NotFound() : File(System.Text.Encoding.UTF8.GetBytes(DocumentationTextExporters.ToMarkdown(snapshot)), "text/markdown; charset=utf-8", "documentation.md");
+    }
+
+    /// <summary>Dictionnaire des colonnes en CSV (ouvre directement dans Excel).</summary>
+    [HttpGet("{id}/export/csv")]
+    public async Task<IActionResult> ExportCsv(string id, CancellationToken ct)
+    {
+        var snapshot = await HtmlDocumentationExporter.LoadAsync(repository, id, ct);
+        return snapshot == null ? NotFound() : File(System.Text.Encoding.UTF8.GetBytes(DocumentationTextExporters.ToCsv(snapshot)), "text/csv; charset=utf-8", "colonnes.csv");
+    }
+
     /// <summary>Relit la source conservée (fichier SQLite, connexion SQL Server enregistrée) et met le catalogue à jour.</summary>
     [HttpPost("{id}/sync")]
     public async Task<IActionResult> Sync(string id, CancellationToken ct)

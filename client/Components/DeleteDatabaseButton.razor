@@ -1,0 +1,96 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+@inject NavigationManager Navigation
+
+@* Suppression d'une base documentée : jamais en un clic. Le nom de la base doit être retapé, car la documentation saisie est perdue. *@
+@if (!_asking)
+{
+    <MudButton Variant="Variant.Outlined" Color="Color.Error" Size="@Size" StartIcon="@Icons.Material.Filled.DeleteOutline"
+               OnClick="Ask" Class="delete-database" aria-label="@($"Supprimer la base {Database.Name}")">Supprimer</MudButton>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-3 delete-confirm" role="alertdialog" aria-label="Confirmer la suppression">
+        <MudText Typo="Typo.subtitle2">Supprimer « @Database.Name » du catalogue ?</MudText>
+        <MudText Typo="Typo.body2" Class="mt-1">
+            Descriptions, relations, domaines et étiquettes de cette base seront perdus, sans retour possible.
+            La base source elle-même n'est pas touchée.
+        </MudText>
+        <MudTextField @bind-Value="_typed" Immediate="true" Label="@($"Retapez {Database.Name} pour confirmer")" Dense="true"
+                      Class="mt-2 delete-confirm-name" Disabled="_busy" />
+        @if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
+        }
+        <MudStack Row="true" Spacing="1" Class="mt-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="DeleteAsync"
+                       Disabled="@(_busy || !Matches)" Class="delete-confirm-button">Supprimer définitivement</MudButton>
+            <MudButton Size="Size.Small" OnClick="Cancel" Disabled="_busy" Class="delete-cancel">Annuler</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public DatabaseInfo Database { get; set; } = null!;
+
+    [Parameter] public Size Size { get; set; } = Size.Medium;
+
+    /// <summary>La base a été supprimée (la liste qui l'affichait peut se relire).</summary>
+    [Parameter] public EventCallback OnDeleted { get; set; }
+
+    private bool _asking;
+    private bool _busy;
+    private string _typed = "";
+    private string? _error;
+
+    private bool Matches => string.Equals(_typed.Trim(), Database.Name, StringComparison.OrdinalIgnoreCase);
+
+    private void Ask()
+    {
+        _asking = true;
+        _typed = "";
+        _error = null;
+    }
+
+    private void Cancel() => _asking = false;
+
+    private async Task DeleteAsync()
+    {
+        if (!Matches) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Api.DeleteDatabaseAsync(Database.Id);
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+            _busy = false;
+            return;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API est injoignable.";
+            _busy = false;
+            return;
+        }
+
+        var prefix = $"/databases/{Database.Id}";
+        foreach (var tab in Workspace.Tabs.Where(t => t.Href == prefix || t.Href.StartsWith(prefix + "/") || t.Href.StartsWith(prefix + "?")).ToList())
+            Workspace.Close(tab.Href);
+        if (Workspace.IsFavorite("database", Database.Id))
+            Workspace.ToggleFavorite(new FavoriteItem("database", Database.Id, Database.Name, prefix));
+        if (Workspace.Selection?.DatabaseId == Database.Id) Workspace.Select(null);
+        Workspace.NotifyCatalogChanged(null);
+        Notifier.Show($"Base {Database.Name} supprimée du catalogue.");
+        _busy = false;
+        _asking = false;
+        await OnDeleted.InvokeAsync();
+        if (new Uri(Navigation.Uri).AbsolutePath.StartsWith(prefix)) Navigation.NavigateTo("/");
+    }
+}

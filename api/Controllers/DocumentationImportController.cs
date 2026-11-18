@@ -33,6 +33,12 @@ public class DocDomainInput
 
     /// <summary>Place des tables dans le diagramme du domaine (reprise d'un plan existant).</summary>
     public List<DocPlacement> Layout { get; set; } = [];
+
+    /// <summary>
+    ///     Relations que la documentation d'origine trace dans ce domaine. Quand la liste est fournie (même vide), les
+    ///     autres relations entre les tables du domaine sont enregistrées comme masquées ; absente, rien n'est masqué.
+    /// </summary>
+    public List<DocRelationInput>? DrawnRelations { get; set; }
 }
 
 public class DocPlacement
@@ -51,6 +57,16 @@ public class DocRelationInput
     [Required] public string RefColumn { get; set; } = "";
     public string? RelationType { get; set; }
     [StringLength(4000)] public string? Description { get; set; }
+
+    /// <summary>Paires suivantes d'une relation multi-colonnes (mêmes tables) ; la première est <c>Column</c>/<c>RefColumn</c>.</summary>
+    public List<DocColumnPair>? Extra { get; set; }
+}
+
+/// <summary>Une paire de colonnes d'une relation multi-colonnes : <c>Column</c> référence <c>RefColumn</c>.</summary>
+public class DocColumnPair
+{
+    [Required] public string Column { get; set; } = "";
+    [Required] public string RefColumn { get; set; } = "";
 }
 
 /// <summary>Documentation existante (export d'un autre outil, document officiel) à rattacher à une base du catalogue.</summary>
@@ -69,7 +85,7 @@ public class DocumentationImportInput
 
 public record DocumentationImportResult(
     int TablesDescribed, int ColumnsDescribed, int TablesNotFound, int ColumnsNotFound, int DomainsCreated,
-    int DomainLinksCreated, int PlacementsSet, int RelationsCreated, int RelationsSkipped, IReadOnlyList<string> Missing);
+    int DomainLinksCreated, int PlacementsSet, int RelationsCreated, int RelationsSkipped, int RelationsHidden, IReadOnlyList<string> Missing);
 
 /// <summary>
 ///     Complète la documentation d'une base à partir d'une documentation externe, en rapprochant tables et colonnes
@@ -201,16 +217,74 @@ public class DocumentationImportController(ICatalogRepository repository) : Cont
             relationsDone++;
             pairs.Add((first.Id, second.Id));
             if (input.DryRun) continue;
-            await repo.CreateAsync(new RelationInfo
+            var relation = await repo.CreateAsync(new RelationInfo
             {
                 FirstId = first.Id, SecondId = second.Id,
                 RelationType = string.IsNullOrWhiteSpace(doc.RelationType) ? "One-to-Many" : doc.RelationType,
                 Description = doc.Description, MetaInfo = RelationMarker
             }, ct);
+            // Relation multi-colonnes : les paires suivantes dont les deux colonnes existent (rang 1, 2…).
+            var rank = 1;
+            foreach (var extra in doc.Extra ?? [])
+            {
+                var f = Find(tables, columns, doc.RefTable, extra.RefColumn);
+                var s = Find(tables, columns, doc.Table, extra.Column);
+                if (f == null || s == null || f.Id == s.Id) continue;
+                await repo.CreateAsync(new RelationColumnInfo
+                    { RelationId = relation.Id, FirstId = f.Id, SecondId = s.Id, Position = rank++ }, ct);
+            }
         }
 
+        // Relations non tracées par la documentation d'origine : masquées dans le domaine (elles restent dans le catalogue).
+        var hidden = input.DryRun ? 0 : await HideUndrawnAsync(repo, databaseId, input, domains, tables, columns, ct);
+
         return new DocumentationImportResult(tablesDone, columnsDone, tablesMissing, columnsMissing, domainsCreated,
-            linksCreated, placed, relationsDone, relationsSkipped, missing.Take(200).ToList());
+            linksCreated, placed, relationsDone, relationsSkipped, hidden, missing.Take(200).ToList());
+    }
+
+    private static async Task<int> HideUndrawnAsync(ICatalogRepository repo, string databaseId,
+        DocumentationImportInput input, Dictionary<string, DomainInfo> domains, Dictionary<string, TableInfo> tables,
+        Dictionary<string, Dictionary<string, ColumnInfo>> columns, CancellationToken ct)
+    {
+        var tableOfColumn = columns.SelectMany(t => t.Value.Values).ToDictionary(c => c.Id, c => c.TableId);
+        var relations = await repo.GetRelationsOfDatabaseAsync(databaseId, ct);
+        var already = (await repo.GetAllAsync<DomainHiddenRelationInfo>(ct)).Select(h => (h.DomainId, h.RelationId)).ToHashSet();
+        var count = 0;
+        foreach (var doc in input.Domains.Where(d => d.DrawnRelations != null))
+        {
+            if (!domains.TryGetValue(doc.Name, out var domain)) continue;
+            var members = doc.Tables.Select(n => tables.GetValueOrDefault(n)?.Id).Where(id => id != null).ToHashSet();
+            var drawn = new HashSet<(string, string)>();
+            foreach (var d in doc.DrawnRelations!)
+            {
+                var first = Find(tables, columns, d.RefTable, d.RefColumn);
+                var second = Find(tables, columns, d.Table, d.Column);
+                if (first == null || second == null) continue;
+                drawn.Add((first.Id, second.Id));
+                drawn.Add((second.Id, first.Id));
+                // Une relation multi-colonnes tracée l'est pour toutes ses paires.
+                foreach (var extra in d.Extra ?? [])
+                {
+                    var f = Find(tables, columns, d.RefTable, extra.RefColumn);
+                    var s = Find(tables, columns, d.Table, extra.Column);
+                    if (f == null || s == null) continue;
+                    drawn.Add((f.Id, s.Id));
+                    drawn.Add((s.Id, f.Id));
+                }
+            }
+
+            foreach (var r in relations)
+            {
+                if (drawn.Contains((r.FirstId, r.SecondId)) || already.Contains((domain.Id, r.Id))) continue;
+                if (!tableOfColumn.TryGetValue(r.FirstId, out var a) || !tableOfColumn.TryGetValue(r.SecondId, out var b) ||
+                    !members.Contains(a) || !members.Contains(b)) continue;
+                await repo.CreateAsync(new DomainHiddenRelationInfo { DomainId = domain.Id, RelationId = r.Id }, ct);
+                already.Add((domain.Id, r.Id));
+                count++;
+            }
+        }
+
+        return count;
     }
 
     private static ColumnInfo? Find(Dictionary<string, TableInfo> tables,

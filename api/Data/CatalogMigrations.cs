@@ -366,6 +366,161 @@ public static class CatalogMigrations
             [
                 "IF COL_LENGTH('dbo.Databases', 'SourceSecret') IS NULL ALTER TABLE dbo.Databases ADD SourceSecret NVARCHAR(MAX) NULL",
                 "IF COL_LENGTH('dbo.Databases', 'SourceLabel') IS NULL ALTER TABLE dbo.Databases ADD SourceLabel NVARCHAR(500) NULL"
+            ]),
+
+        // Domaines configurables : tables voisines affichées ou non, relations masquées par domaine.
+        new(10, "Domaines : tables voisines et relations masquées",
+            Sqlite:
+            [
+                """ALTER TABLE "Domains" ADD COLUMN "ShowNeighbors" INTEGER NOT NULL DEFAULT 0""",
+                """
+                CREATE TABLE IF NOT EXISTS "DomainHiddenRelations" (
+                    "Id" TEXT PRIMARY KEY,
+                    "DomainId" TEXT NOT NULL REFERENCES "Domains"("Id"),
+                    "RelationId" TEXT NOT NULL,
+                    "Description" TEXT,
+                    "MetaInfo" TEXT
+                )
+                """,
+                """CREATE UNIQUE INDEX IF NOT EXISTS "UX_DomainHiddenRelations" ON "DomainHiddenRelations"("DomainId", "RelationId")"""
+            ],
+            SqlServer:
+            [
+                "IF COL_LENGTH('dbo.Domains', 'ShowNeighbors') IS NULL ALTER TABLE dbo.Domains ADD ShowNeighbors BIT NOT NULL CONSTRAINT DF_Domains_ShowNeighbors DEFAULT 0",
+                """
+                IF OBJECT_ID(N'dbo.DomainHiddenRelations', N'U') IS NULL
+                CREATE TABLE dbo.DomainHiddenRelations (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    DomainId VARCHAR(36) NOT NULL CONSTRAINT FK_DomainHiddenRelations_Domains FOREIGN KEY REFERENCES dbo.Domains(Id),
+                    RelationId VARCHAR(36) NOT NULL,
+                    Description NVARCHAR(MAX) NULL,
+                    MetaInfo NVARCHAR(MAX) NULL)
+                """,
+                UniqueIndex("UX_DomainHiddenRelations", "DomainHiddenRelations", "DomainId, RelationId")
+            ]),
+
+        // Journal d'audit et webhooks. Pas de clé étrangère : le journal survit à ce qu'il décrit, et un webhook
+        // d'une base supprimée ne se déclenche plus (aucun événement ne la vise).
+        new(11, "Journal d'audit et webhooks",
+            Sqlite:
+            [
+                """
+                CREATE TABLE IF NOT EXISTS "AuditLog" (
+                    "Id" TEXT PRIMARY KEY,
+                    "At" TEXT NOT NULL,
+                    "Actor" TEXT,
+                    "Method" TEXT NOT NULL,
+                    "Path" TEXT NOT NULL,
+                    "Status" INTEGER NOT NULL,
+                    "Controller" TEXT,
+                    "EntityId" TEXT,
+                    "Ip" TEXT
+                )
+                """,
+                """CREATE INDEX IF NOT EXISTS "IX_AuditLog_At" ON "AuditLog"("At")""",
+                """CREATE INDEX IF NOT EXISTS "IX_AuditLog_EntityId" ON "AuditLog"("EntityId")""",
+                """
+                CREATE TABLE IF NOT EXISTS "Webhooks" (
+                    "Id" TEXT PRIMARY KEY,
+                    "DatabaseId" TEXT,
+                    "Url" TEXT NOT NULL,
+                    "Secret" TEXT,
+                    "Events" TEXT NOT NULL,
+                    "IsActive" INTEGER NOT NULL DEFAULT 1,
+                    "Description" TEXT,
+                    "CreatedAt" TEXT NOT NULL
+                )
+                """,
+                """
+                CREATE TABLE IF NOT EXISTS "WebhookDeliveries" (
+                    "Id" TEXT PRIMARY KEY,
+                    "WebhookId" TEXT NOT NULL,
+                    "At" TEXT NOT NULL,
+                    "Event" TEXT NOT NULL,
+                    "StatusCode" INTEGER,
+                    "Success" INTEGER NOT NULL,
+                    "Attempts" INTEGER NOT NULL,
+                    "Error" TEXT
+                )
+                """,
+                """CREATE INDEX IF NOT EXISTS "IX_WebhookDeliveries_WebhookId" ON "WebhookDeliveries"("WebhookId", "At")"""
+            ],
+            SqlServer:
+            [
+                """
+                IF OBJECT_ID(N'dbo.AuditLog', N'U') IS NULL
+                CREATE TABLE dbo.AuditLog (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    At DATETIME2 NOT NULL,
+                    Actor NVARCHAR(255) NULL,
+                    Method VARCHAR(10) NOT NULL,
+                    Path NVARCHAR(500) NOT NULL,
+                    Status INT NOT NULL,
+                    Controller VARCHAR(100) NULL,
+                    EntityId NVARCHAR(100) NULL,
+                    Ip VARCHAR(64) NULL)
+                """,
+                Index("IX_AuditLog_At", "AuditLog", "At"),
+                Index("IX_AuditLog_EntityId", "AuditLog", "EntityId"),
+                """
+                IF OBJECT_ID(N'dbo.Webhooks', N'U') IS NULL
+                CREATE TABLE dbo.Webhooks (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    DatabaseId VARCHAR(36) NULL,
+                    Url NVARCHAR(2000) NOT NULL,
+                    Secret NVARCHAR(MAX) NULL,
+                    Events NVARCHAR(500) NOT NULL,
+                    IsActive BIT NOT NULL CONSTRAINT DF_Webhooks_IsActive DEFAULT 1,
+                    Description NVARCHAR(500) NULL,
+                    CreatedAt DATETIME2 NOT NULL)
+                """,
+                """
+                IF OBJECT_ID(N'dbo.WebhookDeliveries', N'U') IS NULL
+                CREATE TABLE dbo.WebhookDeliveries (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    WebhookId VARCHAR(36) NOT NULL,
+                    At DATETIME2 NOT NULL,
+                    Event VARCHAR(50) NOT NULL,
+                    StatusCode INT NULL,
+                    Success BIT NOT NULL,
+                    Attempts INT NOT NULL,
+                    Error NVARCHAR(500) NULL)
+                """,
+                Index("IX_WebhookDeliveries_WebhookId", "WebhookDeliveries", "WebhookId")
+            ]),
+
+        // Relations multi-colonnes : la première paire reste dans Relations, les suivantes sont ici (rang >= 1).
+        // Pas de clé étrangère : les suppressions en cascade sont faites à la main, comme pour les autres liens.
+        new(12, "Relations multi-colonnes",
+            Sqlite:
+            [
+                """
+                CREATE TABLE IF NOT EXISTS "RelationColumns" (
+                    "Id" TEXT PRIMARY KEY,
+                    "RelationId" TEXT NOT NULL,
+                    "FirstId" TEXT NOT NULL,
+                    "SecondId" TEXT NOT NULL,
+                    "Position" INTEGER NOT NULL,
+                    "Description" TEXT,
+                    "MetaInfo" TEXT
+                )
+                """,
+                """CREATE INDEX IF NOT EXISTS "IX_RelationColumns_RelationId" ON "RelationColumns"("RelationId")"""
+            ],
+            SqlServer:
+            [
+                """
+                IF OBJECT_ID(N'dbo.RelationColumns', N'U') IS NULL
+                CREATE TABLE dbo.RelationColumns (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    RelationId VARCHAR(36) NOT NULL,
+                    FirstId VARCHAR(36) NOT NULL,
+                    SecondId VARCHAR(36) NOT NULL,
+                    Position INT NOT NULL,
+                    Description NVARCHAR(MAX) NULL,
+                    MetaInfo NVARCHAR(MAX) NULL)
+                """,
+                Index("IX_RelationColumns_RelationId", "RelationColumns", "RelationId")
             ])
     ];
 

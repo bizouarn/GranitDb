@@ -17,6 +17,12 @@ public abstract class ShellTestBase : IAsyncLifetime
     protected readonly BunitContext Ctx = new();
     protected readonly FakeApi Api = new();
 
+    /// <summary>Le fournisseur de fenêtres flottantes : le contenu des menus ouverts y est rendu, pas dans la page.</summary>
+    protected IRenderedComponent<MudBlazor.MudPopoverProvider>? Popovers { get; private set; }
+
+    /// <summary>Le fournisseur de fenêtres de saisie : le contenu d'une fenêtre ouverte y est rendu, pas dans la page.</summary>
+    protected IRenderedComponent<MudBlazor.MudDialogProvider>? Dialogs { get; private set; }
+
     /// <summary>Remplace la réponse d'une requête (null : réponse par défaut).</summary>
     protected Func<HttpRequestMessage, HttpResponseMessage?> Override = _ => null;
 
@@ -27,7 +33,11 @@ public abstract class ShellTestBase : IAsyncLifetime
         Ctx.Services.AddMudServices();
         Ctx.Services.AddGranitWorkspace();
         Ctx.Services.AddScoped(_ => Api.Client);
-        if (popoverProvider) Ctx.Render<MudBlazor.MudPopoverProvider>();
+        if (popoverProvider)
+        {
+            Popovers = Ctx.Render<MudBlazor.MudPopoverProvider>();
+            Dialogs = Ctx.Render<MudBlazor.MudDialogProvider>();
+        }
         Api.Respond = Serve;
     }
 

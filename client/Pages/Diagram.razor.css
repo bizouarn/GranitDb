@@ -38,3 +38,59 @@
 .table-item {
     cursor: grab;
 }
+
+/* Légende de la sélection du diagramme : mêmes couleurs que les tables et colonnes éclairées. */
+.er-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    margin: 6px 0;
+    font-size: 0.8125rem;
+}
+
+.er-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.er-swatch {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 3px solid transparent;
+    box-sizing: border-box;
+}
+
+.er-swatch-selected { border-color: var(--mud-palette-primary); }
+.er-swatch-dependent { border-color: var(--mud-palette-error); }
+.er-swatch-dependency { border-color: var(--mud-palette-info); }
+.er-swatch-sibling { background: var(--mud-palette-primary-hover); border-color: var(--mud-palette-primary-hover); }
+
+.er-help, .er-hidden-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 16px;
+    margin: 6px 0;
+    padding: 8px 12px;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 6px;
+    font-size: 0.8125rem;
+}
+
+.er-hidden-banner {
+    background: var(--mud-palette-info-hover);
+}
+
+.er-swatch-frontier { border: 2px dashed var(--mud-palette-text-secondary); }
+
+.er-focus:focus { outline: none; }
+
+/* Beaucoup de domaines : la liste défile, la recherche et les boutons restent visibles. */
+.domain-list {
+    max-height: 38vh;
+    overflow-y: auto;
+}

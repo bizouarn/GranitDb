@@ -193,6 +193,31 @@ public class ClientTableTabTests : ShellTestBase
     }
 
     [BunitFact]
+    public void The_three_exports_live_in_one_menu_and_each_downloads_its_format()
+    {
+        Override = r => r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath.Contains("/export/")
+            ? FakeApi.Json("contenu")
+            : null;
+        var page = OpenDatabase();
+        Assert.Empty(page.FindAll("button.export-html")); // plus de bouton séparé
+
+        page.Find(".export-menu button").Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(Popovers!.FindAll(".export-markdown")));
+        Popovers!.Find(".export-markdown").Click();
+
+        page.WaitForAssertion(() => Assert.Contains(Api.Requests, r => r.RequestUri!.AbsolutePath == "/api/v1/DatabaseInfo/d1/export/markdown"));
+    }
+
+    [BunitFact]
+    public void The_action_row_of_a_database_may_wrap_but_no_button_label_does()
+    {
+        var page = OpenDatabase();
+
+        Assert.Contains("db-actions", page.Find(".db-actions").ClassName);
+        Assert.Contains("flex-wrap", page.Find(".db-actions").ClassName);
+    }
+
+    [BunitFact]
     public void The_database_page_titles_its_tab_with_the_database_name()
     {
         OpenDatabase();
@@ -333,6 +358,40 @@ public class ClientTableTabTests : ShellTestBase
     }
 
     [BunitFact]
+    public void A_relation_description_is_edited_in_place_like_any_other_text()
+    {
+        var page = OpenTable("t1");
+        Assert.Contains("Ajouter une description de la relation", page.Find("#t-t1 .relation-description .inline-placeholder").TextContent);
+
+        page.Find("#t-t1 .relation-description .inline-view").Click();
+        page.Find("#t-t1 .relation-description input").Input("  Un client a plusieurs commandes  ");
+        page.Find("#t-t1 .relation-description input").Blur();
+
+        page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/RelationInfo/r1/documentation")));
+        var body = BodyOf(HttpMethod.Put, "/api/v1/RelationInfo/r1/documentation");
+        Assert.Equal("Un client a plusieurs commandes", body.GetProperty("description").GetString());
+        Assert.Equal("auto:fk", body.GetProperty("metaInfo").GetString()); // le marqueur est renvoyé tel quel
+        Assert.Contains(Notices.Toasts, t => t.Message == "Modification enregistrée." && t.Undo != null);
+    }
+
+    [BunitFact]
+    public void The_relation_type_opens_on_click_and_closes_when_the_field_is_left_or_escaped()
+    {
+        var page = OpenTable("t1");
+        Assert.Empty(page.FindAll("#t-t1 [data-relation='r1'] select"));
+
+        page.Find("#t-t1 [data-relation='r1'] button.relation-edit").Click();
+        Assert.NotEmpty(page.FindAll("#t-t1 [data-relation='r1'] select"));
+        page.Find("#t-t1 [data-relation='r1'] select").Blur();
+        Assert.Empty(page.FindAll("#t-t1 [data-relation='r1'] select"));
+        Assert.False(WasSent(HttpMethod.Put, "/api/v1/RelationInfo/r1")); // rien n'a été choisi : rien n'est envoyé
+
+        page.Find("#t-t1 [data-relation='r1'] button.relation-edit").Click();
+        page.Find("#t-t1 [data-relation='r1'] select").KeyDown(new KeyboardEventArgs { Key = "Escape" });
+        Assert.Empty(page.FindAll("#t-t1 [data-relation='r1'] select"));
+    }
+
+    [BunitFact]
     public void Removing_a_tag_and_toggling_sensitivity_can_both_be_undone()
     {
         var page = OpenTable("t1");
@@ -379,9 +438,8 @@ public class ClientDiagramWorkspaceTests : ShellTestBase
     {
         var page = Open("?domain=g1");
 
-        Assert.Equal(["customers", "orders"], Shown(page)); // le domaine (orders) et sa table liée (customers, en pointillés)
+        Assert.Equal(["orders"], Shown(page)); // les tables voisines ne sont montrées que si le domaine le demande
         Assert.Contains("domain-selected", page.Find("[data-domain='Ventes']").ClassName);
-        Assert.Contains("er-frontier", page.Find("g.er-node[data-table='customers']").ClassName);
         page.WaitForAssertion(() => Assert.Contains(Api.Requests, r => r.RequestUri!.PathAndQuery == "/api/v1/Completeness/database/d1?domainId=g1"));
     }
 

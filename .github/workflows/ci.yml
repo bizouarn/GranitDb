@@ -1,9 +1,11 @@
 name: CI
 
+# La CI ne tourne que pour la branche main : un push sur main, ou une pull request qui la vise.
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: [main]
   pull_request:
+    branches: [main]
 
 jobs:
   build-test:
