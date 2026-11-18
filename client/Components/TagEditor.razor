@@ -1,0 +1,85 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+
+@* Étiquettes d'un élément : pastilles supprimables et un champ pour en ajouter (Entrée). *@
+<span class="tag-editor">
+    @foreach (var tag in Tags)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="tag-chip" Style="@ChipStyle(tag)"
+                 OnClose="@(() => RemoveAsync(tag))">@tag.TagName</MudChip>
+    }
+    @if (_adding)
+    {
+        <MudTextField T="string" @bind-Value="_name" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true"
+                      Placeholder="étiquette" AutoFocus="true" OnKeyDown="OnKeyDown" OnBlur="Close"
+                      Class="tag-input" Style="width: 9rem; display: inline-block;" MaxLength="50" />
+    }
+    else
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.LocalOffer" Size="Size.Small" Title="Ajouter une étiquette"
+                       Class="tag-add" OnClick="Open" aria-label="Ajouter une étiquette" />
+    }
+    @if (_error != null)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Error" Class="tag-error">@_error</MudText>
+    }
+</span>
+
+@code {
+    private bool _adding;
+    private string _name = "";
+    private string? _error;
+
+    [Parameter] public IReadOnlyList<TagLinkView> Tags { get; set; } = [];
+
+    /// <summary>Pose l'étiquette de ce nom ; peut lever <see cref="ApiException" />.</summary>
+    [Parameter, EditorRequired] public Func<string, Task> OnAdd { get; set; } = _ => Task.CompletedTask;
+
+    [Parameter, EditorRequired] public Func<TagLinkView, Task> OnRemove { get; set; } = _ => Task.CompletedTask;
+
+    private static string? ChipStyle(TagLinkView tag)
+    {
+        return string.IsNullOrEmpty(tag.Color) ? null : $"border: 1px solid {tag.Color};";
+    }
+
+    private void Open()
+    {
+        _name = "";
+        _error = null;
+        _adding = true;
+    }
+
+    private void Close()
+    {
+        _adding = false;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+        else if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_name))
+        {
+            var name = _name.Trim();
+            _adding = false;
+            await Run(() => OnAdd(name));
+        }
+    }
+
+    private Task RemoveAsync(TagLinkView tag) => Run(() => OnRemove(tag));
+
+    private async Task Run(Func<Task> action)
+    {
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+    }
+}

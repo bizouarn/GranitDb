@@ -1,0 +1,120 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Workspace
+@inject Notifier Notifier
+
+@* Texte modifiable en place : un clic ouvre le champ ; il s'enregistre seul en le quittant (ou avec Entrée), Échap annule, et « Annuler » rétablit l'ancien texte. *@
+@if (_editing)
+{
+    <div class="inline-edit" data-editing="true">
+        <MudTextField T="string" @bind-Value="_draft" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true"
+                      Lines="@(Multiline ? 3 : 1)" AutoFocus="true" Disabled="_saving" Placeholder="@Placeholder"
+                      Label="@Label" OnKeyDown="OnKeyDown" OnBlur="OnBlurAsync" Class="inline-field"
+                      HelperText="Entrée pour enregistrer, Échap pour annuler" />
+        @if (_error != null)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Error" Class="inline-error">@_error</MudText>
+        }
+    </div>
+}
+else
+{
+    <span class="inline-view" role="button" tabindex="0" title="Cliquer pour modifier" @onclick="Edit" @onkeydown="OnViewKeyDown">
+        @if (string.IsNullOrWhiteSpace(Value))
+        {
+            <span class="inline-placeholder">@Placeholder</span>
+        }
+        else
+        {
+            <span class="inline-text">@Value</span>
+        }
+        <MudIcon Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="inline-pencil" />
+    </span>
+}
+
+@code {
+    private bool _editing;
+    private bool _saving;
+    private bool _cancelled;
+    private string _draft = "";
+    private string? _error;
+
+    [Parameter] public string? Value { get; set; }
+
+    /// <summary>Texte affiché quand il n'y a encore rien d'écrit.</summary>
+    [Parameter] public string Placeholder { get; set; } = "Ajouter une description";
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public bool Multiline { get; set; } = true;
+
+    /// <summary>Sans confirmation ni « Annuler » après l'enregistrement.</summary>
+    [Parameter] public bool Silent { get; set; }
+
+    /// <summary>Enregistre le nouveau texte (vide = effacer) ; peut lever <see cref="ApiException" />, dont le message est affiché.</summary>
+    [Parameter, EditorRequired] public Func<string?, Task> OnSave { get; set; } = _ => Task.CompletedTask;
+
+    private void Edit()
+    {
+        _draft = Value ?? "";
+        _error = null;
+        _cancelled = false;
+        _editing = true;
+    }
+
+    private void Cancel()
+    {
+        _cancelled = true;
+        _editing = false;
+        _error = null;
+    }
+
+    /// <summary>Quitter le champ enregistre ce qui a été saisi ; une saisie inchangée ne fait aucun appel.</summary>
+    private async Task OnBlurAsync()
+    {
+        if (_cancelled || !_editing) return;
+        await SaveAsync();
+    }
+
+    private void OnViewKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or " ") Edit();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") Cancel();
+        // Entrée enregistre ; Maj+Entrée va à la ligne dans un texte multiligne.
+        else if (e.Key == "Enter" && (!Multiline || !e.ShiftKey)) await SaveAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        var previous = string.IsNullOrWhiteSpace(Value) ? null : Value;
+        var text = string.IsNullOrWhiteSpace(_draft) ? null : _draft.Trim();
+        if (text == previous)
+        {
+            _editing = false;
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        try
+        {
+            await OnSave(text);
+            _editing = false;
+            if (!Silent)
+                Notifier.Show(text == null ? "Description effacée." : "Modification enregistrée.", MudBlazor.Severity.Success,
+                    async () => await OnSave(previous));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -7,3 +7,9 @@ api/config.json
 *.user
 
 api/log.txt
+
+api/granitdb-data/
+.env
+
+# Documentation officielle Herakles (export Dataedo, ne pas commiter)
+work-doc/herakles/

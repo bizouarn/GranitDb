@@ -1,0 +1,29 @@
+@* Liste déroulante native (accessible, sans fenêtre flottante) : le contenu est une suite de <option>. *@
+<label class="native-select @Class">
+    @if (!string.IsNullOrEmpty(Label))
+    {
+        <span class="native-select-label">@Label</span>
+    }
+    <select value="@Value" @onchange="OnChange" aria-label="@(AriaLabel ?? Label)">
+        @ChildContent
+    </select>
+</label>
+
+@code {
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? AriaLabel { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private Task OnChange(ChangeEventArgs e)
+    {
+        return ValueChanged.InvokeAsync(e.Value?.ToString() ?? "");
+    }
+}

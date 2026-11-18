@@ -1,0 +1,102 @@
+@implements IDisposable
+@using GranitDb.Client.Workspace
+@inject WorkspaceState Workspace
+@inject NavigationManager Navigation
+
+@* Une page ouverte = un onglet : épinglable, fermable (clic du milieu), réordonnable par glisser-déposer. *@
+<div class="tabstrip" role="tablist" aria-label="Pages ouvertes">
+    @foreach (var tab in Workspace.Tabs)
+    {
+        var current = tab;
+        var active = IsActive(tab);
+        <div class="@($"tab{(active ? " tab-active" : "")}{(tab.Pinned ? " tab-pinned" : "")}")" data-tab="@tab.Title"
+             draggable="true" @ondragstart="() => _dragged = current.Href" @ondragend="() => _dragged = null"
+             @ondragover="() => { }" @ondragover:preventDefault="true" @ondrop="() => DropOn(current.Href)">
+            <button type="button" role="tab" class="tab-link" data-href="@tab.Href" aria-selected="@(active ? "true" : "false")" title="@tab.Title"
+                    tabindex="@(active ? 0 : -1)" @onclick="() => Navigation.NavigateTo(current.Href)"
+                    @onmousedown="e => OnMouseDown(e, current)" @onkeydown="e => OnKeyDown(e, current)">
+                <MudIcon Icon="@IconOf(tab.Kind)" Size="Size.Small" />
+                <span class="tab-title">@tab.Title</span>
+            </button>
+            <button type="button" class="tab-pin" aria-label="@((tab.Pinned ? "Désépingler " : "Épingler ") + tab.Title)"
+                    title="@(tab.Pinned ? "Désépingler" : "Épingler")" @onclick="() => Workspace.TogglePin(current.Href)">
+                <MudIcon Icon="@(tab.Pinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
+            </button>
+            @if (!tab.Pinned)
+            {
+                <button type="button" class="tab-close" aria-label="@("Fermer " + tab.Title)" title="Fermer (Alt+W)" @onclick="() => CloseTab(current.Href)">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private string? _dragged;
+
+    protected override void OnInitialized()
+    {
+        Workspace.Changed += OnChanged;
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Workspace.Changed -= OnChanged;
+    }
+
+    private bool IsActive(WorkspaceTab tab)
+    {
+        return Workspace.ActiveHref != null &&
+               WorkspaceState.Normalize(Workspace.ActiveHref).Split('?')[0] == tab.Href.Split('?')[0];
+    }
+
+    private static string IconOf(TabKind kind) => kind switch
+    {
+        TabKind.Home => Icons.Material.Filled.Home,
+        TabKind.Database => Icons.Material.Filled.Storage,
+        TabKind.Table => Icons.Material.Filled.TableChart,
+        TabKind.Diagram => Icons.Material.Filled.AccountTree,
+        TabKind.Search => Icons.Material.Filled.Search,
+        _ => Icons.Material.Filled.Description
+    };
+
+    private void CloseTab(string href)
+    {
+        var next = Workspace.Close(href);
+        if (next != null) Navigation.NavigateTo(next);
+    }
+
+    /// <summary>Clic du milieu : ferme l'onglet (comme dans un navigateur).</summary>
+    private void OnMouseDown(MouseEventArgs e, WorkspaceTab tab)
+    {
+        if (e.Button == 1) CloseTab(tab.Href);
+    }
+
+    /// <summary>Flèches : onglet voisin ; Suppr : ferme l'onglet (clavier, comme les onglets d'un navigateur).</summary>
+    private void OnKeyDown(KeyboardEventArgs e, WorkspaceTab tab)
+    {
+        var tabs = Workspace.Tabs;
+        var index = tabs.ToList().FindIndex(t => t.Href == tab.Href);
+        switch (e.Key)
+        {
+            case "ArrowRight" when index >= 0 && tabs.Count > 0:
+                Navigation.NavigateTo(tabs[(index + 1) % tabs.Count].Href);
+                break;
+            case "ArrowLeft" when index >= 0 && tabs.Count > 0:
+                Navigation.NavigateTo(tabs[(index - 1 + tabs.Count) % tabs.Count].Href);
+                break;
+            case "Delete":
+                CloseTab(tab.Href);
+                break;
+        }
+    }
+
+    private void DropOn(string beforeHref)
+    {
+        if (_dragged != null && _dragged != beforeHref) Workspace.MoveTab(_dragged, beforeHref);
+        _dragged = null;
+    }
+}

@@ -101,3 +101,28 @@ a, .btn-link {
 code {
     color: #c02d76;
 }
+
+/* Zone de dépôt d'un fichier SQLite : l'InputFile transparent recouvre toute la carte. */
+.dropzone {
+    position: relative;
+    text-align: center;
+    border-style: dashed;
+}
+
+.dropzone:hover {
+    background-color: var(--mud-palette-action-default-hover);
+}
+
+.dropzone-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.search-box {
+    max-width: 480px;
+    min-width: 200px;
+}

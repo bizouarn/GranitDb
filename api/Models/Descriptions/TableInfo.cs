@@ -1,4 +1,4 @@
-﻿using Dapper.Contrib.Extensions;
+using System.ComponentModel.DataAnnotations.Schema;
 using GranitDB.API.Models.Descriptions.Base;
 using GranitDb.Interfaces;
 
@@ -7,17 +7,19 @@ namespace GranitDB.API.Models.Descriptions;
 [Table("Tables")]
 public class TableInfo : InfoBase, ITableInfo
 {
-    public TableInfo()
-    {
-        Relations = new List<IRelationInfo>();
-        Columns = new List<IColumnInfo>();
-    }
+    public string Name { get; set; } = "";
 
-    public string Name { get; set; }
+    public string DatabaseId { get; set; } = ""; // Relation vers DatabaseInfo
 
-    public string DatabaseId { get; set; } // Relation vers DatabaseInfo
+    public string TableType { get; set; } = "Table"; // Table, View, Virtual
 
-    [Computed] public List<IRelationInfo> Relations { get; set; }
+    [NotMapped] public List<RelationInfo> Relations { get; set; } = [];
 
-    [Computed] public List<IColumnInfo> Columns { get; set; }
+    [NotMapped] public List<ColumnInfo> Columns { get; set; } = [];
+
+    [NotMapped] public List<IndexInfo> Indexes { get; set; } = [];
+
+    IReadOnlyList<IRelationInfo> ITableInfo.Relations => Relations;
+    IReadOnlyList<IColumnInfo> ITableInfo.Columns => Columns;
+    IReadOnlyList<IIndexInfo> ITableInfo.Indexes => Indexes;
 }

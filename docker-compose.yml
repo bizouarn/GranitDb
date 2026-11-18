@@ -1,0 +1,48 @@
+# Démarrage en une commande, sans serveur de base de données (catalogue SQLite) :
+#   docker compose up --build        -> interface http://localhost:8081, API http://localhost:5105/swagger
+#
+# Avec SQL Server comme catalogue (voir .env.example) :
+#   docker compose --profile sqlserver up --build
+services:
+  api:
+    restart: on-failure
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "5105:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      Catalog__Provider: ${CATALOG_PROVIDER:-Sqlite}
+      Catalog__ConnectionString: ${CATALOG_CONNECTION_STRING:-}
+      # Autorise l'API à se connecter à un serveur SQL Server choisi depuis l'interface (voir le README : à n'ouvrir qu'à des personnes de confiance).
+      Catalog__AllowSqlServerSources: ${ALLOW_SQLSERVER_SOURCES:-true}
+    # Permet d'atteindre un SQL Server du poste hôte avec « host.docker.internal » (déjà vrai sous Docker Desktop, utile sous Linux).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - granitdb-data:/data
+
+  client:
+    build:
+      context: .
+      dockerfile: client/Dockerfile
+    ports:
+      - "8081:80"
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:5105/}
+    depends_on:
+      - api
+
+  sqlserver:
+    profiles: ["sqlserver"]
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Granit_Dev_Passw0rd}
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+
+volumes:
+  granitdb-data:
+  sqlserver-data:

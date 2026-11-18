@@ -1,0 +1,11 @@
+**/.git
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/granitdb-data
+**/log.txt
+**/*.user
+tests
+work-doc
+.github

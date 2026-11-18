@@ -1,0 +1,111 @@
+@page "/search"
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+
+<PageTitle>Recherche</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudBreadcrumbs Items="_crumbs" />
+    <MudText Typo="Typo.h4" Class="mb-4">Recherche</MudText>
+
+    @if (string.IsNullOrWhiteSpace(Q) || Q.Trim().Length < 2)
+    {
+        <MudText Style="color: var(--mud-palette-text-secondary)">Saisissez au moins 2 caractères dans la barre de recherche, puis validez avec Entrée.</MudText>
+    }
+    else if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_error != null)
+    {
+        <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+    }
+    else if (_hits.Length == 0)
+    {
+        <MudText Style="color: var(--mud-palette-text-secondary)">Aucun résultat pour « @Q ».</MudText>
+    }
+    else
+    {
+        <MudText Class="mb-3" Style="color: var(--mud-palette-text-secondary)">@_hits.Length résultat(s) pour « @Q »</MudText>
+        @foreach (var group in Groups)
+        {
+            <MudText Typo="Typo.h6" Class="mt-4">@group.Label (@group.Hits.Count)</MudText>
+            <MudList T="string" Dense="true" Class="search-results">
+                @foreach (var hit in group.Hits)
+                {
+                    <MudListItem T="string" Href="@hit.Href">
+                        <MudText>@hit.Name</MudText>
+                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@Context(hit)</MudText>
+                        @if (!string.IsNullOrWhiteSpace(hit.Description))
+                        {
+                            <MudText Typo="Typo.body2">@hit.Description</MudText>
+                        }
+                    </MudListItem>
+                }
+            </MudList>
+        }
+    }
+</MudContainer>
+
+@code {
+    private static readonly (string Kind, string Label)[] Kinds =
+        [("database", "Bases"), ("table", "Tables"), ("column", "Colonnes"), ("index", "Index")];
+
+    private readonly List<BreadcrumbItem> _crumbs =
+    [
+        new("Bases", href: "/"),
+        new("Recherche", href: null, disabled: true)
+    ];
+
+    private SearchHit[] _hits = [];
+    private bool _loading;
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
+
+    private IEnumerable<(string Label, List<SearchHit> Hits)> Groups => Kinds
+        .Select(k => (k.Label, Hits: _hits.Where(h => h.Kind == k.Kind).ToList()))
+        .Where(g => g.Hits.Count > 0);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+        _hits = [];
+        var term = Q?.Trim();
+        Workspace.Describe(Navigation.Uri, term is { Length: >= 2 } ? $"Recherche : {term}" : "Recherche");
+        if (term is not { Length: >= 2 }) return;
+
+        _loading = true;
+        try
+        {
+            _hits = await Api.SearchAsync(term);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API est injoignable.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string Context(SearchHit hit)
+    {
+        return hit.Kind switch
+        {
+            "database" => "Base",
+            "table" => $"Table de {hit.DatabaseName}",
+            "column" => $"Colonne de {hit.DatabaseName} › {hit.TableName}",
+            _ => $"Index de {hit.DatabaseName} › {hit.TableName}"
+        };
+    }
+}

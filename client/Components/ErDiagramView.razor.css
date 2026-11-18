@@ -1,0 +1,125 @@
+.er-scroll {
+    overflow: auto;
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 4px;
+    background: var(--mud-palette-background);
+    max-height: 75vh;
+}
+
+.er-svg {
+    display: block;
+    user-select: none;
+    touch-action: none;
+    font-size: 12px;
+}
+
+.er-edge {
+    fill: none;
+    stroke: var(--mud-palette-text-secondary);
+    stroke-width: 1.5;
+    opacity: .6;
+}
+
+.er-edge-active {
+    stroke: var(--mud-palette-warning);
+    stroke-width: 2.5;
+    opacity: 1;
+}
+
+.er-card {
+    fill: var(--mud-palette-text-secondary);
+    font-size: 11px;
+}
+
+.er-node {
+    cursor: grab;
+}
+
+.er-node:active {
+    cursor: grabbing;
+}
+
+.er-box {
+    fill: var(--mud-palette-surface);
+    stroke: var(--mud-palette-lines-inputs);
+}
+
+.er-head {
+    fill: var(--mud-palette-primary);
+}
+
+.er-head-view {
+    fill: var(--mud-palette-secondary);
+}
+
+.er-title {
+    fill: var(--mud-palette-primary-text);
+    font-weight: bold;
+}
+
+.er-row-bg {
+    fill: transparent;
+}
+
+.er-row:hover .er-row-bg {
+    fill: var(--mud-palette-action-default-hover);
+}
+
+.er-col, .er-type {
+    fill: var(--mud-palette-text-primary);
+}
+
+.er-type {
+    fill: var(--mud-palette-text-secondary);
+}
+
+.er-col-pk {
+    font-weight: bold;
+}
+
+.er-key {
+    fill: var(--mud-palette-warning);
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.er-selected > .er-box {
+    stroke: var(--mud-palette-primary);
+    stroke-width: 3;
+}
+
+.er-dependent > .er-box {
+    stroke: var(--mud-palette-error);
+    stroke-width: 3;
+}
+
+.er-dependency > .er-box {
+    stroke: var(--mud-palette-info);
+    stroke-width: 3;
+}
+
+.er-row.er-selected .er-row-bg {
+    fill: var(--mud-palette-primary-hover);
+}
+
+.er-row.er-dependent .er-row-bg {
+    fill: var(--mud-palette-error-hover);
+}
+
+.er-row.er-dependency .er-row-bg {
+    fill: var(--mud-palette-info-hover);
+}
+
+.er-frontier > .er-box {
+    stroke-dasharray: 5 3;
+}
+
+.er-frontier {
+    opacity: .7;
+}
+
+.er-caption {
+    fill: var(--mud-palette-primary-text);
+    font-size: 11px;
+    opacity: .85;
+}

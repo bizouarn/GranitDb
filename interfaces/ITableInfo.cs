@@ -1,4 +1,4 @@
-﻿namespace GranitDb.Interfaces;
+namespace GranitDb.Interfaces;
 
 public interface ITableInfo
 {
@@ -6,7 +6,11 @@ public interface ITableInfo
 
     public string DatabaseId { get; set; }
 
-    public List<IRelationInfo> Relations { get; }
+    public string TableType { get; set; } // Table, View, Virtual
 
-    public List<IColumnInfo> Columns { get; }
+    public IReadOnlyList<IRelationInfo> Relations { get; }
+
+    public IReadOnlyList<IColumnInfo> Columns { get; }
+
+    public IReadOnlyList<IIndexInfo> Indexes { get; }
 }

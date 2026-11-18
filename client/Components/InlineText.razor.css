@@ -1,0 +1,35 @@
+.inline-view {
+    display: inline-flex;
+    align-items: baseline;
+    gap: .25rem;
+    cursor: text;
+    border-radius: 4px;
+    padding: 0 .15rem;
+}
+
+.inline-view:hover, .inline-view:focus-visible {
+    background: var(--mud-palette-action-default-hover);
+    outline: none;
+}
+
+.inline-pencil {
+    opacity: 0;
+    transition: opacity .15s;
+}
+
+.inline-view:hover .inline-pencil, .inline-view:focus-visible .inline-pencil {
+    opacity: .6;
+}
+
+.inline-placeholder {
+    color: var(--mud-palette-text-secondary);
+    font-style: italic;
+}
+
+.inline-text {
+    white-space: pre-wrap;
+}
+
+.inline-edit {
+    min-width: 16rem;
+}

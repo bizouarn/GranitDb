@@ -1,0 +1,365 @@
+@implements IDisposable
+@using GranitDb.Client.api
+@using GranitDb.Client.Components
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject CatalogCache Cache
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+@inject NavigationManager Navigation
+
+@* Détails de l'élément sélectionné dans l'explorateur : on le documente sans quitter ce qu'on était en train de lire. *@
+<aside class="detail" aria-label="Détails de la sélection">
+    @if (Workspace.Selection == null)
+    {
+        <div class="detail-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.Info" />
+            <p>Sélectionnez une base, une table ou une colonne dans l'explorateur pour voir ses détails et la documenter ici.</p>
+        </div>
+    }
+    else if (_loading)
+    {
+        <MudProgressLinear Indeterminate="true" Class="ma-2" />
+    }
+    else if (_database == null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="ma-2">Cet élément n'existe plus.</MudAlert>
+    }
+    else if (_selection!.Kind == "database")
+    {
+        <div class="detail-body" data-detail="database">
+            <MudText Typo="Typo.h6" Class="detail-title">@_database.Name</MudText>
+            <MudChip T="string" Size="Size.Small">@_database.Type</MudChip>
+            <div class="detail-field">
+                <MudText Typo="Typo.caption">Description</MudText>
+                <InlineText Value="@_database.Description" Placeholder="Décrire cette base" OnSave="SaveDatabaseAsync" />
+            </div>
+            @CompletenessView(_completeness)
+            <MudText Typo="Typo.body2">@(_tables.Length) table(s)</MudText>
+            <MudStack Row="true" Spacing="1" Class="mt-2">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}")">Ouvrir</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/diagram")">Diagramme</MudButton>
+            </MudStack>
+        </div>
+    }
+    else if (_selection.Kind == "table" && _table != null)
+    {
+        <div class="detail-body" data-detail="table">
+            <MudText Typo="Typo.h6" Class="detail-title">@_table.Name</MudText>
+            <MudText Typo="Typo.caption" Class="detail-sub">@_database.Name · @_table.TableType · @_table.Columns.Count colonne(s)</MudText>
+            <div class="detail-field">
+                <MudText Typo="Typo.caption">Description</MudText>
+                <InlineText Value="@_table.Description" Placeholder="Décrire cette table" OnSave="SaveTableAsync" />
+            </div>
+            <div class="detail-field">
+                <MudText Typo="Typo.caption">Étiquettes</MudText>
+                <TagEditor Tags="TagsOf(KindTable, _table.Id)" OnAdd="name => AddTagAsync(name, KindTable, _table.Id)" OnRemove="RemoveTagAsync" />
+            </div>
+            @if (_domains.Where(d => d.Tables.Any(t => t.TableId == _table.Id)).ToList() is { Count: > 0 } inDomains)
+            {
+                <div class="detail-field">
+                    <MudText Typo="Typo.caption">Domaines</MudText>
+                    @foreach (var domain in inDomains)
+                    {
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/diagram?domain={domain.Id}")">@domain.Name</MudChip>
+                    }
+                </div>
+            }
+            @CompletenessView(_completeness?.PerTable?.FirstOrDefault(t => t.TableId == _table.Id) is { } row ? new CompletenessSummary(row.Percent, row.ColumnsDescribed + (row.TableDescribed ? 1 : 0), row.Columns + 1, row.SensitiveUndescribed) : null)
+            @ImpactView()
+            <MudStack Row="true" Spacing="1" Class="mt-2">
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/tables/{_table.Id}")">Ouvrir la table</MudButton>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/diagram")">Diagramme</MudButton>
+            </MudStack>
+        </div>
+    }
+    else if (_selection.Kind == "column" && _column != null && _table != null)
+    {
+        <div class="detail-body" data-detail="column">
+            <MudText Typo="Typo.h6" Class="detail-title">@_column.Name</MudText>
+            <MudText Typo="Typo.caption" Class="detail-sub">@_database.Name › @_table.Name</MudText>
+            <div class="detail-chips">
+                <MudChip T="string" Size="Size.Small">@_column.DataType</MudChip>
+                @if (_column.IsPrimaryKey)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Primary">clé primaire</MudChip>
+                }
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(_column.IsNullable ? "nullable" : "non nullable")</MudChip>
+                @if (!string.IsNullOrEmpty(_column.DefaultValue))
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">défaut : @_column.DefaultValue</MudChip>
+                }
+            </div>
+            <div class="detail-field">
+                <MudText Typo="Typo.caption">Description</MudText>
+                <InlineText Value="@_column.Description" Placeholder="Décrire cette colonne" OnSave="SaveColumnAsync" />
+            </div>
+            <div class="detail-field">
+                <MudButton Size="Size.Small" Variant="@(_column.IsSensitive ? Variant.Filled : Variant.Outlined)" Color="@(_column.IsSensitive ? Color.Warning : Color.Default)"
+                           Class="detail-sensitive" StartIcon="@Icons.Material.Filled.Shield" OnClick="ToggleSensitiveAsync"
+                           aria-pressed="@(_column.IsSensitive ? "true" : "false")">@(_column.IsSensitive ? "Données sensibles" : "Marquer comme sensible")</MudButton>
+            </div>
+            <div class="detail-field">
+                <MudText Typo="Typo.caption">Étiquettes</MudText>
+                <TagEditor Tags="TagsOf(KindColumn, _column.Id)" OnAdd="name => AddTagAsync(name, KindColumn, _column.Id)" OnRemove="RemoveTagAsync" />
+            </div>
+            @ImpactView()
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2" Href="@($"/databases/{_database.Id}/tables/{_table.Id}?column={_column.Id}")">Ouvrir la table</MudButton>
+        </div>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="ma-2">Cet élément n'existe plus.</MudAlert>
+    }
+</aside>
+
+@code {
+    private const string KindTable = "table";
+    private const string KindColumn = "column";
+
+    private record CompletenessSummary(int Percent, int Done, int Total, int SensitiveUndescribed);
+
+    private SelectionItem? _selection;
+    private bool _loading;
+    private DatabaseInfo? _database;
+    private TableInfo[] _tables = [];
+    private TableInfo? _table;
+    private ColumnInfo? _column;
+    private DomainInfo[] _domains = [];
+    private TagLinkView[] _tagLinks = [];
+    private CompletenessReport? _completeness;
+    private ImpactResult? _impact;
+    private int _version;
+
+    protected override void OnInitialized()
+    {
+        Workspace.Changed += OnWorkspaceChanged;
+        Workspace.CatalogChanged += OnCatalogChanged;
+    }
+
+    public void Dispose()
+    {
+        Workspace.Changed -= OnWorkspaceChanged;
+        Workspace.CatalogChanged -= OnCatalogChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await SyncSelectionAsync();
+    }
+
+    private void OnWorkspaceChanged()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await SyncSelectionAsync();
+            StateHasChanged();
+        });
+    }
+
+    /// <summary>Ce qui est affiché a pu changer ailleurs : on relit, sauf si c'est ce panneau qui l'a modifié.</summary>
+    private void OnCatalogChanged(string? databaseId, object? source)
+    {
+        if (ReferenceEquals(source, this) || _selection == null) return;
+        if (databaseId != null && databaseId != _selection.DatabaseId) return;
+        _ = InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task SyncSelectionAsync()
+    {
+        var selection = Workspace.Selection;
+        if (selection == _selection) return;
+        _selection = selection;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var selection = _selection;
+        if (selection == null) return;
+        var version = ++_version;
+        _loading = true;
+        StateHasChanged();
+        try
+        {
+            var database = await Api.GetDatabaseAsync(selection.DatabaseId);
+            var tables = database == null ? [] : await Cache.GetTablesAsync(selection.DatabaseId);
+            var domains = database == null ? [] : await Cache.GetDomainsAsync(selection.DatabaseId);
+            var tags = database == null ? [] : await Api.GetTagLinksAsync(selection.DatabaseId);
+            var completeness = database == null ? null : await Api.GetCompletenessAsync(selection.DatabaseId);
+            var table = selection.Kind == "database" ? null : tables.FirstOrDefault(t => t.Id == (selection.TableId ?? selection.Id));
+            var column = selection.Kind == "column" ? table?.Columns.FirstOrDefault(c => c.Id == selection.Id) : null;
+            ImpactResult? impact = null;
+            if (selection.Kind == "table" && table != null) impact = await Api.GetImpactAsync("table", table.Id);
+            else if (column != null) impact = await Api.GetImpactAsync("column", column.Id);
+
+            // Une sélection plus récente a pris la place : cette réponse est périmée.
+            if (version != _version) return;
+            (_database, _tables, _domains, _tagLinks, _completeness, _table, _column, _impact) =
+                (database, tables, domains, tags, completeness, table, column, impact);
+        }
+        catch (HttpRequestException)
+        {
+            if (version == _version) _database = null;
+        }
+        finally
+        {
+            if (version == _version) _loading = false;
+        }
+    }
+
+    private TagLinkView[] TagsOf(string type, string id) => _tagLinks.Where(l => l.EntityType == type && l.EntityId == id).ToArray();
+
+    // --- Affichages ---
+
+    private RenderFragment CompletenessView(CompletenessReport? report) =>
+        report == null || report.Tables == 0
+            ? CompletenessView((CompletenessSummary?)null)
+            : CompletenessView(new CompletenessSummary(report.Percent, report.TablesDescribed + report.ColumnsDescribed, report.Tables + report.Columns, report.SensitiveUndescribed));
+
+    private RenderFragment CompletenessView(CompletenessSummary? summary) => builder =>
+    {
+        if (summary == null) return;
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "detail-field detail-completeness");
+        builder.OpenComponent<MudText>(2);
+        builder.AddAttribute(3, "Typo", Typo.caption);
+        builder.AddAttribute(4, "ChildContent", (RenderFragment)(b => b.AddContent(0, $"Documentation : {summary.Percent} % ({summary.Done} / {summary.Total})")));
+        builder.CloseComponent();
+        builder.OpenComponent<MudProgressLinear>(5);
+        builder.AddAttribute(6, "Value", (double)summary.Percent);
+        builder.AddAttribute(7, "Color", summary.Percent >= 80 ? Color.Success : summary.Percent >= 40 ? Color.Warning : Color.Error);
+        builder.AddAttribute(8, "Rounded", true);
+        builder.CloseComponent();
+        if (summary.SensitiveUndescribed > 0)
+        {
+            builder.OpenComponent<MudText>(9);
+            builder.AddAttribute(10, "Typo", Typo.caption);
+            builder.AddAttribute(11, "Color", Color.Warning);
+            builder.AddAttribute(12, "ChildContent", (RenderFragment)(b => b.AddContent(0, $"{summary.SensitiveUndescribed} colonne(s) sensible(s) sans description")));
+            builder.CloseComponent();
+        }
+
+        builder.CloseElement();
+    };
+
+    private RenderFragment ImpactView() => builder =>
+    {
+        if (_impact == null) return;
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "detail-field detail-impact");
+        builder.OpenElement(2, "div");
+        builder.AddAttribute(3, "class", "mud-typography mud-typography-caption");
+        builder.AddContent(4, "Impact");
+        builder.CloseElement();
+        builder.OpenElement(5, "p");
+        builder.AddAttribute(6, "class", "impact-summary");
+        builder.AddContent(7, _impact.Dependents.Length == 0 && _impact.Dependencies.Length == 0
+            ? "Aucune relation : rien ne dépend de cet élément et il ne dépend de rien."
+            : $"{_impact.Dependents.Length} élément(s) en dépendent, il dépend de {_impact.Dependencies.Length}.");
+        builder.CloseElement();
+        if (_impact.Dependents.Length > 0)
+        {
+            builder.OpenElement(8, "ul");
+            builder.AddAttribute(9, "class", "impact-list");
+            foreach (var node in _impact.Dependents.Take(8))
+            {
+                builder.OpenElement(10, "li");
+                builder.AddContent(11, node.ColumnName == null ? node.TableName : $"{node.TableName}.{node.ColumnName}");
+                builder.CloseElement();
+            }
+
+            if (_impact.Dependents.Length > 8)
+            {
+                builder.OpenElement(12, "li");
+                builder.AddContent(13, $"… et {_impact.Dependents.Length - 8} autre(s)");
+                builder.CloseElement();
+            }
+
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+    };
+
+    // --- Modifications ---
+
+    private async Task SaveDatabaseAsync(string? text)
+    {
+        await Api.UpdateDocumentationAsync("DatabaseInfo", _database!.Id, text, _database.MetaInfo);
+        _database.Description = text;
+        Changed();
+    }
+
+    private async Task SaveTableAsync(string? text)
+    {
+        await Api.UpdateDocumentationAsync("TableInfo", _table!.Id, text, _table.MetaInfo);
+        _table.Description = text;
+        Changed();
+    }
+
+    private async Task SaveColumnAsync(string? text)
+    {
+        await Api.UpdateDocumentationAsync("ColumnInfo", _column!.Id, text, _column.MetaInfo);
+        _column.Description = text;
+        Changed();
+    }
+
+    private async Task ToggleSensitiveAsync()
+    {
+        var column = _column!;
+        var now = !column.IsSensitive;
+        try
+        {
+            await Api.SetSensitiveAsync(column.Id, now);
+            column.IsSensitive = now;
+            Changed();
+            Notifier.Show(now ? $"{column.Name} marquée comme sensible." : $"{column.Name} n'est plus marquée comme sensible.",
+                Severity.Success, async () =>
+                {
+                    await Api.SetSensitiveAsync(column.Id, !now);
+                    column.IsSensitive = !now;
+                    Changed();
+                    await InvokeAsync(StateHasChanged);
+                });
+        }
+        catch (ApiException ex)
+        {
+            Notifier.Error(ex.Message);
+        }
+    }
+
+    private async Task AddTagAsync(string name, string type, string entityId)
+    {
+        await Api.AttachTagAsync(name, type, entityId);
+        _tagLinks = await Api.GetTagLinksAsync(_selection!.DatabaseId);
+        Changed();
+        StateHasChanged();
+    }
+
+    private async Task RemoveTagAsync(TagLinkView tag)
+    {
+        await Api.DetachTagAsync(tag.TagId, tag.EntityType, tag.EntityId);
+        _tagLinks = await Api.GetTagLinksAsync(_selection!.DatabaseId);
+        Changed();
+        StateHasChanged();
+        Notifier.Show($"Étiquette {tag.TagName} retirée.", Severity.Success, async () =>
+        {
+            await Api.AttachTagAsync(tag.TagName, tag.EntityType, tag.EntityId);
+            _tagLinks = await Api.GetTagLinksAsync(_selection!.DatabaseId);
+            Changed();
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    /// <summary>Les autres vues (onglets ouverts, explorateur) relisent ce que ce panneau vient de modifier.</summary>
+    private void Changed()
+    {
+        Workspace.NotifyCatalogChanged(_selection?.DatabaseId, this);
+    }
+}

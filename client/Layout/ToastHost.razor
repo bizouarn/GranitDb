@@ -1,0 +1,35 @@
+@implements IDisposable
+@using GranitDb.Client.Workspace
+@inject Notifier Notifier
+
+@* Retours brefs, annonçables par un lecteur d'écran ; « Annuler » défait l'action quand elle peut l'être. *@
+<div class="toast-host" role="status" aria-live="polite">
+    @foreach (var toast in Notifier.Toasts)
+    {
+        var current = toast;
+        <MudAlert Severity="@toast.Severity" Dense="true" Elevation="4" Class="toast" ShowCloseIcon="true"
+                  role="@(toast.Severity == Severity.Error ? "alert" : "status")"
+                  CloseIconClicked="() => Notifier.Dismiss(current.Id)">
+            <span class="toast-message">@toast.Message</span>
+            @if (toast.Undo != null)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Class="toast-undo ml-2"
+                           OnClick="() => Notifier.UndoAsync(current.Id)">Annuler</MudButton>
+            }
+        </MudAlert>
+    }
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        Notifier.Changed += OnChanged;
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Notifier.Changed -= OnChanged;
+    }
+}

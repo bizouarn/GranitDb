@@ -1,0 +1,241 @@
+@page "/import/sqlserver"
+@using GranitDb.Client.api
+@using GranitDb.Client.Components
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+
+<PageTitle>@Title</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <MudBreadcrumbs Items="Crumbs" />
+    <MudText Typo="Typo.h4" Class="mb-2">@Title</MudText>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (!_capabilities.AllowSqlServerSources)
+    {
+        <MudAlert Severity="Severity.Info" Class="sqlserver-disabled">
+            Les sources SQL Server sont désactivées sur ce serveur : l'API ne se connecte pas à un serveur choisi par
+            l'appelant. Pour les activer, définissez <code>Catalog:AllowSqlServerSources</code> à <code>true</code>
+            (variable d'environnement <code>Catalog__AllowSqlServerSources</code>) et redémarrez l'API.
+        </MudAlert>
+    }
+    else if (EditId != null && _existing == null)
+    {
+        <MudAlert Severity="Severity.Warning">Base introuvable.</MudAlert>
+    }
+    else
+    {
+        <MudText Class="mb-3" Style="color: var(--mud-palette-text-secondary)">
+            GranitDb lit uniquement le <strong>schéma</strong> (tables, colonnes, clés, index), jamais les données. Un compte qui a
+            seulement l'autorisation <code>VIEW DEFINITION</code> suffit. La connexion est enregistrée chiffrée sur le serveur de
+            l'API et n'est jamais renvoyée.
+        </MudText>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3 docker-hint">
+            Si l'API tourne dans Docker, <code>localhost</code> et les adresses IPv6 locales (<code>fe80::…%11</code>) désignent le conteneur,
+            pas votre poste : pour un SQL Server de votre machine, saisissez <code>host.docker.internal</code> (avec le port TCP du serveur,
+            et « Faire confiance au certificat » s'il a un certificat auto-signé).
+        </MudAlert>
+
+        <MudPaper Class="pa-4" Outlined="true">
+            <MudGrid>
+                <MudItem xs="12" sm="8">
+                    <MudTextField T="string" @bind-Value="_form.Server" Label="Serveur" Placeholder="srv-sql.exemple.fr ou localhost\SQLEXPRESS"
+                                  Immediate="true" Class="field-server" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="int?" @bind-Value="_form.Port" Label="Port (facultatif)" Min="1" Max="65535" Class="field-port" HideSpinButtons="true" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudTextField T="string" @bind-Value="_form.Database" Label="Base de données" Immediate="true" Class="field-database" Required="true" />
+                </MudItem>
+                <MudItem xs="12" sm="4">
+                    <NativeSelect Label="Authentification" Value="@_form.AuthMode" ValueChanged="@(v => { _form.AuthMode = v; _test = null; })" Class="field-auth">
+                        <option value="Sql">Identifiant et mot de passe SQL</option>
+                        <option value="Integrated">Compte Windows de l'API</option>
+                    </NativeSelect>
+                </MudItem>
+                @if (_form.AuthMode == "Sql")
+                {
+                    <MudItem xs="12" sm="4">
+                        <MudTextField T="string" @bind-Value="_form.User" Label="Identifiant" Immediate="true" Class="field-user" autocomplete="off" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudTextField T="string" @bind-Value="_form.Password" Label="Mot de passe" InputType="InputType.Password" Immediate="true"
+                                      Class="field-password" autocomplete="new-password" />
+                    </MudItem>
+                }
+                <MudItem xs="12">
+                    <MudCheckBox T="bool" @bind-Value="_form.Encrypt" Label="Chiffrer la connexion (recommandé)" Class="field-encrypt" />
+                    <MudCheckBox T="bool" @bind-Value="_form.TrustServerCertificate" Label="Faire confiance au certificat du serveur (déconseillé en production)" Class="field-trust" />
+                    @if (!_form.Encrypt)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="unencrypted-warning">
+                            Sans chiffrement, l'identifiant et le mot de passe circulent en clair sur le réseau.
+                        </MudAlert>
+                    }
+                </MudItem>
+                @if (EditId == null)
+                {
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string" @bind-Value="_form.Name" Label="Nom affiché (facultatif)" Immediate="true" Class="field-name" />
+                    </MudItem>
+                    <MudItem xs="12" sm="6">
+                        <MudTextField T="string" @bind-Value="_form.Description" Label="Description (facultatif)" Immediate="true" Class="field-description" />
+                    </MudItem>
+                }
+            </MudGrid>
+
+            <MudStack Row="true" Spacing="2" Class="mt-3" AlignItems="AlignItems.Center">
+                <MudButton Variant="Variant.Outlined" OnClick="TestAsync" Disabled="_busy || !Ready" Class="test-connection"
+                           StartIcon="@Icons.Material.Filled.NetworkCheck">Tester la connexion</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy || !Ready" Class="save-connection"
+                           StartIcon="@Icons.Material.Filled.Download">@(EditId == null ? "Importer" : "Enregistrer la connexion")</MudButton>
+                @if (_busy)
+                {
+                    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                }
+            </MudStack>
+        </MudPaper>
+
+        @if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-3 connection-error">@_error</MudAlert>
+        }
+
+        @if (_test != null)
+        {
+            <MudAlert Severity="@(_test.Ok ? Severity.Success : Severity.Error)" Class="mt-3 connection-test">@_test.Message</MudAlert>
+            @if (_test.Ok && _test.Schemas.Length > 0)
+            {
+                <MudPaper Class="pa-3 mt-3" Outlined="true" id="schemas">
+                    <MudText Typo="Typo.subtitle2">Schémas à documenter</MudText>
+                    @foreach (var schema in _test.Schemas)
+                    {
+                        var current = schema;
+                        <div>
+                            <MudCheckBox T="bool" Value="@_selected.Contains(schema.Name)" ValueChanged="@(on => ToggleSchema(current.Name, on))"
+                                         Label="@($"{schema.Name} ({schema.Tables})")" Dense="true" Size="Size.Small" />
+                        </div>
+                    }
+                </MudPaper>
+            }
+        }
+    }
+</MudContainer>
+
+@code {
+    private readonly SqlServerConnection _form = new();
+    private Capabilities _capabilities = new(false, false);
+    private DatabaseInfo? _existing;
+    private ConnectionTestResult? _test;
+    private readonly HashSet<string> _selected = [];
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    /// <summary>Base dont on remplace la connexion (lien « Modifier la connexion » de la page d'une base).</summary>
+    [SupplyParameterFromQuery(Name = "id")] public string? EditId { get; set; }
+
+    private string Title => EditId == null ? "Connecter un serveur SQL Server" : $"Modifier la connexion de {_existing?.Name ?? "la base"}";
+
+    private List<BreadcrumbItem> Crumbs =>
+    [
+        new("Bases", href: "/"),
+        new(Title, href: null, disabled: true)
+    ];
+
+    /// <summary>Les champs obligatoires sont remplis (le serveur de l'API valide le reste).</summary>
+    private bool Ready => !string.IsNullOrWhiteSpace(_form.Server) && !string.IsNullOrWhiteSpace(_form.Database)
+                          && (_form.AuthMode != "Sql" || (!string.IsNullOrWhiteSpace(_form.User) && !string.IsNullOrEmpty(_form.Password)));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _capabilities = await Api.GetCapabilitiesAsync();
+        _existing = EditId == null ? null : await Api.GetDatabaseAsync(EditId);
+        if (_existing != null && string.IsNullOrWhiteSpace(_form.Name)) _form.Name = _existing.Name;
+        Workspace.Describe(Navigation.Uri, EditId == null ? "Connecter SQL Server" : $"Connexion · {_existing?.Name ?? "base"}");
+        _loading = false;
+    }
+
+    /// <summary>Les schémas cochés ; <c>null</c> (tous) quand rien n'a été restreint.</summary>
+    private List<string>? ChosenSchemas()
+    {
+        if (_test is not { Ok: true } || _test.Schemas.Length == 0) return null;
+        return _selected.Count == _test.Schemas.Length ? null : _selected.ToList();
+    }
+
+    private void ToggleSchema(string name, bool on)
+    {
+        if (on) _selected.Add(name);
+        else _selected.Remove(name);
+    }
+
+    private async Task TestAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _test = await Api.TestSqlServerAsync(_form);
+            _selected.Clear();
+            foreach (var schema in _test.Schemas) _selected.Add(schema.Name);
+        }
+        catch (ApiException ex)
+        {
+            _test = null;
+            _error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _test = null;
+            _error = "L'API est injoignable.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_test is { Ok: true } && _selected.Count == 0)
+        {
+            _error = "Cochez au moins un schéma à documenter.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _form.Schemas = ChosenSchemas();
+            var result = EditId == null ? await Api.ImportSqlServerAsync(_form) : await Api.UpdateSqlServerConnectionAsync(EditId, _form);
+            Workspace.NotifyCatalogChanged(EditId, this);
+            Notifier.Show(EditId == null
+                ? $"Base {result.Database.Name} importée : {result.Sync.TablesAdded} table(s), {result.Sync.ColumnsAdded} colonne(s)."
+                : $"Connexion enregistrée et base resynchronisée : {result.Sync.TablesAdded} table(s) ajoutée(s), {result.Sync.TablesRemoved} supprimée(s).");
+            _form.Password = null; // le mot de passe ne reste pas dans la page
+            Navigation.NavigateTo($"/databases/{result.Database.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API est injoignable.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

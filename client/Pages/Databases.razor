@@ -1,0 +1,170 @@
+@page "/"
+@page "/databases"
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+
+<PageTitle>Bases documentées</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudText Typo="Typo.h4" Class="mb-4">Bases documentées</MudText>
+
+    <MudPaper Class="pa-6 mb-6 dropzone" Outlined="true">
+        <InputFile class="dropzone-input" OnChange="OnFileSelected" accept=".db,.sqlite,.sqlite3,.db3" disabled="@_busy" />
+        <MudStack AlignItems="AlignItems.Center" Spacing="1">
+            <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Large" />
+            <MudText Typo="Typo.h6">Glissez un fichier SQLite ici, ou cliquez pour le choisir</MudText>
+            <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                Aucun serveur de base de données n'est nécessaire : le schéma est lu directement dans le fichier.
+            </MudText>
+            @if (_busy)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mt-2" Style="width: 240px" />
+            }
+        </MudStack>
+    </MudPaper>
+
+    @if (_capabilities.AllowSqlServerSources)
+    {
+        <MudButton Variant="Variant.Outlined" Href="/import/sqlserver" StartIcon="@Icons.Material.Filled.Dns" Class="mb-4 connect-sqlserver">
+            Connecter un serveur SQL Server
+        </MudButton>
+    }
+    else
+    {
+        <MudText Typo="Typo.caption" Class="mb-4 sqlserver-disabled" Style="color: var(--mud-palette-text-secondary)">
+            Pour documenter une base Microsoft SQL Server, activez Catalog:AllowSqlServerSources sur le serveur de l'API.
+        </MudText>
+    }
+
+    @if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
+    }
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_loadError != null)
+    {
+        <MudAlert Severity="Severity.Warning">@_loadError</MudAlert>
+    }
+    else if (_databases.Length == 0)
+    {
+        <MudText Style="color: var(--mud-palette-text-secondary)">Aucune base pour le moment. Envoyez un fichier SQLite pour commencer.</MudText>
+        <ol class="welcome-steps" aria-label="Pour commencer">
+            <li><strong>1. Importez</strong>Déposez un fichier SQLite : tables, colonnes, clés et relations sont lues sans serveur.</li>
+            <li><strong>2. Explorez et documentez</strong>Parcourez l'arbre à gauche, cliquez une table ou une colonne et décrivez-la sur place.</li>
+            <li><strong>3. Partagez</strong>Ouvrez le diagramme d'un domaine et exportez-le en SVG, PNG ou Mermaid.</li>
+        </ol>
+        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">Astuce : Ctrl+K ouvre la palette de commandes.</MudText>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var db in _databases)
+            {
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard>
+                        <MudCardContent>
+                            <MudText Typo="Typo.h6">@db.Name</MudText>
+                            <MudChip T="string" Size="Size.Small">@db.Type</MudChip>
+                            @if (!string.IsNullOrWhiteSpace(db.Description))
+                            {
+                                <MudText Typo="Typo.body2" Class="mt-2">@db.Description</MudText>
+                            }
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Href="@($"/databases/{db.Id}")" Color="Color.Primary">Ouvrir</MudButton>
+                            <MudButton Href="@($"/databases/{db.Id}/diagram")">Diagramme</MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+
+        @if (_pageCount > 1)
+        {
+            <MudPagination Count="_pageCount" Selected="_page" SelectedChanged="GoToPageAsync" Class="mt-4 d-flex justify-center" />
+        }
+    }
+</MudContainer>
+
+@code {
+    private const long MaxFileSize = 100L * 1024 * 1024;
+
+    private const int PageSize = 12;
+
+    private DatabaseInfo[] _databases = [];
+    private int _page = 1;
+    private int _pageCount = 1;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+    private string? _loadError;
+
+    private Capabilities _capabilities = new(false, false);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _capabilities = await Api.GetCapabilitiesAsync();
+        await LoadPageAsync();
+        _loading = false;
+    }
+
+    private async Task LoadPageAsync()
+    {
+        try
+        {
+            var result = await Api.GetDatabasesPageAsync((_page - 1) * PageSize, PageSize);
+            _databases = result.Items;
+            _pageCount = Math.Max(1, (int)Math.Ceiling(result.Total / (double)PageSize));
+            _loadError = null;
+        }
+        catch (HttpRequestException)
+        {
+            _loadError = "L'API est injoignable. Vérifiez qu'elle est démarrée et que ApiBaseUrl est correct.";
+        }
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        _page = page;
+        await LoadPageAsync();
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(MaxFileSize);
+            var result = await Api.UploadSqliteAsync(stream, e.File.Name, null, null);
+            Workspace.NotifyCatalogChanged(null, this);
+            Notifier.Show($"Base {result.Database.Name} importée : {result.Sync.TablesAdded} table(s), {result.Sync.ColumnsAdded} colonne(s).");
+            Navigation.NavigateTo($"/databases/{result.Database.Id}");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (IOException)
+        {
+            _error = "Fichier trop volumineux (100 Mo maximum).";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API est injoignable.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

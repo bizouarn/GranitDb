@@ -1,32 +1,239 @@
-﻿@inherits LayoutComponentBase
+@inherits LayoutComponentBase
+@implements IDisposable
+@implements IAsyncDisposable
+@using GranitDb.Client.Workspace
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject WorkspaceState Workspace
 
-<MudThemeProvider />
+<MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+<a class="skip-link" href="#main-content">Aller au contenu</a>
+
 <MudLayout>
-    <MudAppBar>
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@DrawerToggle" />
+    <MudAppBar Dense="true" Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleExplorer"
+                       aria-label="Afficher ou masquer l'explorateur" title="Explorateur (Ctrl+B)" />
+        <span class="brand">Granit DB</span>
+        <MudSpacer />
+        <MudTextField T="string" @bind-Value="_query" Immediate="true" Placeholder="Rechercher une table, une colonne, un index…"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="search-box"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Clearable="true" OnKeyDown="OnSearchKeyDown" aria-label="Recherche globale" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Inherit" Size="Size.Small" Class="palette-button ml-2" OnClick="OpenPalette"
+                   aria-label="Ouvrir la palette de commandes" title="Palette de commandes (Ctrl+K)">Ctrl K</MudButton>
+        <MudSpacer />
+        <MudIconButton Icon="@Icons.Material.Filled.ViewSidebar" Color="Color.Inherit" OnClick="ToggleDetail"
+                       aria-label="Afficher ou masquer les détails" title="Détails de la sélection" />
+        <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                       Color="Color.Inherit" OnClick="ToggleThemeAsync"
+                       aria-label="@(_isDarkMode ? "Passer au thème clair" : "Passer au thème sombre")"
+                       title="@(_isDarkMode ? "Thème clair" : "Thème sombre")" />
     </MudAppBar>
 
-    <MudDrawer @bind-Open="@_drawerOpen" AppBar="false" Anchor="Anchor.Start">
-        <div style="height: 64px; background-color: var(--mud-palette-primary); display: flex; align-items: center; justify-content: center; color: white; font-size: 1.2rem; font-weight: bold;">
-            Granit DB
-        </div>
-        <NavMenu />
+    <MudDrawer Open="Workspace.ExplorerOpen" OpenChanged="@(open => Workspace.SetExplorerOpen(open, remember: false))" Anchor="Anchor.Start"
+               Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Md" ClipMode="DrawerClipMode.Always" Width="300px" Elevation="0">
+        <Explorer />
+    </MudDrawer>
+
+    <MudDrawer Open="Workspace.DetailOpen" OpenChanged="@(open => Workspace.SetDetailOpen(open, remember: false))" Anchor="Anchor.End"
+               Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Lg" ClipMode="DrawerClipMode.Always" Width="340px" Elevation="0">
+        <DetailPanel />
     </MudDrawer>
 
     <MudMainContent>
-        @Body
+        <TabStrip />
+        <main id="main-content" tabindex="-1" class="workspace-main">
+            @Body
+        </main>
     </MudMainContent>
 </MudLayout>
 
-@code {
-    bool _drawerOpen = true;
+<CommandPalette OnToggleTheme="ToggleThemeAsync" />
+<ToastHost />
 
-    void DrawerToggle()
+@code {
+    private const string ThemeKey = "granitdb.theme";
+    private const string WorkspaceKey = "granitdb.workspace";
+
+    /// <summary>Palette sobre ; les teintes sont choisies pour un contraste de texte d'au moins 4,5:1 sur leur fond.</summary>
+    private static readonly MudTheme Theme = new()
     {
-        _drawerOpen = !_drawerOpen;
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#1d4ed8",
+            Secondary = "#6b21a8",
+            Info = "#0b5cad",
+            Success = "#177245",
+            Warning = "#8a5300",
+            Error = "#b3261e",
+            AppbarBackground = "#1d4ed8",
+            DrawerBackground = "#f8fafc",
+            Background = "#ffffff",
+            TextSecondary = "#475569"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#8ab4f8",
+            Secondary = "#d0a8ff",
+            Info = "#7cc4ff",
+            Success = "#6fd39c",
+            Warning = "#ffc266",
+            Error = "#ff8a80",
+            AppbarBackground = "#1e293b",
+            DrawerBackground = "#111827",
+            Background = "#0f172a",
+            Surface = "#1e293b",
+            TextSecondary = "#b6c2d4"
+        },
+        LayoutProperties = new LayoutProperties { DrawerWidthLeft = "300px", DrawerWidthRight = "340px", AppbarHeight = "48px" }
+    };
+
+    private MudTheme _theme = Theme;
+    private MudThemeProvider? _themeProvider;
+    private bool _isDarkMode;
+    private string? _query;
+    private bool _workspaceRestored;
+    private DotNetObjectReference<MainLayout>? _shortcuts;
+
+    protected override void OnInitialized()
+    {
+        Workspace.Open(Navigation.Uri);
+        Navigation.LocationChanged += OnLocationChanged;
+        Workspace.Changed += OnWorkspaceChanged;
+    }
+
+    public void Dispose()
+    {
+        Navigation.LocationChanged -= OnLocationChanged;
+        Workspace.Changed -= OnWorkspaceChanged;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_shortcuts != null) await JS.InvokeVoidAsync("granitdb.unregisterShortcuts");
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Plus de page : rien à détacher.
+        }
+
+        _shortcuts?.Dispose();
+    }
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        Workspace.Open(e.Location);
+    }
+
+    private void OnWorkspaceChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+        if (_workspaceRestored) _ = SaveWorkspaceAsync();
+    }
+
+    /// <summary>Thème et onglets/favoris mémorisés dans le navigateur ; à défaut, le thème du système et un espace vide.</summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            var stored = await JS.InvokeAsync<string?>("localStorage.getItem", ThemeKey);
+            if (stored is "dark" or "light")
+                _isDarkMode = stored == "dark";
+            else if (_themeProvider != null)
+                _isDarkMode = await _themeProvider.GetSystemDarkModeAsync();
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Stockage du navigateur indisponible : thème par défaut.
+        }
+
+        try
+        {
+            Workspace.TryRestore(await JS.InvokeAsync<string?>("localStorage.getItem", WorkspaceKey));
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Espace de travail non mémorisé : on repart d'un espace vide.
+        }
+
+        _workspaceRestored = true;
+        Workspace.Open(Navigation.Uri); // la page affichée a toujours son onglet, même après la reprise
+
+        try
+        {
+            _shortcuts = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("granitdb.registerShortcuts", _shortcuts);
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Sans raccourcis clavier, la souris reste possible.
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task SaveWorkspaceAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", WorkspaceKey, Workspace.ToJson());
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Non mémorisé : l'espace vaut pour la session.
+        }
+    }
+
+    /// <summary>Raccourcis clavier reçus du navigateur (voir <c>granitdb.registerShortcuts</c>).</summary>
+    [JSInvokable]
+    public Task OnShortcut(string name)
+    {
+        switch (name)
+        {
+            case "palette":
+                Workspace.SetPalette(!Workspace.PaletteOpen);
+                break;
+            case "closeTab":
+                if (Workspace.ActiveHref != null && Workspace.Close(Workspace.ActiveHref) is { } next) Navigation.NavigateTo(next);
+                break;
+            case "toggleExplorer":
+                ToggleExplorer();
+                break;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private void ToggleExplorer() => Workspace.SetExplorerOpen(!Workspace.ExplorerOpen);
+
+    private void ToggleDetail() => Workspace.SetDetailOpen(!Workspace.DetailOpen);
+
+    private void OpenPalette() => Workspace.SetPalette(true);
+
+    private async Task ToggleThemeAsync()
+    {
+        _isDarkMode = !_isDarkMode;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", ThemeKey, _isDarkMode ? "dark" : "light");
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Le choix vaut pour la session même s'il ne peut pas être mémorisé.
+        }
+    }
+
+    private void OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        var term = _query?.Trim();
+        if (e.Key == "Enter" && term is { Length: >= 2 })
+            Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(term)}");
     }
 }

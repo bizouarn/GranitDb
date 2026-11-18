@@ -1,0 +1,508 @@
+@implements IDisposable
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject CatalogCache Cache
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@* Explorateur : bases → tables → colonnes, et les domaines comme collections. Navigation au clavier (flèches, Entrée, F = favori). *@
+<nav class="explorer" aria-label="Explorateur">
+    <div class="explorer-head">
+        <MudTextField T="string" Value="@_filter" ValueChanged="OnFilterChangedAsync" Immediate="true" Placeholder="Filtrer les bases et les tables" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" Clearable="true" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.FilterList"
+                      aria-label="Filtrer l'explorateur" Class="explorer-filter" />
+        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Size="Size.Small" aria-label="Recharger l'explorateur" Title="Recharger"
+                       OnClick="ReloadAsync" />
+    </div>
+
+    @if (_loadError != null)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="ma-2">@_loadError</MudAlert>
+    }
+
+    @if (Workspace.Favorites.Count > 0 && !Filtering)
+    {
+        <div class="explorer-section" role="group" aria-label="Favoris">
+            <div class="section-title">Favoris</div>
+            @foreach (var favorite in Workspace.Favorites)
+            {
+                var current = favorite;
+                <div class="node node-favorite" role="treeitem" aria-level="1" tabindex="-1" data-favorite="@favorite.Name"
+                     draggable="true" @ondragstart="() => _draggedFavorite = current" @ondragend="() => _draggedFavorite = null"
+                     @ondragover="() => { }" @ondragover:preventDefault="true" @ondrop="() => DropFavorite(current)">
+                    <MudIcon Icon="@FavoriteIcon(favorite.Kind)" Size="Size.Small" />
+                    <a class="node-label" href="@favorite.Href">@favorite.Name</a>
+                    <button type="button" class="node-action" aria-label="@("Retirer des favoris : " + favorite.Name)" title="Retirer des favoris"
+                            @onclick="() => Workspace.ToggleFavorite(current)">
+                        <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" Color="Color.Warning" />
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+    <div role="tree" aria-label="Bases de données" class="explorer-tree" @onfocusin="OnFocusIn">
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Class="ma-2" />
+        }
+        else if (_databases.Length == 0 && _loadError == null)
+        {
+            <div class="explorer-empty">Aucune base pour le moment.<br />Importez un fichier SQLite depuis l'accueil.</div>
+        }
+
+        @foreach (var db in VisibleDatabases)
+        {
+            var database = db;
+            var expanded = IsDbExpanded(db);
+            <div class="@($"node node-db{(IsSelected("database", db.Id) ? " node-selected" : "")}{(IsCurrent($"/databases/{db.Id}") ? " node-current" : "")}")"
+                 role="treeitem" aria-level="1" aria-expanded="@(expanded ? "true" : "false")" tabindex="@TabIndexFor("db:" + db.Id)"
+                 data-node="@("db:" + db.Id)" data-db="@db.Name"
+                 @onkeydown="e => OnTreeKey(e, true, expanded, () => ToggleDbAsync(database), DbHref(database), () => FavoriteDb(database))">
+                <button type="button" class="chev" tabindex="-1" aria-label="@((expanded ? "Replier " : "Déplier ") + db.Name)" @onclick="() => ToggleDbAsync(database)">
+                    <MudIcon Icon="@(expanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)" Size="Size.Small" />
+                </button>
+                <MudIcon Icon="@Icons.Material.Filled.Storage" Size="Size.Small" />
+                <a class="node-label" href="@($"/databases/{db.Id}")" @onclick="() => SelectDb(database)">@db.Name</a>
+                <button type="button" class="node-action" tabindex="-1" aria-label="@("Diagramme de " + db.Name)" title="Diagramme"
+                        @onclick="() => GoDiagram(database)">
+                    <MudIcon Icon="@Icons.Material.Filled.AccountTree" Size="Size.Small" />
+                </button>
+                @FavoriteButton(FavoriteItemOf(database))
+            </div>
+
+            @if (expanded)
+            {
+                <div role="group">
+                    @if (_loadingDbs.Contains(db.Id))
+                    {
+                        <div class="node-hint" style="padding-left: 2rem;">Chargement…</div>
+                    }
+
+                    @if (_tables.TryGetValue(db.Id, out var tables))
+                    {
+                        @foreach (var table in VisibleTables(db, tables))
+                        {
+                            var t = table;
+                            var tableExpanded = _expandedTables.Contains(table.Id);
+                            <div class="@($"node node-table{(IsSelected("table", table.Id) ? " node-selected" : "")}{(IsCurrent($"/databases/{db.Id}/tables/{table.Id}") ? " node-current" : "")}")"
+                                 role="treeitem" aria-level="2" aria-expanded="@(tableExpanded ? "true" : "false")" tabindex="@TabIndexFor("t:" + table.Id)"
+                                 data-node="@("t:" + table.Id)" data-table="@table.Name" draggable="true"
+                                 @ondragstart="() => _draggedTable = (t.Id, database.Id)" @ondragend="ClearDrag"
+                                 @onkeydown="e => OnTreeKey(e, true, tableExpanded, () => ToggleTable(t.Id), TableHref(database, t), () => FavoriteTable(database, t))">
+                                <button type="button" class="chev" tabindex="-1" aria-label="@((tableExpanded ? "Replier " : "Déplier ") + table.Name)" @onclick="() => ToggleTable(t.Id)">
+                                    <MudIcon Icon="@(tableExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)" Size="Size.Small" />
+                                </button>
+                                <MudIcon Icon="@(table.TableType == "Table" ? Icons.Material.Filled.TableChart : Icons.Material.Filled.Visibility)" Size="Size.Small" />
+                                <a class="node-label" href="@($"/databases/{db.Id}/tables/{table.Id}")" @onclick="() => SelectTable(database, t)">@table.Name</a>
+                                @FavoriteButton(FavoriteItemOf(database, table))
+                            </div>
+                            @if (tableExpanded)
+                            {
+                                <div role="group">
+                                    @foreach (var column in table.Columns.OrderBy(c => c.Position))
+                                    {
+                                        var c = column;
+                                        <div class="@($"node node-column{(IsSelected("column", column.Id) ? " node-selected" : "")}")" role="treeitem" aria-level="3"
+                                             tabindex="@TabIndexFor("c:" + column.Id)" data-node="@("c:" + column.Id)" data-column="@column.Name"
+                                             @onkeydown="e => OnTreeKey(e, false, false, null, ColumnHref(database, t, c), null)">
+                                            <span class="chev-space"></span>
+                                            @if (column.IsPrimaryKey)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" Title="Clé primaire" />
+                                            }
+                                            else
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.ViewColumn" Size="Size.Small" />
+                                            }
+                                            <a class="node-label" href="@($"/databases/{db.Id}/tables/{table.Id}?column={column.Id}")"
+                                               @onclick="() => SelectColumn(database, t, c)">@column.Name</a>
+                                            @if (column.IsSensitive)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Shield" Size="Size.Small" Color="Color.Warning" Title="Données sensibles" />
+                                            }
+                                            <span class="node-meta">@column.DataType</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+
+                    @if (_domains.TryGetValue(db.Id, out var domains) && domains.Length > 0 && !Filtering)
+                    {
+                        <div class="section-title" style="padding-left: 1.5rem;">Domaines</div>
+                        @foreach (var domain in domains)
+                        {
+                            var d = domain;
+                            var domainExpanded = _expandedDomains.Contains(domain.Id);
+                            <div class="@($"node node-domain{(_draggedTable != null ? " domain-target" : "")}")" role="treeitem" aria-level="2"
+                                 aria-expanded="@(domainExpanded ? "true" : "false")" tabindex="@TabIndexFor("d:" + domain.Id)"
+                                 data-node="@("d:" + domain.Id)" data-domain="@domain.Name"
+                                 @ondragover="() => { }" @ondragover:preventDefault="true" @ondrop="() => DropOnDomainAsync(database, d)"
+                                 @onkeydown="e => OnTreeKey(e, true, domainExpanded, () => ToggleDomain(d.Id), DomainHref(database, d), () => FavoriteDomain(database, d))">
+                                <button type="button" class="chev" tabindex="-1" aria-label="@((domainExpanded ? "Replier " : "Déplier ") + domain.Name)" @onclick="() => ToggleDomain(d.Id)">
+                                    <MudIcon Icon="@(domainExpanded ? Icons.Material.Filled.ExpandMore : Icons.Material.Filled.ChevronRight)" Size="Size.Small" />
+                                </button>
+                                <span class="domain-dot" style="@(string.IsNullOrEmpty(domain.Color) ? null : $"background:{domain.Color}")"></span>
+                                <a class="node-label" href="@($"/databases/{db.Id}/diagram?domain={domain.Id}")">@domain.Name</a>
+                                <span class="node-meta">@domain.Tables.Count</span>
+                                @FavoriteButton(new FavoriteItem("domain", domain.Id, $"{domain.Name} ({db.Name})", $"/databases/{db.Id}/diagram?domain={domain.Id}"))
+                            </div>
+                            @if (domainExpanded)
+                            {
+                                <div role="group">
+                                    @foreach (var member in domain.Tables)
+                                    {
+                                        var m = member;
+                                        var name = tables?.FirstOrDefault(x => x.Id == member.TableId)?.Name ?? member.TableId;
+                                        <div class="node node-member" role="treeitem" aria-level="3" tabindex="-1" data-member="@name">
+                                            <span class="chev-space"></span>
+                                            <MudIcon Icon="@Icons.Material.Filled.TableChart" Size="Size.Small" />
+                                            <a class="node-label" href="@($"/databases/{db.Id}/tables/{member.TableId}")">@name</a>
+                                            <button type="button" class="node-action" tabindex="-1" aria-label="@($"Retirer {name} du domaine {domain.Name}")" title="Retirer du domaine"
+                                                    @onclick="() => RemoveFromDomainAsync(database, d, m.TableId, name)">
+                                                <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                </div>
+            }
+        }
+
+        @if (Filtering && !_loading && !VisibleDatabases.Any())
+        {
+            <div class="explorer-empty">Aucun résultat pour « @_filter ».</div>
+        }
+    </div>
+</nav>
+
+@code {
+    private DatabaseInfo[] _databases = [];
+    private readonly Dictionary<string, TableInfo[]> _tables = [];
+    private readonly Dictionary<string, DomainInfo[]> _domains = [];
+    private readonly HashSet<string> _expandedDbs = [];
+    private readonly HashSet<string> _expandedTables = [];
+    private readonly HashSet<string> _expandedDomains = [];
+    private readonly HashSet<string> _loadingDbs = [];
+    private string? _filter;
+    private string? _focusKey;
+    private bool _loading = true;
+    private string? _loadError;
+    private (string TableId, string DatabaseId)? _draggedTable;
+    private FavoriteItem? _draggedFavorite;
+
+    private bool Filtering => _filter is { Length: >= 2 } && !string.IsNullOrWhiteSpace(_filter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        Workspace.Changed += OnWorkspaceChanged;
+        Workspace.CatalogChanged += OnCatalogChanged;
+        await LoadDatabasesAsync();
+        _loading = false;
+    }
+
+    public void Dispose()
+    {
+        Workspace.Changed -= OnWorkspaceChanged;
+        Workspace.CatalogChanged -= OnCatalogChanged;
+    }
+
+    private void OnWorkspaceChanged() => _ = InvokeAsync(StateHasChanged);
+
+    /// <summary>Le catalogue a changé ailleurs (import, synchronisation, édition) : l'explorateur relit ce qu'il affiche.</summary>
+    private void OnCatalogChanged(string? databaseId, object? source)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            if (databaseId == null) await LoadDatabasesAsync();
+            foreach (var id in _expandedDbs.Where(id => databaseId == null || id == databaseId).ToList())
+                await LoadDatabaseAsync(id);
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadDatabasesAsync()
+    {
+        try
+        {
+            _databases = (await Api.GetAllDatabaseAsync()).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+            _loadError = null;
+        }
+        catch (HttpRequestException)
+        {
+            _loadError = "L'API est injoignable.";
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        Cache.Invalidate(null);
+        _tables.Clear();
+        _domains.Clear();
+        await LoadDatabasesAsync();
+        foreach (var id in _expandedDbs.ToList()) await LoadDatabaseAsync(id);
+    }
+
+    private async Task LoadDatabaseAsync(string databaseId)
+    {
+        _loadingDbs.Add(databaseId);
+        try
+        {
+            _tables[databaseId] = await Cache.GetTablesAsync(databaseId);
+            _domains[databaseId] = await Cache.GetDomainsAsync(databaseId);
+        }
+        finally
+        {
+            _loadingDbs.Remove(databaseId);
+        }
+    }
+
+    private async Task ToggleDbAsync(DatabaseInfo db)
+    {
+        if (!_expandedDbs.Remove(db.Id))
+        {
+            _expandedDbs.Add(db.Id);
+            if (!_tables.ContainsKey(db.Id)) await LoadDatabaseAsync(db.Id);
+        }
+    }
+
+    private Task ToggleTable(string tableId)
+    {
+        if (!_expandedTables.Remove(tableId)) _expandedTables.Add(tableId);
+        return Task.CompletedTask;
+    }
+
+    private Task ToggleDomain(string domainId)
+    {
+        if (!_expandedDomains.Remove(domainId)) _expandedDomains.Add(domainId);
+        return Task.CompletedTask;
+    }
+
+    // --- Filtre ---
+
+    /// <summary>Un filtre cherche aussi dans les tables des bases pas encore dépliées : elles sont lues à ce moment-là.</summary>
+    private async Task OnFilterChangedAsync(string? value)
+    {
+        _filter = value;
+        if (!Filtering) return;
+        foreach (var db in _databases.Where(d => !_tables.ContainsKey(d.Id)).ToList())
+            await LoadDatabaseAsync(db.Id);
+    }
+
+    private bool Matches(string name) => name.Contains(_filter!.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private IEnumerable<DatabaseInfo> VisibleDatabases => !Filtering
+        ? _databases
+        : _databases.Where(d => Matches(d.Name) || (_tables.TryGetValue(d.Id, out var t) && t.Any(x => Matches(x.Name))));
+
+    private IEnumerable<TableInfo> VisibleTables(DatabaseInfo db, TableInfo[] tables) =>
+        !Filtering || Matches(db.Name) ? tables : tables.Where(t => Matches(t.Name));
+
+    private bool IsDbExpanded(DatabaseInfo db) => _expandedDbs.Contains(db.Id) || (Filtering && VisibleDatabases.Contains(db));
+
+    // --- Sélection et repères ---
+
+    private bool IsSelected(string kind, string id) => Workspace.Selection is { } s && s.Kind == kind && s.Id == id;
+
+    private bool IsCurrent(string path) =>
+        Workspace.ActiveHref != null && WorkspaceState.Normalize(Workspace.ActiveHref).Split('?')[0] == path;
+
+    private void SelectDb(DatabaseInfo db) => Workspace.Select(new SelectionItem("database", db.Id, db.Id));
+
+    private void SelectTable(DatabaseInfo db, TableInfo table) => Workspace.Select(new SelectionItem("table", table.Id, db.Id, table.Id));
+
+    private void SelectColumn(DatabaseInfo db, TableInfo table, ColumnInfo column) =>
+        Workspace.Select(new SelectionItem("column", column.Id, db.Id, table.Id));
+
+    private void GoDiagram(DatabaseInfo db) => Navigation.NavigateTo($"/databases/{db.Id}/diagram");
+
+    private static string DbHref(DatabaseInfo db) => $"/databases/{db.Id}";
+
+    private static string TableHref(DatabaseInfo db, TableInfo table) => $"/databases/{db.Id}/tables/{table.Id}";
+
+    private static string ColumnHref(DatabaseInfo db, TableInfo table, ColumnInfo column) => $"/databases/{db.Id}/tables/{table.Id}?column={column.Id}";
+
+    private static string DomainHref(DatabaseInfo db, DomainInfo domain) => $"/databases/{db.Id}/diagram?domain={domain.Id}";
+
+    // --- Clavier ---
+
+    /// <summary>Un seul élément de l'arbre est dans l'ordre de tabulation (le dernier pris, sinon le premier).</summary>
+    private int TabIndexFor(string key)
+    {
+        var first = _databases.Length > 0 ? "db:" + _databases[0].Id : null;
+        return (_focusKey ?? first) == key ? 0 : -1;
+    }
+
+    private void OnFocusIn(FocusEventArgs _) { }
+
+    private async Task OnTreeKey(KeyboardEventArgs e, bool expandable, bool expanded, Func<Task>? toggle, string? href, Func<bool>? favorite)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                await FocusAsync("next");
+                break;
+            case "ArrowUp":
+                await FocusAsync("prev");
+                break;
+            case "Home":
+                await FocusAsync("first");
+                break;
+            case "End":
+                await FocusAsync("last");
+                break;
+            case "ArrowRight":
+                if (expandable && !expanded && toggle != null) await toggle();
+                else await FocusAsync("next");
+                break;
+            case "ArrowLeft":
+                if (expandable && expanded && toggle != null) await toggle();
+                else await FocusAsync("parent");
+                break;
+            case "Enter":
+            case " ":
+                if (href != null) Navigation.NavigateTo(href);
+                else if (expandable && toggle != null) await toggle();
+                break;
+            case "f" or "F" when favorite != null:
+                favorite();
+                break;
+        }
+    }
+
+    private async Task FocusAsync(string where)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("granitdb.moveTreeFocus", where);
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException)
+        {
+            // Sans script, la tabulation et la souris restent possibles.
+        }
+    }
+
+    // --- Favoris ---
+
+    private static string FavoriteIcon(string kind) => kind switch
+    {
+        "database" => Icons.Material.Filled.Storage,
+        "domain" => Icons.Material.Filled.Folder,
+        _ => Icons.Material.Filled.TableChart
+    };
+
+    private static FavoriteItem FavoriteItemOf(DatabaseInfo db) => new("database", db.Id, db.Name, $"/databases/{db.Id}");
+
+    private static FavoriteItem FavoriteItemOf(DatabaseInfo db, TableInfo table) =>
+        new("table", table.Id, $"{table.Name} ({db.Name})", $"/databases/{db.Id}/tables/{table.Id}");
+
+    private bool FavoriteDb(DatabaseInfo db) => Workspace.ToggleFavorite(FavoriteItemOf(db));
+
+    private bool FavoriteTable(DatabaseInfo db, TableInfo table) => Workspace.ToggleFavorite(FavoriteItemOf(db, table));
+
+    private bool FavoriteDomain(DatabaseInfo db, DomainInfo domain) =>
+        Workspace.ToggleFavorite(new FavoriteItem("domain", domain.Id, $"{domain.Name} ({db.Name})", $"/databases/{db.Id}/diagram?domain={domain.Id}"));
+
+    private RenderFragment FavoriteButton(FavoriteItem item) => builder =>
+    {
+        var on = Workspace.IsFavorite(item.Kind, item.Id);
+        builder.OpenElement(0, "button");
+        builder.AddAttribute(1, "type", "button");
+        builder.AddAttribute(2, "class", "node-action node-star");
+        builder.AddAttribute(3, "tabindex", "-1");
+        builder.AddAttribute(4, "aria-pressed", on ? "true" : "false");
+        builder.AddAttribute(5, "aria-label", (on ? "Retirer des favoris : " : "Ajouter aux favoris : ") + item.Name);
+        builder.AddAttribute(6, "title", on ? "Retirer des favoris" : "Ajouter aux favoris (F)");
+        builder.AddAttribute(7, "onclick", EventCallback.Factory.Create(this, () => Workspace.ToggleFavorite(item)));
+        builder.OpenComponent<MudIcon>(8);
+        builder.AddAttribute(9, "Icon", on ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder);
+        builder.AddAttribute(10, "Size", Size.Small);
+        builder.AddAttribute(11, "Color", on ? Color.Warning : Color.Default);
+        builder.CloseComponent();
+        builder.CloseElement();
+    };
+
+    private void DropFavorite(FavoriteItem target)
+    {
+        if (_draggedFavorite != null) Workspace.MoveFavorite(_draggedFavorite.Kind, _draggedFavorite.Id, target.Id);
+        _draggedFavorite = null;
+    }
+
+    // --- Domaines : déposer une table, la retirer ---
+
+    private void ClearDrag()
+    {
+        _draggedTable = null;
+    }
+
+    /// <summary>Une table glissée depuis l'arbre est rangée dans le domaine ; « Annuler » l'en retire.</summary>
+    private async Task DropOnDomainAsync(DatabaseInfo db, DomainInfo domain)
+    {
+        var dragged = _draggedTable;
+        _draggedTable = null;
+        if (dragged == null) return;
+        var (tableId, sourceDatabase) = dragged.Value;
+        var name = _tables.GetValueOrDefault(sourceDatabase)?.FirstOrDefault(t => t.Id == tableId)?.Name ?? tableId;
+        if (sourceDatabase != db.Id)
+        {
+            Notifier.Error($"{name} n'appartient pas à la base de ce domaine.");
+            return;
+        }
+
+        if (domain.Tables.Any(t => t.TableId == tableId))
+        {
+            Notifier.Show($"{name} est déjà dans le domaine {domain.Name}.", Severity.Info);
+            return;
+        }
+
+        try
+        {
+            await Api.AddTableToDomainAsync(domain.Id, tableId);
+            await RefreshDomainsAsync(db.Id);
+            Notifier.Show($"{name} ajoutée au domaine {domain.Name}.", Severity.Success, async () =>
+            {
+                await Api.RemoveTableFromDomainAsync(domain.Id, tableId);
+                await RefreshDomainsAsync(db.Id);
+            });
+        }
+        catch (ApiException ex)
+        {
+            Notifier.Error(ex.Message);
+        }
+    }
+
+    private async Task RemoveFromDomainAsync(DatabaseInfo db, DomainInfo domain, string tableId, string name)
+    {
+        var place = domain.Tables.FirstOrDefault(t => t.TableId == tableId);
+        try
+        {
+            await Api.RemoveTableFromDomainAsync(domain.Id, tableId);
+            await RefreshDomainsAsync(db.Id);
+            Notifier.Show($"{name} retirée du domaine {domain.Name}.", Severity.Success, async () =>
+            {
+                await Api.AddTableToDomainAsync(domain.Id, tableId, null, place?.X, place?.Y);
+                await RefreshDomainsAsync(db.Id);
+            });
+        }
+        catch (ApiException ex)
+        {
+            Notifier.Error(ex.Message);
+        }
+    }
+
+    private async Task RefreshDomainsAsync(string databaseId)
+    {
+        Workspace.NotifyCatalogChanged(databaseId, this);
+        await LoadDatabaseAsync(databaseId);
+        await InvokeAsync(StateHasChanged);
+    }
+}

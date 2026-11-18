@@ -1,0 +1,273 @@
+@implements IDisposable
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject WorkspaceState Workspace
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+@* Palette de commandes (Ctrl+K) : actions et résultats de recherche, tout au clavier. *@
+@if (Workspace.PaletteOpen)
+{
+    <div class="palette-backdrop" @onclick="Close"></div>
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Palette de commandes" @onkeydown="OnKeyDown">
+        <input id="palette-input" class="palette-input" type="text" role="combobox" aria-expanded="true" aria-controls="palette-list"
+               aria-activedescendant="@(Items.Count == 0 ? null : $"palette-item-{_index}")" aria-label="Rechercher une action, une base, une table ou une colonne"
+               placeholder="Tapez une commande ou cherchez une table, une colonne…" autocomplete="off"
+               value="@_query" @oninput="OnInput" />
+        <ul id="palette-list" class="palette-list" role="listbox">
+            @for (var i = 0; i < Items.Count; i++)
+            {
+                var item = Items[i];
+                var position = i;
+                @if (i == 0 || Items[i - 1].Group != item.Group)
+                {
+                    <li class="palette-group" role="presentation">@item.Group</li>
+                }
+                <li id="@($"palette-item-{i}")" class="@($"palette-item{(i == _index ? " palette-active" : "")}")" role="option"
+                    aria-selected="@(i == _index ? "true" : "false")" @onclick="() => RunAsync(item)" @onmouseover="() => _index = position">
+                    <span class="palette-label">@item.Label</span>
+                    @if (item.Hint != null)
+                    {
+                        <span class="palette-hint">@item.Hint</span>
+                    }
+                </li>
+            }
+            @if (Items.Count == 0)
+            {
+                <li class="palette-empty" role="presentation">@(_searching ? "Recherche…" : "Aucun résultat.")</li>
+            }
+        </ul>
+        <div class="palette-foot">↑ ↓ pour choisir · Entrée pour ouvrir · Échap pour fermer</div>
+    </div>
+}
+
+@code {
+    private sealed record PaletteItem(string Group, string Label, string? Hint, Func<Task> Run);
+
+    private string _query = "";
+    private int _index;
+    private bool _searching;
+    private bool _wasOpen;
+    private DatabaseInfo[] _databases = [];
+    private SearchHit[] _hits = [];
+    private CancellationTokenSource? _search;
+
+    /// <summary>Bascule clair/sombre (la mise en page porte le thème).</summary>
+    [Parameter] public EventCallback OnToggleTheme { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Workspace.Changed += OnChanged;
+    }
+
+    public void Dispose()
+    {
+        Workspace.Changed -= OnChanged;
+        _search?.Cancel();
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Workspace.PaletteOpen && !_wasOpen)
+        {
+            _wasOpen = true;
+            _query = "";
+            _index = 0;
+            _hits = [];
+            await LoadDatabasesAsync();
+            await FocusInputAsync();
+            StateHasChanged();
+        }
+        else if (!Workspace.PaletteOpen)
+        {
+            _wasOpen = false;
+        }
+    }
+
+    private async Task LoadDatabasesAsync()
+    {
+        try
+        {
+            _databases = (await Api.GetAllDatabaseAsync()).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+        }
+        catch (HttpRequestException)
+        {
+            _databases = [];
+        }
+    }
+
+    private async Task FocusInputAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("granitdb.focus", "#palette-input");
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException)
+        {
+            // Le champ garde son focus automatique du navigateur.
+        }
+    }
+
+    // --- Éléments proposés ---
+
+    private string? CurrentDatabaseId
+    {
+        get
+        {
+            var path = (Workspace.ActiveHref ?? "").Split('?')[0].Split('/', StringSplitOptions.RemoveEmptyEntries);
+            return path.Length >= 2 && path[0] == "databases" ? path[1] : null;
+        }
+    }
+
+    private List<PaletteItem> Items => BuildItems();
+
+    private List<PaletteItem> BuildItems()
+    {
+        var term = _query.Trim();
+        bool Matches(string text) => term.Length == 0 || text.Contains(term, StringComparison.OrdinalIgnoreCase);
+        var items = new List<PaletteItem>();
+
+        void Action(string label, string? hint, Func<Task> run)
+        {
+            if (Matches(label)) items.Add(new PaletteItem("Actions", label, hint, run));
+        }
+
+        if (term.Length >= 2)
+            items.Add(new PaletteItem("Actions", $"Rechercher « {term} » dans tout le catalogue", "Entrée dans la barre de recherche",
+                () => Go($"/search?q={Uri.EscapeDataString(term)}")));
+        Action("Importer une base SQLite", "accueil", () => Go("/"));
+        Action("Aller à l'accueil", null, () => Go("/"));
+        Action("Connecter un serveur SQL Server", "documenter une base du serveur", () => Go("/import/sqlserver"));
+        if (CurrentDatabaseId is { } current)
+        {
+            Action("Ouvrir le diagramme de cette base", null, () => Go($"/databases/{current}/diagram"));
+            Action("Ouvrir cette base", null, () => Go($"/databases/{current}"));
+        }
+
+        Action("Fermer l'onglet", "Alt+W", () =>
+        {
+            if (Workspace.ActiveHref != null && Workspace.Close(Workspace.ActiveHref) is { } next) Navigation.NavigateTo(next);
+            return Task.CompletedTask;
+        });
+        Action("Basculer le thème clair / sombre", null, () => OnToggleTheme.InvokeAsync());
+        Action("Afficher ou masquer l'explorateur", "Ctrl+B", () =>
+        {
+            Workspace.SetExplorerOpen(!Workspace.ExplorerOpen);
+            return Task.CompletedTask;
+        });
+        Action("Afficher ou masquer les détails", null, () =>
+        {
+            Workspace.SetDetailOpen(!Workspace.DetailOpen);
+            return Task.CompletedTask;
+        });
+
+        foreach (var db in _databases)
+        {
+            if (Matches(db.Name))
+                items.Add(new PaletteItem("Bases", $"Ouvrir {db.Name}", db.Type, () => Go($"/databases/{db.Id}")));
+            if (term.Length > 0 && Matches(db.Name))
+                items.Add(new PaletteItem("Bases", $"Diagramme de {db.Name}", null, () => Go($"/databases/{db.Id}/diagram")));
+        }
+
+        foreach (var hit in _hits)
+        {
+            var label = hit.Kind switch
+            {
+                "column" => $"{hit.TableName}.{hit.Name}",
+                _ => hit.Name
+            };
+            var group = hit.Kind switch { "database" => "Bases", "table" => "Tables", "column" => "Colonnes", _ => "Index" };
+            var href = hit.Kind == "table" ? $"/databases/{hit.DatabaseId}/tables/{hit.Id}" :
+                hit.Kind == "column" ? $"/databases/{hit.DatabaseId}/tables/{hit.TableId}?column={hit.Id}" : hit.Href;
+            items.Add(new PaletteItem(group, label, hit.DatabaseName, () => Go(href)));
+        }
+
+        // Les groupes se suivent (l'affichage les intitule une fois) : actions, bases, puis résultats de recherche.
+        return items.OrderBy(i => GroupOrder(i.Group)).ToList();
+    }
+
+    private static int GroupOrder(string group) => group switch { "Actions" => 0, "Bases" => 1, "Tables" => 2, "Colonnes" => 3, _ => 4 };
+
+    // --- Saisie et clavier ---
+
+    private async Task OnInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        _index = 0;
+        _search?.Cancel();
+        if (_query.Trim().Length < 2)
+        {
+            _hits = [];
+            _searching = false;
+            return;
+        }
+
+        var source = _search = new CancellationTokenSource();
+        _searching = true;
+        try
+        {
+            await Task.Delay(250, source.Token); // on attend la fin de la frappe
+            var hits = await Api.SearchAsync(_query.Trim());
+            if (source.IsCancellationRequested) return;
+            _hits = hits;
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        catch (Exception ex) when (ex is ApiException or HttpRequestException)
+        {
+            _hits = [];
+        }
+
+        _searching = false;
+        _index = Math.Min(_index, Math.Max(0, Items.Count - 1));
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs e)
+    {
+        var items = Items;
+        switch (e.Key)
+        {
+            case "Escape":
+                Close();
+                break;
+            case "ArrowDown":
+                _index = items.Count == 0 ? 0 : (_index + 1) % items.Count;
+                break;
+            case "ArrowUp":
+                _index = items.Count == 0 ? 0 : (_index - 1 + items.Count) % items.Count;
+                break;
+            case "Enter" when _index < items.Count:
+                await RunAsync(items[_index]);
+                break;
+        }
+    }
+
+    private async Task RunAsync(PaletteItem item)
+    {
+        Close();
+        await item.Run();
+    }
+
+    private Task Go(string href)
+    {
+        Navigation.NavigateTo(href);
+        return Task.CompletedTask;
+    }
+
+    private void Close()
+    {
+        _search?.Cancel();
+        Workspace.SetPalette(false);
+    }
+}

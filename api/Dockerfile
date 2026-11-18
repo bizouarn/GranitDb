@@ -1,30 +1,27 @@
-# Consultez https://aka.ms/customizecontainer pour savoir comment personnaliser votre conteneur de débogage et comment Visual Studio utilise ce Dockerfile pour générer vos images afin d’accélérer le débogage.
+# Contexte de build : la racine du dépôt (l'API référence le projet interfaces/).
+#   docker build -f api/Dockerfile -t granitdb-api .
 
-# Cet index est utilisé lors de l’exécution à partir de VS en mode rapide (par défaut pour la configuration de débogage)
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
-USER $APP_UID
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 WORKDIR /app
+# Les données (catalogue SQLite, fichiers importés) vivent dans /data : montez-y un volume.
+RUN mkdir -p /data && chown $APP_UID /data
+USER $APP_UID
+ENV ASPNETCORE_HTTP_PORTS=8080 \
+    Catalog__DataDirectory=/data
 EXPOSE 8080
-EXPOSE 8081
+VOLUME /data
 
-
-# Cette phase est utilisée pour générer le projet de service
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["GranitDB.API.csproj", "."]
-RUN dotnet restore "./GranitDB.API.csproj"
-COPY . .
-WORKDIR "/src/."
-RUN dotnet build "./GranitDB.API.csproj" -c $BUILD_CONFIGURATION -o /app/build
+COPY api/GranitDB.API.csproj api/
+COPY interfaces/GranitDb.Interfaces.csproj interfaces/
+RUN dotnet restore api/GranitDB.API.csproj
+COPY api/ api/
+COPY interfaces/ interfaces/
+RUN dotnet publish api/GranitDB.API.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
-# Cette étape permet de publier le projet de service à copier dans la phase finale
-FROM build AS publish
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./GranitDB.API.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
-
-# Cette phase est utilisée en production ou lors de l’exécution à partir de VS en mode normal (par défaut quand la configuration de débogage n’est pas utilisée)
 FROM base AS final
 WORKDIR /app
-COPY --from=publish /app/publish .
+COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "GranitDB.API.dll"]

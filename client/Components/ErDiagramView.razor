@@ -1,0 +1,193 @@
+@using System.Globalization
+@using GranitDb.Client.Diagram
+
+@* Affichage interactif d'un diagramme : glisser une table pour la déplacer, cliquer une table ou une colonne pour la sélectionner. *@
+@{
+    var (width, height) = Diagram.Size();
+    var touched = Dependents.Union(Dependencies).ToHashSet();
+}
+<div class="er-scroll">
+    <svg class="er-svg" width="@N(width * Zoom)" height="@N(height * Zoom)" viewBox="0 0 @N(width) @N(height)"
+         @onpointermove="OnMove" @onpointerup="FinishDragAsync" @onpointerleave="LeaveAsync" @onpointercancel="CancelDrag">
+        @foreach (var edge in Diagram.Edges)
+        {
+            var route = Diagram.Route(edge);
+            if (route == null) continue;
+            var (many, one) = ErDiagram.Cardinality(edge.RelationType);
+            var toRight = route.X2 > route.X1;
+            var active = IsActive(edge, touched);
+            <path d="@route.Path" class="@($"er-edge{(active ? " er-edge-active" : "")}")" />
+            @if (route.Vertical)
+            {
+                var down = route.Y2 > route.Y1;
+                @Txt("er-card", route.X1 + 5, route.Y1 + (down ? 12 : -5), many)
+                @Txt("er-card", route.X2 + 5, route.Y2 + (down ? -5 : 12), one)
+            }
+            else
+            {
+                @Txt("er-card", route.X1 + (toRight ? 6 : -6), route.Y1 - 5, many, toRight ? "start" : "end")
+                @Txt("er-card", route.X2 + (toRight ? -6 : 6), route.Y2 - 5, one, toRight ? "end" : "start")
+            }
+        }
+
+        @foreach (var node in Diagram.Nodes)
+        {
+            var state = StateOf(node.Id) + (node.IsFrontier ? " er-frontier" : "");
+            <g class="@($"er-node{state}")" transform="translate(@N(node.X) @N(node.Y))"
+               data-table="@node.Name" @onpointerdown="e => StartDrag(node, e)" @onpointerdown:preventDefault="true"
+               @onpointerup="() => EndDrag(node, null)" @onpointerup:stopPropagation="true">
+                <rect class="er-box" width="@N(node.Width)" height="@N(node.Height)" rx="4" />
+                <rect class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")" width="@N(node.Width)" height="@N(node.HeaderHeight)" rx="4" />
+                @Txt("er-title", 10, ErDiagram.HeaderHeight / 2 + 4, node.Name)
+                @if (node.Caption != null)
+                {
+                    @Txt("er-caption", 10, ErDiagram.HeaderHeight + ErDiagram.CaptionHeight / 2 + 1, node.Caption)
+                }
+                @for (var i = 0; i < node.Rows.Count; i++)
+                {
+                    var row = node.Rows[i];
+                    var y = node.HeaderHeight + (i + 0.5) * ErDiagram.RowHeight + 4;
+                    var rowState = RowStateOf(row.ColumnId);
+                    <g class="@($"er-row{rowState}")" data-column="@row.Name"
+                       @onpointerup="() => EndDrag(node, row)" @onpointerup:stopPropagation="true">
+                        <rect x="1" y="@N(node.HeaderHeight + i * ErDiagram.RowHeight)" width="@N(node.Width - 2)" height="@N(ErDiagram.RowHeight)" class="er-row-bg" />
+                        @Txt("er-key", 10, y, row.IsPrimaryKey ? "PK" : row.IsForeignKey ? "FK" : "")
+                        @Txt(row.IsPrimaryKey ? "er-col er-col-pk" : "er-col", 34, y, row.Name)
+                        @Txt("er-type", node.Width - 8, y, row.DataType, "end")
+                    </g>
+                }
+            </g>
+        }
+    </svg>
+</div>
+
+@code {
+    private sealed record Drag(ErNode Node, double StartX, double StartY, double NodeX, double NodeY)
+    {
+        public bool Moved { get; set; }
+    }
+
+    private Drag? _drag;
+
+    [Parameter, EditorRequired] public ErDiagram Diagram { get; set; } = null!;
+
+    /// <summary>Échelle d'affichage (1 = taille réelle).</summary>
+    [Parameter] public double Zoom { get; set; } = 1;
+
+    [Parameter] public string? SelectedTableId { get; set; }
+
+    [Parameter] public string? SelectedColumnId { get; set; }
+
+    /// <summary>Identifiants (tables et colonnes) qui dépendent de la sélection.</summary>
+    [Parameter] public IReadOnlySet<string> Dependents { get; set; } = new HashSet<string>();
+
+    /// <summary>Identifiants (tables et colonnes) dont dépend la sélection.</summary>
+    [Parameter] public IReadOnlySet<string> Dependencies { get; set; } = new HashSet<string>();
+
+    /// <summary>Une table vient d'être déplacée (relâchée ailleurs) : la place peut être mémorisée.</summary>
+    [Parameter] public EventCallback<ErNode> OnNodeMoved { get; set; }
+
+    /// <summary>
+    ///     Le pointeur sort du dessin avec une table accrochée (ex : vers un domaine à côté) : le parent peut en faire
+    ///     la cible d'un dépôt.
+    /// </summary>
+    [Parameter] public EventCallback<ErNode> OnDragLeave { get; set; }
+
+    [Parameter] public EventCallback<string> OnSelectTable { get; set; }
+
+    [Parameter] public EventCallback<(string TableId, string ColumnId)> OnSelectColumn { get; set; }
+
+    private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    /// <summary>Texte SVG (Razor réserve la balise <c>text</c> : l'élément est construit à la main).</summary>
+    private static RenderFragment Txt(string cssClass, double x, double y, string content, string? anchor = null)
+    {
+        return builder =>
+        {
+            builder.OpenElement(0, "text");
+            builder.AddAttribute(1, "class", cssClass);
+            builder.AddAttribute(2, "x", N(x));
+            builder.AddAttribute(3, "y", N(y));
+            if (anchor != null) builder.AddAttribute(4, "text-anchor", anchor);
+            builder.AddContent(5, content);
+            builder.CloseElement();
+        };
+    }
+
+    private string StateOf(string tableId)
+    {
+        if (tableId == SelectedTableId) return " er-selected";
+        if (Dependents.Contains(tableId)) return " er-dependent";
+        return Dependencies.Contains(tableId) ? " er-dependency" : "";
+    }
+
+    private string RowStateOf(string columnId)
+    {
+        if (columnId == SelectedColumnId) return " er-selected";
+        if (Dependents.Contains(columnId)) return " er-dependent";
+        return Dependencies.Contains(columnId) ? " er-dependency" : "";
+    }
+
+    private bool IsActive(ErEdge edge, HashSet<string> touched)
+    {
+        bool Hit(string tableId, string columnId) =>
+            tableId == SelectedTableId || touched.Contains(tableId) || touched.Contains(columnId);
+        return (SelectedTableId != null || touched.Count > 0)
+               && Hit(edge.ReferencingTableId, edge.ReferencingColumnId)
+               && Hit(edge.ReferencedTableId, edge.ReferencedColumnId);
+    }
+
+    private void StartDrag(ErNode node, PointerEventArgs e)
+    {
+        _drag = new Drag(node, e.ClientX, e.ClientY, node.X, node.Y);
+    }
+
+    private void OnMove(PointerEventArgs e)
+    {
+        if (_drag == null) return;
+        var dx = e.ClientX - _drag.StartX;
+        var dy = e.ClientY - _drag.StartY;
+        if (!_drag.Moved && Math.Abs(dx) + Math.Abs(dy) < 4) return;
+        _drag.Moved = true;
+        _drag.Node.X = Math.Max(0, _drag.NodeX + dx / Zoom);
+        _drag.Node.Y = Math.Max(0, _drag.NodeY + dy / Zoom);
+    }
+
+    private void CancelDrag()
+    {
+        _drag = null;
+    }
+
+    /// <summary>Relâchement sur le fond du dessin : une table déplacée garde sa nouvelle place.</summary>
+    private async Task FinishDragAsync()
+    {
+        var drag = _drag;
+        _drag = null;
+        if (drag is { Moved: true }) await OnNodeMoved.InvokeAsync(drag.Node);
+    }
+
+    private async Task LeaveAsync()
+    {
+        var drag = _drag;
+        _drag = null;
+        if (drag != null) await OnDragLeave.InvokeAsync(drag.Node);
+    }
+
+    /// <summary>Relâchement sur une table ou une colonne : sans déplacement, c'est un clic (sélection).</summary>
+    private async Task EndDrag(ErNode node, ErRow? row)
+    {
+        var drag = _drag;
+        _drag = null;
+        if (drag == null) return;
+        if (drag.Moved)
+        {
+            await OnNodeMoved.InvokeAsync(drag.Node);
+            return;
+        }
+
+        if (row == null)
+            await OnSelectTable.InvokeAsync(node.Id);
+        else
+            await OnSelectColumn.InvokeAsync((node.Id, row.ColumnId));
+    }
+}

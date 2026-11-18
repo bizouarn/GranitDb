@@ -1,0 +1,858 @@
+@page "/databases/{Id}"
+@page "/databases/{Id}/tables/{TableRoute}"
+@implements IDisposable
+@using GranitDb.Client.api
+@using GranitDb.Client.Components
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+
+<PageTitle>@(Title)</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudBreadcrumbs Items="Crumbs" />
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_database == null)
+    {
+        <MudAlert Severity="Severity.Warning">Base introuvable.</MudAlert>
+    }
+    else
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h4">@_database.Name</MudText>
+            <MudChip T="string" Size="Size.Small">@_database.Type</MudChip>
+            @if (!string.IsNullOrWhiteSpace(_database.SourceLabel))
+            {
+                <MudText Typo="Typo.caption" Class="source-label" Style="color: var(--mud-palette-text-secondary)">@_database.SourceLabel</MudText>
+            }
+            <MudSpacer />
+            @if (_tables.Length > 0)
+            {
+                <MudButton Variant="Variant.Outlined" Href="@($"/databases/{Uri.EscapeDataString(Id)}/diagram")"
+                           StartIcon="@Icons.Material.Filled.AccountTree">Diagramme</MudButton>
+            }
+            @if (_database.CanResync && !Single)
+            {
+                @if (!string.IsNullOrWhiteSpace(_database.SourceLabel))
+                {
+                    <MudButton Variant="Variant.Outlined" Href="@($"/import/sqlserver?id={Uri.EscapeDataString(_database.Id)}")"
+                               StartIcon="@Icons.Material.Filled.Link" Class="edit-connection">Modifier la connexion</MudButton>
+                }
+                <MudButton Variant="Variant.Outlined" OnClick="PreviewSyncAsync" Disabled="_syncing"
+                           StartIcon="@Icons.Material.Filled.Sync">Resynchroniser</MudButton>
+            }
+        </MudStack>
+
+        @if (!Single)
+        {
+            <div class="mb-2">
+                <InlineText Value="@_database.Description" Placeholder="Décrire cette base" Label="Description"
+                            OnSave="SaveDatabaseDescriptionAsync" />
+            </div>
+            <div class="mb-3">
+                <TagEditor Tags="TagsOf(TagKind.Database, _database.Id)" OnAdd="name => AddTagAsync(name, TagKind.Database, _database.Id)"
+                           OnRemove="RemoveTagAsync" />
+            </div>
+        }
+
+        @if (!Single && _completeness is { } overall && (overall.Tables > 0))
+        {
+            <MudPaper Class="pa-3 mb-3" id="completeness">
+                <MudStack Row="true" AlignItems="AlignItems.Center">
+                    <MudText Typo="Typo.subtitle2">Documentation</MudText>
+                    <MudProgressLinear Value="overall.Percent" Color="@PercentColor(overall.Percent)" Class="flex-grow-1" Rounded="true" />
+                    <MudText Typo="Typo.subtitle2" Class="completeness-percent">@overall.Percent %</MudText>
+                </MudStack>
+                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                    @overall.TablesDescribed / @overall.Tables table(s) et @overall.ColumnsDescribed / @overall.Columns colonne(s) décrites.
+                </MudText>
+                @if (overall.SensitiveUndescribed > 0)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2 sensitive-warning">
+                        @overall.SensitiveUndescribed colonne(s) sensible(s) sans description : à documenter en priorité.
+                    </MudAlert>
+                }
+            </MudPaper>
+        }
+
+        @if (_message != null)
+        {
+            <MudAlert Severity="@_messageSeverity" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _message = null">@_message</MudAlert>
+        }
+
+        @if (_preview != null)
+        {
+            <MudPaper Class="pa-3 mb-3" id="sync-preview">
+                <MudText Typo="Typo.h6">Aperçu de la synchronisation</MudText>
+                @if (!_preview.HasChanges)
+                {
+                    <MudText Class="mt-1">Le catalogue est déjà à jour : la source n'a pas changé.</MudText>
+                    <MudButton Size="Size.Small" Class="mt-2" OnClick="ClosePreview">Fermer</MudButton>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mb-1">
+                        @_preview.Changes.Count(c => c.Action == "added") ajout(s),
+                        @_preview.Changes.Count(c => c.Action == "changed") modification(s),
+                        @_preview.Changes.Count(c => c.Action == "removed") suppression(s).
+                    </MudText>
+                    @if (_preview.LosesDocumentation > 0)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2 loses-documentation">
+                            @_preview.LosesDocumentation suppression(s) feront perdre une documentation saisie (description, notes, marquage sensible, étiquettes ou relation manuelle).
+                        </MudAlert>
+                    }
+                    <MudSimpleTable Dense="true" Style="max-height: 40vh; overflow: auto;">
+                        <thead><tr><th></th><th>Élément</th><th>Détail</th></tr></thead>
+                        <tbody>
+                        @foreach (var change in _preview.Changes)
+                        {
+                            <tr class="@($"change change-{change.Action}")">
+                                <td>@ActionSign(change.Action)</td>
+                                <td>
+                                    @KindLabel(change.Kind) <strong>@Describe(change)</strong>
+                                    @if (change.LosesDocumentation)
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Filled.WarningAmber" Color="Color.Warning" Size="Size.Small" Title="Documentation perdue" />
+                                    }
+                                </td>
+                                <td>@change.Detail</td>
+                            </tr>
+                        }
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudStack Row="true" Spacing="2" Class="mt-2">
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplySyncAsync" Disabled="_syncing">Appliquer la synchronisation</MudButton>
+                        <MudButton Variant="Variant.Text" OnClick="ClosePreview" Disabled="_syncing">Annuler</MudButton>
+                    </MudStack>
+                }
+            </MudPaper>
+        }
+
+        @if (!Single)
+        {
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
+            <MudTextField @bind-Value="_filter" Label="Filtrer les tables" Immediate="true" Clearable="true"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="flex-grow-1" />
+            @if (_domains.Length > 0)
+            {
+                <NativeSelect Label="Domaine" Value="@_domainFilter" ValueChanged="@(v => _domainFilter = v)" Class="domain-filter">
+                    <option value="">Tous les domaines</option>
+                    @foreach (var domain in _domains)
+                    {
+                        <option value="@domain.Id">@domain.Name</option>
+                    }
+                </NativeSelect>
+            }
+        </MudStack>
+        }
+
+        @if (_tables.Length == 0)
+        {
+            <MudText Style="color: var(--mud-palette-text-secondary)">Aucune table dans cette base.</MudText>
+        }
+        else if (Single && !Visible.Any())
+        {
+            <MudAlert Severity="Severity.Warning">Table introuvable dans cette base.</MudAlert>
+        }
+        else
+        {
+            <MudExpansionPanels MultiExpansion="true">
+                @foreach (var table in Shown)
+                {
+                    <MudExpansionPanel Expanded="@_open.Contains(table.Id)" ExpandedChanged="@(open => SetOpen(table.Id, open))" id="@($"t-{table.Id}")">
+                        <TitleContent>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                                <MudText Typo="Typo.subtitle1">@table.Name</MudText>
+                                @if (table.TableType != "Table")
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@table.TableType</MudChip>
+                                }
+                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@table.Columns.Count colonnes</MudText>
+                                @if (CompletenessOf(table.Id) is { } done)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="@PercentColor(done.Percent)" Class="table-percent">@done.Percent %</MudChip>
+                                }
+                                @foreach (var domain in DomainsOf(table.Id))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="table-domain">@domain.Name</MudChip>
+                                }
+                                @foreach (var tag in TagsOf(TagKind.Table, table.Id))
+                                {
+                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.LocalOffer">@tag.TagName</MudChip>
+                                }
+                            </MudStack>
+                        </TitleContent>
+                        <ChildContent>
+                            @if (_open.Contains(table.Id))
+                            {
+                            <div class="mb-1">
+                                <InlineText Value="@table.Description" Placeholder="Décrire cette table" Label="Description"
+                                            OnSave="@(text => SaveTableDescriptionAsync(table, text))" />
+                            </div>
+                            <div class="mb-1">
+                                <InlineText Value="@table.MetaInfo" Placeholder="Ajouter des notes" Label="Notes"
+                                            OnSave="@(text => SaveTableNotesAsync(table, text))" />
+                            </div>
+                            <div class="mb-2">
+                                <TagEditor Tags="TagsOf(TagKind.Table, table.Id)" OnAdd="name => AddTagAsync(name, TagKind.Table, table.Id)"
+                                           OnRemove="RemoveTagAsync" />
+                            </div>
+
+                            <MudSimpleTable Dense="true" Hover="true" Style="overflow-x: auto;">
+                                <thead>
+                                <tr><th>Colonne</th><th>Type</th><th>Null</th><th>Défaut</th><th>Description</th><th>Étiquettes</th><th></th></tr>
+                                </thead>
+                                <tbody>
+                                @foreach (var column in table.Columns.OrderBy(c => c.Position))
+                                {
+                                    <tr id="@($"c-{column.Id}")" data-column="@column.Name" class="@(string.Join(' ', new[] { column.IsSensitive ? "column-sensitive" : null, column.Id == ColumnId ? "column-focus" : null }.Where(c => c != null)))">
+                                        <td>
+                                            @if (column.IsPrimaryKey)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Key" Size="Size.Small" Title="Clé primaire" />
+                                            }
+                                            @column.Name
+                                        </td>
+                                        <td>@column.DataType</td>
+                                        <td>@(column.IsNullable ? "oui" : "non")</td>
+                                        <td>@column.DefaultValue</td>
+                                        <td>
+                                            <InlineText Value="@column.Description" Placeholder="Décrire" Label="@($"Description de {column.Name}")"
+                                                        OnSave="@(text => SaveColumnDescriptionAsync(column, text))" />
+                                            @if (_notesOpen.Contains(column.Id) || !string.IsNullOrWhiteSpace(column.MetaInfo))
+                                            {
+                                                <div class="column-notes">
+                                                    <InlineText Value="@column.MetaInfo" Placeholder="Ajouter des notes" Label="@($"Notes de {column.Name}")"
+                                                                OnSave="@(text => SaveColumnNotesAsync(column, text))" />
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>
+                                            <TagEditor Tags="TagsOf(TagKind.Column, column.Id)" OnAdd="name => AddTagAsync(name, TagKind.Column, column.Id)"
+                                                       OnRemove="RemoveTagAsync" />
+                                        </td>
+                                        <td style="white-space: nowrap;">
+                                            <MudIconButton Icon="@(column.IsSensitive ? Icons.Material.Filled.Shield : Icons.Material.Outlined.Shield)"
+                                                           Size="Size.Small" Color="@(column.IsSensitive ? Color.Warning : Color.Default)"
+                                                           Class="sensitive-toggle" aria-pressed="@(column.IsSensitive ? "true" : "false")"
+                                                           Title="@(column.IsSensitive ? "Données sensibles : cliquer pour démarquer" : "Marquer comme données sensibles")"
+                                                           aria-label="@($"Colonne sensible : {column.Name}")"
+                                                           OnClick="@(() => ToggleSensitiveAsync(column))" />
+                                            <MudIconButton Icon="@Icons.Material.Filled.StickyNote2" Size="Size.Small" Class="notes-toggle"
+                                                           Title="Notes" aria-label="@($"Notes de {column.Name}")"
+                                                           OnClick="@(() => ToggleNotes(column.Id))" />
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </MudSimpleTable>
+
+                            @if (table.Indexes.Count > 0)
+                            {
+                                <MudText Typo="Typo.subtitle2" Class="mt-3">Index</MudText>
+                                <MudList T="string" Dense="true">
+                                    @foreach (var index in table.Indexes)
+                                    {
+                                        <MudListItem T="string">
+                                            @index.Name (@index.ColumnNames)
+                                            @if (index.IsUnique)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Info">unique</MudChip>
+                                            }
+                                        </MudListItem>
+                                    }
+                                </MudList>
+                            }
+
+                            <MudText Typo="Typo.subtitle2" Class="mt-3">Relations</MudText>
+                            <MudList T="string" Dense="true">
+                                @foreach (var relation in table.Relations)
+                                {
+                                    <MudListItem T="string">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Class="relation-row" data-relation="@relation.Id">
+                                            <span>@Label(relation.FirstId) → @Label(relation.SecondId) (@relation.RelationType)</span>
+                                            @if (relation.MetaInfo != RelationAutoMarker)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">manuelle</MudChip>
+                                            }
+                                            @if (_editingRelation == relation.Id)
+                                            {
+                                                <NativeSelect AriaLabel="Type de la relation" Value="@relation.RelationType" ValueChanged="@(type => ChangeRelationTypeAsync(relation, type))"
+                                                                 Class="relation-type">
+                                                    @foreach (var type in RelationTypes)
+                                                    {
+                                                        <option value="@type">@type</option>
+                                                    }
+                                                </NativeSelect>
+                                            }
+                                            else
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="relation-edit"
+                                                               Title="Modifier le type" aria-label="Modifier le type de la relation"
+                                                               OnClick="@(() => _editingRelation = relation.Id)" />
+                                            }
+                                            @if (relation.MetaInfo != RelationAutoMarker)
+                                            {
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Class="relation-delete"
+                                                               Title="Supprimer la relation" aria-label="Supprimer la relation"
+                                                               OnClick="@(() => DeleteRelationAsync(relation))" />
+                                            }
+                                        </MudStack>
+                                    </MudListItem>
+                                }
+                            </MudList>
+                            @if (table.Relations.Count == 0)
+                            {
+                                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucune relation.</MudText>
+                            }
+
+                            @if (_relationForm == table.Id)
+                            {
+                                <MudPaper Class="pa-2 mt-2 relation-form" Outlined="true">
+                                    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                                        <NativeSelect Label="Colonne de cette table" Value="@_formColumn" ValueChanged="@(v => _formColumn = v)" Class="relation-form-column">
+                                            <option value="">Choisir…</option>
+                                            @foreach (var column in table.Columns.OrderBy(c => c.Position))
+                                            {
+                                                <option value="@column.Id">@column.Name</option>
+                                            }
+                                        </NativeSelect>
+                                        <MudText>référence</MudText>
+                                        <NativeSelect Label="Colonne référencée" Value="@_formTarget" ValueChanged="@(v => _formTarget = v)" Class="relation-form-target">
+                                            <option value="">Choisir…</option>
+                                            @foreach (var (columnId, label) in _columnLabels.OrderBy(c => c.Value, StringComparer.Ordinal))
+                                            {
+                                                <option value="@columnId">@label</option>
+                                            }
+                                        </NativeSelect>
+                                        <NativeSelect Label="Type" Value="@_formType" ValueChanged="@(v => _formType = v)" Class="relation-form-type">
+                                            @foreach (var type in RelationTypes)
+                                            {
+                                                <option value="@type">@type</option>
+                                            }
+                                        </NativeSelect>
+                                        <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" Class="relation-form-save"
+                                                   Disabled="@(string.IsNullOrEmpty(_formColumn) || string.IsNullOrEmpty(_formTarget))"
+                                                   OnClick="CreateRelationAsync">Ajouter</MudButton>
+                                        <MudButton Size="Size.Small" OnClick="@(() => _relationForm = null)">Annuler</MudButton>
+                                    </MudStack>
+                                </MudPaper>
+                            }
+                            else
+                            {
+                                <MudButton Size="Size.Small" Class="mt-1 relation-add" StartIcon="@Icons.Material.Filled.Add"
+                                           OnClick="@(() => OpenRelationForm(table.Id))">Ajouter une relation</MudButton>
+                            }
+                            }
+                        </ChildContent>
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+            @if (!Single && _visibleCount > _limit)
+            {
+                <MudStack Row="true" Justify="Justify.Center" AlignItems="AlignItems.Center" Class="mt-3" Spacing="2">
+                    <MudText Typo="Typo.caption">@_limit sur @_visibleCount tables affichées</MudText>
+                    <MudButton Variant="Variant.Outlined" Class="show-more" OnClick="@(() => _limit += PageSize)">Afficher plus</MudButton>
+                    <MudButton Variant="Variant.Text" OnClick="@(() => _limit = int.MaxValue)">Tout afficher</MudButton>
+                </MudStack>
+            }
+        }
+    }
+</MudContainer>
+
+@code {
+    private static class TagKind
+    {
+        public const string Database = "database";
+        public const string Table = "table";
+        public const string Column = "column";
+    }
+
+    private const string RelationAutoMarker = "auto:fk";
+    private static readonly string[] RelationTypes = ["One-to-One", "One-to-Many", "Many-to-Many"];
+
+    [Parameter] public string Id { get; set; } = "";
+
+    /// <summary>Table à déplier à l'ouverture (lien depuis un résultat de recherche).</summary>
+    [SupplyParameterFromQuery(Name = "table")] public string? TableId { get; set; }
+
+    /// <summary>Table affichée seule (onglet d'une table : /databases/{id}/tables/{table}).</summary>
+    [Parameter] public string? TableRoute { get; set; }
+
+    /// <summary>Colonne mise en évidence (lien depuis l'explorateur ou la palette).</summary>
+    [SupplyParameterFromQuery(Name = "column")] public string? ColumnId { get; set; }
+
+    private DatabaseInfo? _database;
+    private TableInfo[] _tables = [];
+    private Dictionary<string, string> _columnLabels = new();
+    private TagLinkView[] _tagLinks = [];
+    private DomainInfo[] _domains = [];
+    private CompletenessReport? _completeness;
+    private SyncPreview? _preview;
+    private readonly HashSet<string> _open = [];
+    private readonly HashSet<string> _notesOpen = [];
+    private string? _scrollTo;
+    private const int PageSize = 50;
+    private int _limit = PageSize;
+    private int _visibleCount;
+    private string? _filterText;
+    private string _domainFilterValue = "";
+
+    // Filtrer ou changer de domaine repart d'une première page : on ne rend jamais des centaines de panneaux d'un coup.
+    private string? _filter
+    {
+        get => _filterText;
+        set { _filterText = value; _limit = PageSize; }
+    }
+
+    private string _domainFilter
+    {
+        get => _domainFilterValue;
+        set { _domainFilterValue = value; _limit = PageSize; }
+    }
+
+    // Index des compléments, reconstruits seulement quand le tableau source est remplacé (évite un balayage par table).
+    private TagLinkView[]? _tagSource;
+    private ILookup<(string, string), TagLinkView> _tagIndex = Array.Empty<TagLinkView>().ToLookup(l => (l.EntityType, l.EntityId));
+    private DomainInfo[]? _domainSource;
+    private ILookup<string, DomainInfo> _domainIndex = Array.Empty<DomainInfo>().ToLookup(d => d.Id);
+    private CompletenessReport? _completenessSource;
+    private Dictionary<string, TableCompleteness> _completenessIndex = new();
+    private bool _loading = true;
+    private bool _syncing;
+    private string? _message;
+    private Severity _messageSeverity = Severity.Info;
+
+    private string? _editingRelation;
+    private string? _relationForm;
+    private string? _formColumn;
+    private string? _formTarget;
+    private string _formType = "One-to-Many";
+
+    private bool Single => TableRoute != null;
+
+    private TableInfo? SingleTable => TableRoute == null ? null : _tables.FirstOrDefault(t => t.Id == TableRoute);
+
+    private string Title => Single ? SingleTable?.Name ?? "Table" : _database?.Name ?? "Base";
+
+    private List<BreadcrumbItem> Crumbs => Single
+        ?
+        [
+            new("Bases", href: "/"),
+            new(_database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
+            new(SingleTable?.Name ?? "Table", href: null, disabled: true)
+        ]
+        :
+        [
+            new("Bases", href: "/"),
+            new(_database?.Name ?? "Base", href: null, disabled: true)
+        ];
+
+    /// <summary>Page de tables réellement rendue (les tables dépliées par un lien en font toujours partie).</summary>
+    private IEnumerable<TableInfo> Shown
+    {
+        get
+        {
+            var all = Visible.ToList();
+            _visibleCount = all.Count;
+            if (Single || _limit == int.MaxValue) return all;
+            return all.Where((t, i) => i < _limit || _open.Contains(t.Id));
+        }
+    }
+
+    private IEnumerable<TableInfo> Visible
+    {
+        get
+        {
+            if (Single) return _tables.Where(t => t.Id == TableRoute);
+            var tables = string.IsNullOrWhiteSpace(_filter)
+                ? _tables.AsEnumerable()
+                : _tables.Where(t => t.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase));
+            if (_domainFilter == "") return tables;
+            var members = _domains.FirstOrDefault(d => d.Id == _domainFilter)?.Tables.Select(t => t.TableId).ToHashSet() ?? [];
+            return tables.Where(t => members.Contains(t.Id));
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        Workspace.CatalogChanged += OnCatalogChanged;
+    }
+
+    public void Dispose()
+    {
+        Workspace.CatalogChanged -= OnCatalogChanged;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _database = await Api.GetDatabaseAsync(Id);
+        await LoadTablesAsync();
+        await LoadGovernanceAsync();
+        if (Single && SingleTable != null)
+        {
+            _open.Add(SingleTable.Id);
+            if (!string.IsNullOrEmpty(ColumnId)) _scrollTo = $"c-{ColumnId}";
+        }
+        else if (!string.IsNullOrEmpty(TableId) && _tables.Any(t => t.Id == TableId))
+        {
+            _open.Add(TableId);
+            _scrollTo = $"t-{TableId}";
+        }
+
+        if (_database != null) Workspace.Describe(Navigation.Uri, Title);
+        _loading = false;
+    }
+
+    /// <summary>Le catalogue a été modifié ailleurs (panneau de détail, autre onglet) : on relit sans clignoter.</summary>
+    private void OnCatalogChanged(string? databaseId, object? source)
+    {
+        if (ReferenceEquals(source, this) || (databaseId != null && databaseId != Id) || _database == null) return;
+        _ = InvokeAsync(async () =>
+        {
+            _database = await Api.GetDatabaseAsync(Id) ?? _database;
+            await LoadTablesAsync();
+            await LoadGovernanceAsync();
+            StateHasChanged();
+        });
+    }
+
+    private void Changed() => Workspace.NotifyCatalogChanged(Id, this);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_scrollTo == null || _loading) return;
+        var target = _scrollTo;
+        _scrollTo = null;
+        try
+        {
+            await JS.InvokeVoidAsync("granitdb.scrollToId", target);
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException)
+        {
+            // Défilement impossible : la table reste dépliée.
+        }
+    }
+
+    private void SetOpen(string tableId, bool open)
+    {
+        if (open) _open.Add(tableId);
+        else _open.Remove(tableId);
+    }
+
+    private async Task LoadTablesAsync()
+    {
+        _tables = _database == null ? [] : (await Api.GetTablesAsync(Id)).OrderBy(t => t.Name).ToArray();
+        _columnLabels = _tables.SelectMany(t => t.Columns.Select(c => (c.Id, Label: $"{t.Name}.{c.Name}")))
+            .ToDictionary(x => x.Id, x => x.Label);
+    }
+
+    /// <summary>Complétude, étiquettes et domaines : des compléments, leur absence n'empêche pas d'afficher la base.</summary>
+    private async Task LoadGovernanceAsync()
+    {
+        if (_database == null) return;
+        var links = Api.GetTagLinksAsync(Id);
+        var domains = Api.GetDomainsAsync(Id);
+        var completeness = Api.GetCompletenessAsync(Id);
+        await Task.WhenAll(links, domains, completeness);
+        _tagLinks = links.Result;
+        _domains = domains.Result;
+        _completeness = completeness.Result;
+    }
+
+    private async Task RefreshCompletenessAsync()
+    {
+        _completeness = await Api.GetCompletenessAsync(Id);
+    }
+
+    private string Label(string columnId)
+    {
+        return _columnLabels.GetValueOrDefault(columnId, columnId);
+    }
+
+    private static Color PercentColor(int percent) => percent >= 80 ? Color.Success : percent >= 40 ? Color.Warning : Color.Error;
+
+    private TagLinkView[] TagsOf(string type, string id)
+    {
+        if (!ReferenceEquals(_tagSource, _tagLinks))
+        {
+            _tagSource = _tagLinks;
+            _tagIndex = _tagLinks.ToLookup(l => (l.EntityType, l.EntityId));
+        }
+        return _tagIndex[(type, id)].ToArray();
+    }
+
+    private IEnumerable<DomainInfo> DomainsOf(string tableId)
+    {
+        if (!ReferenceEquals(_domainSource, _domains))
+        {
+            _domainSource = _domains;
+            _domainIndex = _domains.SelectMany(d => d.Tables.Select(t => (t.TableId, Domain: d))).ToLookup(x => x.TableId, x => x.Domain);
+        }
+        return _domainIndex[tableId];
+    }
+
+    private TableCompleteness? CompletenessOf(string tableId)
+    {
+        if (!ReferenceEquals(_completenessSource, _completeness))
+        {
+            _completenessSource = _completeness;
+            _completenessIndex = new Dictionary<string, TableCompleteness>();
+            foreach (var t in _completeness?.PerTable ?? [])
+                _completenessIndex.TryAdd(t.TableId, t);
+        }
+        return _completenessIndex.GetValueOrDefault(tableId);
+    }
+
+    // --- Documentation ---
+
+    private async Task SaveDatabaseDescriptionAsync(string? text)
+    {
+        await Api.UpdateDocumentationAsync("DatabaseInfo", Id, text, _database!.MetaInfo);
+        _database.Description = text;
+        await AfterSaveAsync(refreshCompleteness: false);
+    }
+
+    // Chaque enregistrement envoie les deux valeurs : celle qui change et l'autre telle quelle (null efface).
+    private async Task SaveTableDescriptionAsync(TableInfo table, string? text)
+    {
+        await Api.UpdateDocumentationAsync("TableInfo", table.Id, text, table.MetaInfo);
+        table.Description = text;
+        await AfterSaveAsync();
+    }
+
+    private async Task SaveTableNotesAsync(TableInfo table, string? text)
+    {
+        await Api.UpdateDocumentationAsync("TableInfo", table.Id, table.Description, text);
+        table.MetaInfo = text;
+        await AfterSaveAsync(refreshCompleteness: false);
+    }
+
+    private async Task SaveColumnDescriptionAsync(ColumnInfo column, string? text)
+    {
+        await Api.UpdateDocumentationAsync("ColumnInfo", column.Id, text, column.MetaInfo);
+        column.Description = text;
+        await AfterSaveAsync();
+    }
+
+    private async Task SaveColumnNotesAsync(ColumnInfo column, string? text)
+    {
+        await Api.UpdateDocumentationAsync("ColumnInfo", column.Id, column.Description, text);
+        column.MetaInfo = text;
+        await AfterSaveAsync(refreshCompleteness: false);
+    }
+
+    /// <summary>Appelé par un composant enfant : la page n'est pas redessinée toute seule ; les autres vues relisent.</summary>
+    private async Task AfterSaveAsync(bool refreshCompleteness = true)
+    {
+        if (refreshCompleteness) await RefreshCompletenessAsync();
+        Changed();
+        StateHasChanged();
+    }
+
+    private void ToggleNotes(string columnId)
+    {
+        if (!_notesOpen.Remove(columnId)) _notesOpen.Add(columnId);
+    }
+
+    private async Task ToggleSensitiveAsync(ColumnInfo column)
+    {
+        var now = !column.IsSensitive;
+        try
+        {
+            await Api.SetSensitiveAsync(column.Id, now);
+            column.IsSensitive = now;
+            await RefreshCompletenessAsync();
+            Changed();
+            Notifier.Show(now ? $"{column.Name} marquée comme sensible." : $"{column.Name} n'est plus marquée comme sensible.",
+                Severity.Success, async () =>
+                {
+                    await Api.SetSensitiveAsync(column.Id, !now);
+                    column.IsSensitive = !now;
+                    await RefreshCompletenessAsync();
+                    Changed();
+                    await InvokeAsync(StateHasChanged);
+                });
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    // --- Étiquettes ---
+
+    private async Task AddTagAsync(string name, string type, string entityId)
+    {
+        await Api.AttachTagAsync(name, type, entityId);
+        _tagLinks = await Api.GetTagLinksAsync(Id);
+        Changed();
+        StateHasChanged();
+    }
+
+    private async Task RemoveTagAsync(TagLinkView tag)
+    {
+        await Api.DetachTagAsync(tag.TagId, tag.EntityType, tag.EntityId);
+        _tagLinks = await Api.GetTagLinksAsync(Id);
+        Changed();
+        StateHasChanged();
+        Notifier.Show($"Étiquette {tag.TagName} retirée.", Severity.Success, async () =>
+        {
+            await Api.AttachTagAsync(tag.TagName, tag.EntityType, tag.EntityId);
+            _tagLinks = await Api.GetTagLinksAsync(Id);
+            Changed();
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    // --- Relations ---
+
+    private void OpenRelationForm(string tableId)
+    {
+        _relationForm = tableId;
+        _formColumn = _formTarget = null;
+        _formType = "One-to-Many";
+    }
+
+    private async Task CreateRelationAsync()
+    {
+        try
+        {
+            // Cette table référence la colonne choisie : la colonne de cette table est « SecondId ».
+            await Api.CreateRelationAsync(_formTarget!, _formColumn!, _formType);
+            _relationForm = null;
+            await LoadTablesAsync();
+            Changed();
+            Notifier.Show("Relation ajoutée.");
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task ChangeRelationTypeAsync(RelationInfo relation, string type)
+    {
+        var previous = relation.RelationType;
+        try
+        {
+            await Api.UpdateRelationTypeAsync(relation, type);
+            relation.RelationType = type;
+            _editingRelation = null;
+            Changed();
+            if (previous != type)
+                Notifier.Show("Type de la relation modifié.", Severity.Success, async () =>
+                {
+                    await Api.UpdateRelationTypeAsync(relation, previous);
+                    relation.RelationType = previous;
+                    Changed();
+                    await InvokeAsync(StateHasChanged);
+                });
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task DeleteRelationAsync(RelationInfo relation)
+    {
+        try
+        {
+            await Api.DeleteRelationAsync(relation.Id);
+            await LoadTablesAsync();
+            Changed();
+            // Annuler recrée la relation (avec un nouvel identifiant).
+            Notifier.Show("Relation supprimée.", Severity.Success, async () =>
+            {
+                await Api.CreateRelationAsync(relation.FirstId, relation.SecondId, relation.RelationType, relation.Description);
+                await LoadTablesAsync();
+                Changed();
+                await InvokeAsync(StateHasChanged);
+            });
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    // --- Synchronisation ---
+
+    private async Task PreviewSyncAsync()
+    {
+        _syncing = true;
+        try
+        {
+            _message = null;
+            _preview = await Api.PreviewSyncAsync(Id);
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
+    private void ClosePreview()
+    {
+        _preview = null;
+    }
+
+    private async Task ApplySyncAsync()
+    {
+        _syncing = true;
+        try
+        {
+            var summary = await Api.SyncAsync(Id);
+            _preview = null;
+            await LoadTablesAsync();
+            await LoadGovernanceAsync();
+            Changed();
+            Notifier.Show($"Synchronisé : {summary.TablesAdded} table(s) ajoutée(s), {summary.TablesRemoved} supprimée(s), {summary.ColumnsAdded} colonne(s) ajoutée(s), {summary.IndexesAdded} index ajouté(s).");
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
+    private void ShowError(string message)
+    {
+        _message = message;
+        _messageSeverity = Severity.Error;
+    }
+
+    private static string ActionSign(string action) => action switch { "added" => "+", "removed" => "−", _ => "~" };
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "table" => "Table",
+        "column" => "Colonne",
+        "index" => "Index",
+        "relation" => "Relation",
+        _ => kind
+    };
+
+    private static string Describe(SyncChange change)
+    {
+        return change.Name == null ? change.Table : change.Kind == "relation" ? change.Name : $"{change.Table}.{change.Name}";
+    }
+}

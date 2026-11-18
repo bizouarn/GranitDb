@@ -1,0 +1,703 @@
+@page "/databases/{Id}/diagram"
+@using GranitDb.Client.api
+@using GranitDb.Client.Components
+@using GranitDb.Client.Diagram
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+
+<PageTitle>Diagramme — @(_database?.Name ?? "Base")</PageTitle>
+
+@* Un dépôt relâché n'importe où ailleurs que sur un domaine annule le glisser en cours. *@
+<MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-6" @onpointerup="ClearDragged">
+    <MudBreadcrumbs Items="Crumbs" />
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_database == null)
+    {
+        <MudAlert Severity="Severity.Warning">Base introuvable.</MudAlert>
+    }
+    else if (_tables.Length == 0)
+    {
+        <MudAlert Severity="Severity.Info">Cette base n'a aucune table à représenter.</MudAlert>
+    }
+    else
+    {
+        <MudText Typo="Typo.h4" Class="mb-3">Diagramme de @_database.Name@(CurrentDomain == null ? "" : $" — {CurrentDomain.Name}")</MudText>
+
+        @if (_message != null)
+        {
+            <MudAlert Severity="@_messageSeverity" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _message = null">@_message</MudAlert>
+        }
+
+        <MudGrid>
+            <MudItem xs="12" md="3">
+                <MudPaper Class="pa-3 mb-3" id="domains">
+                    <MudText Typo="Typo.subtitle1">Domaines</MudText>
+                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                        Un domaine regroupe des tables pour un diagramme lisible. Glissez une table sur un domaine pour l'y ranger.
+                    </MudText>
+                    <div class="@($"domain-card domain-all{(_domainId == null ? " domain-selected" : "")}")" role="button" tabindex="0"
+                         @onclick="() => SelectDomainAsync(null)">
+                        <span>Toutes les tables</span>
+                        <MudText Typo="Typo.caption">@_tables.Length</MudText>
+                    </div>
+                    @foreach (var domain in _domains)
+                    {
+                        var current = domain;
+                        <div class="@($"domain-card{(_domainId == domain.Id ? " domain-selected" : "")}{(_draggedTable != null ? " domain-target" : "")}")"
+                             data-domain="@domain.Name" role="button" tabindex="0" style="@DomainStyle(domain)"
+                             @onclick="() => SelectDomainAsync(current.Id)"
+                             @onpointerup="() => DropAsync(current)" @onpointerup:stopPropagation="true"
+                             @ondragover="() => { }" @ondragover:preventDefault="true"
+                             @ondrop="() => DropAsync(current)">
+                            <span class="domain-name">@domain.Name</span>
+                            <MudText Typo="Typo.caption">@domain.Tables.Count</MudText>
+                            <span class="domain-actions" @onclick:stopPropagation="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Class="domain-rename" aria-label="@($"Renommer {domain.Name}")"
+                                           Title="Renommer" OnClick="() => StartRename(current)" />
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Class="domain-delete" aria-label="@($"Supprimer {domain.Name}")"
+                                           Title="Supprimer le domaine (les tables restent)" OnClick="() => DeleteDomainAsync(current)" />
+                            </span>
+                        </div>
+                        @if (_renaming == domain.Id)
+                        {
+                            <MudTextField T="string" @bind-Value="_renameText" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true"
+                                          AutoFocus="true" Class="domain-rename-input" OnKeyDown="e => OnRenameKey(e, current)" MaxLength="100" />
+                        }
+                    }
+                    <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="mt-2">
+                        <MudTextField T="string" @bind-Value="_newDomain" Label="Nouveau domaine" Margin="Margin.Dense" Immediate="true"
+                                      Class="new-domain-name" MaxLength="100" OnKeyDown="OnNewDomainKey" />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="new-domain-add" OnClick="CreateDomainAsync"
+                                   Disabled="@string.IsNullOrWhiteSpace(_newDomain)">Créer</MudButton>
+                    </MudStack>
+                    @if (CurrentDomain != null && _domainCompleteness is { Tables: > 0 } documented)
+                    {
+                        <MudText Typo="Typo.caption" Class="mt-2 domain-completeness">Documentation du domaine : @documented.Percent %</MudText>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-3">
+                    <MudText Typo="Typo.subtitle1">
+                        @if (CurrentDomain == null)
+                        {
+                            <text>Tables affichées (@_visible.Count / @_tables.Length)</text>
+                        }
+                        else
+                        {
+                            <text>Tables du domaine (@Members.Count / @_tables.Length)</text>
+                        }
+                    </MudText>
+                    @if (CurrentDomain != null)
+                    {
+                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                            Cochez pour ajouter une table au domaine. Les tables en pointillés sont d'autres domaines, liées à celui-ci.
+                        </MudText>
+                    }
+                    <MudTextField @bind-Value="_filter" Label="Filtrer" Immediate="true" Clearable="true" Dense="true" Class="mb-2" />
+                    @if (CurrentDomain == null)
+                    {
+                        <MudStack Row="true" Spacing="1" Class="mb-2" Wrap="Wrap.Wrap">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="SelectAll">Toutes</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="SelectNone">Aucune</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ShowNeighbors"
+                                       Disabled="@(_impact == null)" title="Garde la sélection et les tables liées">Voisines</MudButton>
+                        </MudStack>
+                    }
+                    <div style="max-height: 45vh; overflow-y: auto;">
+                        @foreach (var table in Filtered.Take(PickerLimit))
+                        {
+                            var current = table;
+                            <div class="table-item" draggable="true" data-table-item="@table.Name"
+                                 @ondragstart="() => StartDrag(current.Id)" @ondragend="ClearDragged">
+                                <MudCheckBox T="bool" Value="@IsShown(table.Id)" ValueChanged="@(on => ToggleAsync(table.Id, on))"
+                                             Label="@table.Name" Dense="true" Size="Size.Small" />
+                            </div>
+                        }
+                        @if (Filtered.Skip(PickerLimit).Any())
+                        {
+                            <MudText Typo="Typo.caption">… @(Filtered.Count() - PickerLimit) autres : affinez le filtre.</MudText>
+                        }
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <MudItem xs="12" md="9">
+                <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+                    <MudIconButton Icon="@Icons.Material.Filled.ZoomOut" Size="Size.Small" OnClick="() => Zoom(-0.1)" title="Zoom arrière" />
+                    <MudText Typo="Typo.body2">@((int)Math.Round(_zoom * 100)) %</MudText>
+                    <MudIconButton Icon="@Icons.Material.Filled.ZoomIn" Size="Size.Small" OnClick="() => Zoom(0.1)" title="Zoom avant" />
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Relayout"
+                               StartIcon="@Icons.Material.Filled.AutoFixHigh">Réorganiser</MudButton>
+                    @if (CurrentDomain != null)
+                    {
+                        <MudCheckBox T="bool" Value="_allColumns" ValueChanged="ToggleAllColumns" Dense="true" Size="Size.Small"
+                                     Label="Toutes les colonnes" />
+                    }
+                    <MudSpacer />
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ExportSvgAsync"
+                               StartIcon="@Icons.Material.Filled.Download">SVG</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ExportPngAsync"
+                               StartIcon="@Icons.Material.Filled.Image">PNG</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ExportMermaidAsync"
+                               StartIcon="@Icons.Material.Filled.Download">Mermaid</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="CopyMermaidAsync"
+                               StartIcon="@Icons.Material.Filled.ContentCopy">Copier Mermaid</MudButton>
+                </MudStack>
+
+                @if (_diagram.Nodes.Count == 0)
+                {
+                    <MudAlert Severity="Severity.Info">@(CurrentDomain == null ? "Aucune table sélectionnée." : "Ce domaine est vide : cochez des tables ou glissez-les sur le domaine.")</MudAlert>
+                }
+                else
+                {
+                    <ErDiagramView Diagram="_diagram" Zoom="_zoom" SelectedTableId="@_selectedTable" SelectedColumnId="@_selectedColumn"
+                                   Dependents="_dependents" Dependencies="_dependencies"
+                                   OnSelectTable="SelectTableAsync" OnSelectColumn="SelectColumnAsync"
+                                   OnNodeMoved="NodeMovedAsync" OnDragLeave="DragLeave" />
+                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                        Glissez une table pour la déplacer@(CurrentDomain == null ? "" : " (sa place est mémorisée pour ce domaine)") ; cliquez une table ou une colonne pour voir ce qu'elle impacte.
+                        1 = clé référencée, N = colonne qui référence.
+                    </MudText>
+                }
+
+                @if (_impact != null)
+                {
+                    <MudPaper Class="pa-3 mt-3" id="impact">
+                        <MudText Typo="Typo.h6">Impact de @Describe(_impact.Root)</MudText>
+                        @if (_impact.Dependents.Length == 0 && _impact.Dependencies.Length == 0)
+                        {
+                            <MudText>Aucune relation : rien ne dépend de cet élément dans le catalogue, et il ne dépend de rien.</MudText>
+                        }
+                        <MudGrid>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Error">Modifier cet élément peut casser (@_impact.Dependents.Length)</MudText>
+                                @if (_impact.Dependents.Length == 0)
+                                {
+                                    <MudText Typo="Typo.body2">Rien ne le référence.</MudText>
+                                }
+                                <MudList T="string" Dense="true">
+                                    @foreach (var node in _impact.Dependents)
+                                    {
+                                        <MudListItem T="string">@Describe(node) <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
+                                    }
+                                </MudList>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudText Typo="Typo.subtitle2" Color="Color.Info">Dépend de (@_impact.Dependencies.Length)</MudText>
+                                @if (_impact.Dependencies.Length == 0)
+                                {
+                                    <MudText Typo="Typo.body2">Ne référence rien.</MudText>
+                                }
+                                <MudList T="string" Dense="true">
+                                    @foreach (var node in _impact.Dependencies)
+                                    {
+                                        <MudListItem T="string">@Describe(node) <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
+                                    }
+                                </MudList>
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+                }
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    /// <summary>Domaine à afficher à l'ouverture (lien depuis l'explorateur ou un favori).</summary>
+    [SupplyParameterFromQuery(Name = "domain")] public string? DomainParam { get; set; }
+
+    private DatabaseInfo? _database;
+    private TableInfo[] _tables = [];
+    private DomainInfo[] _domains = [];
+    private string? _domainId;
+    private readonly HashSet<string> _visible = [];
+    private ErDiagram _diagram = ErDiagram.Build([]);
+    private double _zoom = 1;
+    private string? _filter;
+    private bool _allColumns;
+    private const int PickerLimit = 150;
+    private const int LargeDatabase = 150;
+    private bool _loading = true;
+    private string? _message;
+    private Severity _messageSeverity = Severity.Warning;
+
+    private string? _draggedTable;
+    private string _newDomain = "";
+    private string? _renaming;
+    private string _renameText = "";
+    private CompletenessReport? _domainCompleteness;
+
+    private string? _selectedTable;
+    private string? _selectedColumn;
+    private ImpactResult? _impact;
+    private IReadOnlySet<string> _dependents = new HashSet<string>();
+    private IReadOnlySet<string> _dependencies = new HashSet<string>();
+
+    private List<BreadcrumbItem> Crumbs =>
+    [
+        new("Bases", href: "/"),
+        new(_database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
+        new("Diagramme", href: null, disabled: true)
+    ];
+
+    private DomainInfo? CurrentDomain => _domainId == null ? null : _domains.FirstOrDefault(d => d.Id == _domainId);
+
+    private HashSet<string> Members => CurrentDomain?.Tables.Select(t => t.TableId).ToHashSet() ?? [];
+
+    private IEnumerable<TableInfo> Filtered => string.IsNullOrWhiteSpace(_filter)
+        ? _tables
+        : _tables.Where(t => t.Name.Contains(_filter, StringComparison.OrdinalIgnoreCase));
+
+    private bool IsShown(string tableId) => CurrentDomain == null ? _visible.Contains(tableId) : Members.Contains(tableId);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _database = await Api.GetDatabaseAsync(Id);
+        _tables = _database == null ? [] : (await Api.GetTablesAsync(Id)).OrderBy(t => t.Name).ToArray();
+        _domains = _database == null ? [] : await Api.GetDomainsAsync(Id);
+        _domainId = !string.IsNullOrEmpty(DomainParam) && _domains.Any(d => d.Id == DomainParam) ? DomainParam : null;
+        // Une grosse base dessinée d'un bloc est illisible (et lente) : on ouvre le premier domaine, ou rien.
+        var large = _tables.Length > LargeDatabase;
+        if (_domainId == null && large && _domains.Length > 0)
+            _domainId = _domains.OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).First().Id;
+        _visible.Clear();
+        if (!large)
+            foreach (var table in _tables) _visible.Add(table.Id);
+        ClearSelection();
+        Rebuild(keepPositions: false);
+        await LoadDomainCompletenessAsync();
+        if (_database != null) Workspace.Describe(Navigation.Uri, $"Diagramme · {_database.Name}");
+        _loading = false;
+    }
+
+    /// <summary>
+    ///     Reconstruit le diagramme. Sans domaine : les tables cochées. Avec un domaine : ses tables et, en pointillés,
+    ///     les tables d'autres domaines qui leur sont reliées. Les tables déjà placées restent où l'utilisateur les a
+    ///     mises ; sinon la place mémorisée du domaine est reprise.
+    /// </summary>
+    private void Rebuild(bool keepPositions = true)
+    {
+        var previous = keepPositions ? _diagram.Nodes.ToDictionary(n => n.Id, n => (n.X, n.Y)) : [];
+        var domain = CurrentDomain;
+        if (domain == null)
+        {
+            _diagram = ErDiagram.Build(_tables, _visible);
+        }
+        else
+        {
+            var members = Members;
+            var frontier = FrontierOf(members);
+            _diagram = ErDiagram.Build(_tables, members.Union(frontier).ToHashSet(), frontier, relatedColumnsOnly: !_allColumns);
+            var placed = 0;
+            foreach (var place in domain.Tables.Where(t => t is { X: not null, Y: not null }))
+                if (_diagram.Node(place.TableId) is { } node && !previous.ContainsKey(node.Id))
+                {
+                    (node.X, node.Y) = (place.X!.Value, place.Y!.Value);
+                    placed++;
+                }
+
+            // Les tables voisines n'ont pas de place mémorisée : on les range sous le plan du domaine, sans le recouvrir.
+            if (placed > 0) PlaceFrontierBelow();
+        }
+
+        foreach (var node in _diagram.Nodes)
+            if (previous.TryGetValue(node.Id, out var position))
+                (node.X, node.Y) = position;
+
+        // Ouverture d'un domaine : le plan entier tient à l'écran (on peut ensuite zoomer).
+        if (!keepPositions && domain != null)
+            _zoom = Math.Clamp(Math.Round(1000 / Math.Max(1, _diagram.Size().Width), 1), 0.3, 1);
+    }
+
+    private void PlaceFrontierBelow()
+    {
+        var own = _diagram.Nodes.Where(n => !n.IsFrontier).ToList();
+        var outside = _diagram.Nodes.Where(n => n.IsFrontier).ToList();
+        if (own.Count == 0 || outside.Count == 0) return;
+        var x = ErDiagram.Margin;
+        var y = own.Max(n => n.Y + n.Height) + 60;
+        var width = Math.Max(1200, own.Max(n => n.X + n.Width));
+        var rowHeight = 0.0;
+        foreach (var node in outside)
+        {
+            if (x + node.Width > width && x > ErDiagram.Margin)
+            {
+                x = ErDiagram.Margin;
+                y += rowHeight + 40;
+                rowHeight = 0;
+            }
+
+            (node.X, node.Y) = (x, y);
+            x += node.Width + 40;
+            rowHeight = Math.Max(rowHeight, node.Height);
+        }
+    }
+
+    private void ToggleAllColumns(bool on)
+    {
+        _allColumns = on;
+        Rebuild();
+    }
+
+    /// <summary>Tables hors du domaine reliées par une relation à l'une de ses tables.</summary>
+    private HashSet<string> FrontierOf(HashSet<string> members)
+    {
+        var tableOfColumn = _tables.SelectMany(t => t.Columns.Select(c => (Column: c.Id, Table: t.Id))).ToDictionary(x => x.Column, x => x.Table);
+        var frontier = new HashSet<string>();
+        foreach (var relation in _tables.SelectMany(t => t.Relations))
+        {
+            if (!tableOfColumn.TryGetValue(relation.FirstId, out var first) || !tableOfColumn.TryGetValue(relation.SecondId, out var second))
+                continue;
+            if (members.Contains(first) && !members.Contains(second)) frontier.Add(second);
+            if (members.Contains(second) && !members.Contains(first)) frontier.Add(first);
+        }
+
+        return frontier;
+    }
+
+    // --- Domaines ---
+
+    private async Task SelectDomainAsync(string? domainId)
+    {
+        _domainId = domainId;
+        ClearSelection();
+        Rebuild(keepPositions: false);
+        await LoadDomainCompletenessAsync();
+    }
+
+    private async Task LoadDomainCompletenessAsync()
+    {
+        _domainCompleteness = _domainId == null ? null : await Api.GetCompletenessAsync(Id, _domainId);
+    }
+
+    private async Task ReloadDomainsAsync()
+    {
+        _domains = await Api.GetDomainsAsync(Id);
+        if (_domainId != null && _domains.All(d => d.Id != _domainId)) _domainId = null;
+        await LoadDomainCompletenessAsync();
+    }
+
+    private async Task CreateDomainAsync()
+    {
+        var name = _newDomain.Trim();
+        if (name.Length == 0) return;
+        try
+        {
+            var created = await Api.CreateDomainAsync(Id, name);
+            _newDomain = "";
+            await ReloadDomainsAsync();
+            Workspace.NotifyCatalogChanged(Id, this);
+            await SelectDomainAsync(created.Id);
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private async Task OnNewDomainKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CreateDomainAsync();
+    }
+
+    private void StartRename(DomainInfo domain)
+    {
+        _renaming = domain.Id;
+        _renameText = domain.Name;
+    }
+
+    private async Task OnRenameKey(KeyboardEventArgs e, DomainInfo domain)
+    {
+        if (e.Key == "Escape")
+        {
+            _renaming = null;
+        }
+        else if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_renameText))
+        {
+            try
+            {
+                await Api.RenameDomainAsync(domain, _renameText.Trim());
+                _renaming = null;
+                await ReloadDomainsAsync();
+                Workspace.NotifyCatalogChanged(Id, this);
+            }
+            catch (ApiException ex)
+            {
+                ShowError(ex.Message);
+            }
+        }
+    }
+
+    private async Task DeleteDomainAsync(DomainInfo domain)
+    {
+        try
+        {
+            await Api.DeleteDomainAsync(domain.Id);
+            if (_domainId == domain.Id) _domainId = null;
+            await ReloadDomainsAsync();
+            Rebuild(keepPositions: false);
+            Workspace.NotifyCatalogChanged(Id, this);
+            // Annuler recrée le domaine, avec les mêmes tables à la même place (l'identifiant change).
+            Notifier.Show($"Domaine {domain.Name} supprimé (ses tables sont conservées).", Severity.Success, async () =>
+            {
+                var again = await Api.CreateDomainAsync(Id, domain.Name, domain.Color);
+                foreach (var place in domain.Tables)
+                    await Api.AddTableToDomainAsync(again.Id, place.TableId, null, place.X, place.Y);
+                await ReloadDomainsAsync();
+                Rebuild(keepPositions: false);
+                Workspace.NotifyCatalogChanged(Id, this);
+                await InvokeAsync(StateHasChanged);
+            });
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private static string? DomainStyle(DomainInfo domain)
+    {
+        return string.IsNullOrEmpty(domain.Color) ? null : $"border-left: 4px solid {domain.Color};";
+    }
+
+    // --- Glisser-déposer d'une table vers un domaine ---
+
+    private void StartDrag(string tableId)
+    {
+        _draggedTable = tableId;
+    }
+
+    private void ClearDragged()
+    {
+        _draggedTable = null;
+    }
+
+    /// <summary>La table accrochée dans le diagramme sort du dessin : elle peut maintenant être déposée sur un domaine.</summary>
+    private void DragLeave(ErNode node)
+    {
+        _draggedTable = node.Id;
+    }
+
+    /// <summary>
+    ///     Dépose la table accrochée sur un domaine : elle y est rangée et, si on regardait un autre domaine dont elle
+    ///     faisait partie, elle en est retirée (un déplacement).
+    /// </summary>
+    private async Task DropAsync(DomainInfo target)
+    {
+        var tableId = _draggedTable;
+        _draggedTable = null;
+        if (tableId == null) return;
+        var current = CurrentDomain;
+        var moveFrom = current != null && current.Id != target.Id && current.Tables.Any(t => t.TableId == tableId) ? current.Id : null;
+        var name = _tables.FirstOrDefault(t => t.Id == tableId)?.Name ?? tableId;
+        try
+        {
+            await Api.AddTableToDomainAsync(target.Id, tableId, moveFrom);
+            await ReloadDomainsAsync();
+            Rebuild();
+            Workspace.NotifyCatalogChanged(Id, this);
+            Notifier.Show(moveFrom == null
+                ? $"{name} ajoutée au domaine {target.Name}."
+                : $"{name} déplacée vers le domaine {target.Name}.", Severity.Success, async () =>
+            {
+                // Annuler : la table quitte le domaine cible et retrouve l'ancien (à sa place mémorisée) s'il y en avait un.
+                await Api.RemoveTableFromDomainAsync(target.Id, tableId);
+                if (moveFrom != null) await Api.AddTableToDomainAsync(moveFrom, tableId);
+                await ReloadDomainsAsync();
+                Rebuild();
+                Workspace.NotifyCatalogChanged(Id, this);
+                await InvokeAsync(StateHasChanged);
+            });
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    /// <summary>Une table du domaine a été déplacée : sa place est mémorisée pour ce domaine.</summary>
+    private async Task NodeMovedAsync(ErNode node)
+    {
+        var domain = CurrentDomain;
+        if (domain == null || node.IsFrontier) return;
+        try
+        {
+            await Api.SaveLayoutAsync(domain.Id, [(node.Id, node.X, node.Y)]);
+            var index = domain.Tables.FindIndex(t => t.TableId == node.Id);
+            if (index >= 0) domain.Tables[index] = new DomainTable(node.Id, node.X, node.Y);
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    // --- Tables affichées ---
+
+    private async Task ToggleAsync(string tableId, bool on)
+    {
+        var domain = CurrentDomain;
+        if (domain == null)
+        {
+            if (on) _visible.Add(tableId);
+            else _visible.Remove(tableId);
+            if (!on && _selectedTable == tableId) ClearSelection();
+            Rebuild();
+            return;
+        }
+
+        try
+        {
+            if (on) await Api.AddTableToDomainAsync(domain.Id, tableId);
+            else await Api.RemoveTableFromDomainAsync(domain.Id, tableId);
+            await ReloadDomainsAsync();
+            Workspace.NotifyCatalogChanged(Id, this);
+            if (!on && _selectedTable == tableId) ClearSelection();
+            Rebuild();
+        }
+        catch (ApiException ex)
+        {
+            ShowError(ex.Message);
+        }
+    }
+
+    private void SelectAll()
+    {
+        foreach (var table in _tables) _visible.Add(table.Id);
+        Rebuild();
+    }
+
+    private void SelectNone()
+    {
+        _visible.Clear();
+        ClearSelection();
+        Rebuild();
+    }
+
+    /// <summary>Ne garde que l'élément sélectionné et les tables qui lui sont liées.</summary>
+    private void ShowNeighbors()
+    {
+        if (_impact == null) return;
+        _visible.Clear();
+        _visible.Add(_impact.Root.TableId);
+        foreach (var node in _impact.Dependents.Concat(_impact.Dependencies)) _visible.Add(node.TableId);
+        Rebuild();
+        _diagram.AutoLayout();
+    }
+
+    private void Relayout()
+    {
+        _diagram.AutoLayout();
+    }
+
+    private void Zoom(double delta)
+    {
+        _zoom = Math.Clamp(Math.Round(_zoom + delta, 2), 0.3, 2.5);
+    }
+
+    // --- Sélection et impact ---
+
+    private void ClearSelection()
+    {
+        _selectedTable = _selectedColumn = null;
+        _impact = null;
+        _dependents = new HashSet<string>();
+        _dependencies = new HashSet<string>();
+    }
+
+    private async Task SelectTableAsync(string tableId)
+    {
+        _selectedTable = tableId;
+        _selectedColumn = null;
+        await ShowImpactAsync("table", tableId);
+    }
+
+    private async Task SelectColumnAsync((string TableId, string ColumnId) selection)
+    {
+        _selectedTable = selection.TableId;
+        _selectedColumn = selection.ColumnId;
+        await ShowImpactAsync("column", selection.ColumnId);
+    }
+
+    private async Task ShowImpactAsync(string kind, string id)
+    {
+        var impact = await Api.GetImpactAsync(kind, id);
+        // Une réponse tardive d'une sélection précédente ne doit pas écraser la dernière.
+        if (kind == "table" ? _selectedTable != id || _selectedColumn != null : _selectedColumn != id) return;
+        _impact = impact;
+        // Un élément de colonne éclaire la colonne et sa table ; un élément de table, la table seule.
+        _dependents = Ids(impact?.Dependents);
+        _dependencies = Ids(impact?.Dependencies);
+    }
+
+    private static HashSet<string> Ids(ImpactNode[]? nodes)
+    {
+        var ids = new HashSet<string>();
+        foreach (var node in nodes ?? [])
+        {
+            ids.Add(node.TableId);
+            if (node.ColumnId != null) ids.Add(node.ColumnId);
+        }
+
+        return ids;
+    }
+
+    private static string Describe(ImpactNode node)
+    {
+        return node.ColumnName == null ? node.TableName : $"{node.TableName}.{node.ColumnName}";
+    }
+
+    private void ShowError(string message)
+    {
+        _message = message;
+        _messageSeverity = Severity.Warning;
+    }
+
+    private void ShowInfo(string message)
+    {
+        _message = message;
+        _messageSeverity = Severity.Success;
+    }
+
+    // --- Exports ---
+
+    private string FileBase => string.Concat((_database?.Name + (CurrentDomain == null ? "" : "_" + CurrentDomain.Name))
+        .Select(c => char.IsLetterOrDigit(c) ? c : '_'));
+
+    private Task ExportSvgAsync() => CallJsAsync("granitdb.download", $"{FileBase}.svg", "image/svg+xml", _diagram.ToSvg());
+
+    private Task ExportMermaidAsync() => CallJsAsync("granitdb.download", $"{FileBase}.mmd", "text/plain", _diagram.ToMermaid());
+
+    private Task CopyMermaidAsync() => CallJsAsync("granitdb.copyText", _diagram.ToMermaid());
+
+    private Task ExportPngAsync()
+    {
+        var (width, height) = _diagram.Size();
+        return CallJsAsync("granitdb.downloadPng", $"{FileBase}.png", _diagram.ToSvg(), width, height);
+    }
+
+    private async Task CallJsAsync(string function, params object[] args)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync(function, args);
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException)
+        {
+            ShowError("L'export a échoué dans ce navigateur.");
+        }
+    }
+}
