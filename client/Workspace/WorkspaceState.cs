@@ -67,7 +67,8 @@ public class WorkspaceState
     public static string Normalize(string hrefOrUri)
     {
         var text = hrefOrUri.Trim();
-        if (Uri.TryCreate(text, UriKind.Absolute, out var absolute)) text = absolute.PathAndQuery;
+        // Sous Linux (et dans le navigateur), « /chemin?x » est aussi un chemin de fichier absolu valide : seules les adresses http(s) sont des URI.
+        if (Uri.TryCreate(text, UriKind.Absolute, out var absolute) && absolute.Scheme is "http" or "https") text = absolute.PathAndQuery;
         var hash = text.IndexOf('#');
         if (hash >= 0) text = text[..hash];
         if (!text.StartsWith('/')) text = "/" + text;
