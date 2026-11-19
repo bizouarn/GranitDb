@@ -67,6 +67,27 @@
             }
         </MudStack>
 
+        @if (!Single && _database.CanResync && (Auth.IsAdmin || _database.SyncIntervalMinutes != null || _database.LastSyncAt != null))
+        {
+            <div class="sync-schedule mb-3">
+                <NativeSelect Label="Synchronisation automatique" Value="@(_database.SyncIntervalMinutes?.ToString() ?? "0")" ValueChanged="SetScheduleAsync"
+                              Class="field-schedule">
+                    <option value="0" disabled="@(!Auth.IsAdmin)">Désactivée</option>
+                    @foreach (var (minutes, label) in ScheduleChoices)
+                    {
+                        <option value="@minutes" disabled="@(!Auth.IsAdmin)">@label</option>
+                    }
+                </NativeSelect>
+                @if (_database.LastSyncAt != null)
+                {
+                    <MudText Typo="Typo.caption" Class="sync-status" Style="@(_database.LastSyncOk == false ? "color: var(--mud-palette-error)" : "color: var(--mud-palette-text-secondary)")">
+                        Dernière synchronisation : @_database.LastSyncAt.Value.ToLocalTime().ToString("g")
+                        @(_database.LastSyncOk == false ? $"— échec : {_database.LastSyncError}" : "— réussie")
+                    </MudText>
+                }
+            </div>
+        }
+
         @if (!Single)
         {
             <div class="mb-3 d-flex justify-end gap-2">
@@ -649,6 +670,29 @@
     }
 
     private bool _profilingDatabase;
+
+    private static readonly (string Minutes, string Label)[] ScheduleChoices =
+    [
+        ("15", "Toutes les 15 minutes"),
+        ("60", "Toutes les heures"),
+        ("360", "Toutes les 6 heures"),
+        ("1440", "Tous les jours")
+    ];
+
+    /// <summary>Règle l'intervalle de relecture de la source (administrateur) ; le refus du serveur s'affiche en haut de la page.</summary>
+    private async Task SetScheduleAsync(string minutes)
+    {
+        try
+        {
+            _database = await Api.SetSyncScheduleAsync(Id, int.TryParse(minutes, out var m) && m > 0 ? m : null);
+            _message = _database.SyncIntervalMinutes == null ? "Synchronisation automatique désactivée." : $"La base sera relue toutes les {_database.SyncIntervalMinutes} minute(s).";
+            _messageSeverity = Severity.Success;
+        }
+        catch (ApiException e)
+        {
+            (_message, _messageSeverity) = (e.Message, Severity.Error);
+        }
+    }
 
     /// <summary>« 60 % de nuls · 2 valeurs » : ce que le profil dit d'une colonne, en une ligne.</summary>
     private static string ProfileText(ColumnProfileView p)

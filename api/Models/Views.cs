@@ -17,14 +17,18 @@ public record DatabaseView(
     string? Description,
     string? MetaInfo,
     bool CanResync,
-    string? SourceLabel)
+    string? SourceLabel,
+    int? SyncIntervalMinutes = null,
+    DateTime? LastSyncAt = null,
+    bool? LastSyncOk = null,
+    string? LastSyncError = null)
 {
     public static DatabaseView From(DatabaseInfo database)
     {
         return new DatabaseView(database.Id, database.Name, database.Type, database.IsPublic, database.ProjectUrl,
             database.DatabaseUrl, database.Description, database.MetaInfo,
             !string.IsNullOrWhiteSpace(database.SourcePath) || !string.IsNullOrWhiteSpace(database.SourceSecret),
-            database.SourceLabel);
+            database.SourceLabel, database.SyncIntervalMinutes, database.LastSyncAt, database.LastSyncOk, database.LastSyncError);
     }
 }
 

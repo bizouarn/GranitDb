@@ -26,6 +26,18 @@ public class DatabaseInfo : InfoBase
     [JsonIgnore]
     public string? SourceSecret { get; set; }
 
+    /// <summary>Resynchroniser la base automatiquement toutes les N minutes ; absent : jamais (seulement à la demande).</summary>
+    public int? SyncIntervalMinutes { get; set; }
+
+    /// <summary>Dernière relecture de la source (planifiée ou demandée), en UTC.</summary>
+    public DateTime? LastSyncAt { get; set; }
+
+    /// <summary>Résultat de la dernière relecture ; absent tant qu'il n'y en a pas eu.</summary>
+    public bool? LastSyncOk { get; set; }
+
+    /// <summary>Raison du dernier échec (sans secret), tronquée.</summary>
+    public string? LastSyncError { get; set; }
+
     /// <summary>Description de la source sans secret (« serveur / base »), affichée par l'interface.</summary>
     public string? SourceLabel { get; set; }
 }

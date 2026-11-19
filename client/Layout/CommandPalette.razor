@@ -152,7 +152,7 @@
         {
             Action("Ouvrir le journal d'audit", "qui a modifié quoi", () => Go("/audit"));
             Action("Gérer les webhooks", "notifications de changement de schéma", () => Go("/webhooks"));
-            Action("Connecter un serveur SQL Server", "documenter une base du serveur", () => Go("/import/sqlserver"));
+            Action("Connecter un serveur de base de données", "SQL Server, PostgreSQL, MySQL", () => Go("/import/server"));
         }
         if (CurrentDatabaseId is { } current)
         {

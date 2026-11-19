@@ -153,6 +153,11 @@ namespace GranitDb.Client.Models
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<DatabaseView> ScheduleAsync(string id, ScheduleInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task ExportHtmlAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
@@ -334,6 +339,27 @@ namespace GranitDb.Client.Models
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial interface IServerImportClient
+    {
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ConnectionTestResult> TestAsync(ServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>Created</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ImportView> ImportAsync(ServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ImportView> ReplaceAsync(string id, ServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial interface ISqliteImportClient
     {
 
@@ -371,17 +397,17 @@ namespace GranitDb.Client.Models
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ConnectionTestResult> TestAsync(SqlServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ConnectionTestResult> TestAsync(ServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>Created</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ImportView> ImportAsync(SqlServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ImportView> ImportAsync(ServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<ImportView> ReplaceAsync(string id, SqlServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<ImportView> ReplaceAsync(string id, ServerConnectionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
@@ -878,6 +904,18 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("sourceLabel")]
         public string? SourceLabel { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("syncIntervalMinutes")]
+        public int? SyncIntervalMinutes { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("lastSyncAt")]
+        public System.DateTimeOffset? LastSyncAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("lastSyncOk")]
+        public bool? LastSyncOk { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("lastSyncError")]
+        public string? LastSyncError { get; set; } = default!;
 
     }
 
@@ -1440,6 +1478,16 @@ namespace GranitDb.Client.Models
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ScheduleInput
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("intervalMinutes")]
+        [System.ComponentModel.DataAnnotations.Range(0, 525600)]
+        public int? IntervalMinutes { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class SchemaCount
     {
 
@@ -1491,41 +1539,12 @@ namespace GranitDb.Client.Models
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class SessionView
+    public partial class ServerConnectionInput
     {
 
-        [System.Text.Json.Serialization.JsonPropertyName("enabled")]
-        public bool Enabled { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("authenticated")]
-        public bool Authenticated { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("login")]
-        public string? Login { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("name")]
-        public string? Name { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("avatarUrl")]
-        public string? AvatarUrl { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("role")]
-        public string? Role { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("provider")]
-        public string? Provider { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("providers")]
-        public System.Collections.Generic.List<AuthProviderView> Providers { get; set; } = default!;
-
-        [System.Text.Json.Serialization.JsonPropertyName("allowAnonymousRead")]
-        public bool AllowAnonymousRead { get; set; } = default!;
-
-    }
-
-    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
-    public partial class SqlServerConnectionInput
-    {
+        [System.Text.Json.Serialization.JsonPropertyName("engine")]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^(SqlServer|PostgreSql|MySql)$")]
+        public string Engine { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("server")]
         [System.ComponentModel.DataAnnotations.Required]
@@ -1574,11 +1593,71 @@ namespace GranitDb.Client.Models
         [System.ComponentModel.DataAnnotations.StringLength(4000)]
         public string? Description { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("serverEngine")]
+        public ServerEngine ServerEngine { get; set; } = default!;
+
         [System.Text.Json.Serialization.JsonPropertyName("label")]
         public string Label { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("selectedSchemas")]
         public System.Collections.Generic.List<string>? SelectedSchemas { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ServerEngine
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("type")]
+        public string Type { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("displayName")]
+        public string DisplayName { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("defaultSchema")]
+        public string DefaultSchema { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("defaultPort")]
+        public int DefaultPort { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("supportsSchemas")]
+        public bool SupportsSchemas { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("supportsIntegrated")]
+        public bool SupportsIntegrated { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class SessionView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("authenticated")]
+        public bool Authenticated { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("login")]
+        public string? Login { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("name")]
+        public string? Name { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("avatarUrl")]
+        public string? AvatarUrl { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("role")]
+        public string? Role { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("provider")]
+        public string? Provider { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("providers")]
+        public System.Collections.Generic.List<AuthProviderView> Providers { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("allowAnonymousRead")]
+        public bool AllowAnonymousRead { get; set; } = default!;
 
     }
 

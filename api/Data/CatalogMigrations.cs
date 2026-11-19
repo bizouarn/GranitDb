@@ -560,6 +560,22 @@ public static class CatalogMigrations
                 Index("IX_ColumnProfiles_TableId", "ColumnProfiles", "TableId"),
                 Index("IX_ColumnProfiles_ColumnId", "ColumnProfiles", "ColumnId")
             ])
+        ,
+        new(14, "Synchronisation planifiée",
+            Sqlite:
+            [
+                """ALTER TABLE "Databases" ADD COLUMN "SyncIntervalMinutes" INTEGER""",
+                """ALTER TABLE "Databases" ADD COLUMN "LastSyncAt" TEXT""",
+                """ALTER TABLE "Databases" ADD COLUMN "LastSyncOk" INTEGER""",
+                """ALTER TABLE "Databases" ADD COLUMN "LastSyncError" TEXT"""
+            ],
+            SqlServer:
+            [
+                "IF COL_LENGTH('dbo.Databases', 'SyncIntervalMinutes') IS NULL ALTER TABLE dbo.Databases ADD SyncIntervalMinutes INT NULL",
+                "IF COL_LENGTH('dbo.Databases', 'LastSyncAt') IS NULL ALTER TABLE dbo.Databases ADD LastSyncAt DATETIME2 NULL",
+                "IF COL_LENGTH('dbo.Databases', 'LastSyncOk') IS NULL ALTER TABLE dbo.Databases ADD LastSyncOk BIT NULL",
+                "IF COL_LENGTH('dbo.Databases', 'LastSyncError') IS NULL ALTER TABLE dbo.Databases ADD LastSyncError NVARCHAR(500) NULL"
+            ])
     ];
 
     private static string UniqueIndex(string name, string table, string columns)

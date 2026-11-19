@@ -66,6 +66,10 @@ public class Client(HttpClient http)
     /// <summary>Importe la base d'exemple livrée avec l'API.</summary>
     public Task<ImportView> ImportSampleAsync() => CallAsync(() => _api.SqliteImport.SampleAsync());
 
+    /// <summary>Règle la synchronisation automatique d'une base (minutes ; <c>null</c> ou 0 : désactivée) ; lève <see cref="ApiException" /> si elle est refusée.</summary>
+    public Task<DatabaseView> SetSyncScheduleAsync(string databaseId, int? minutes) =>
+        CallAsync(() => _api.Databases.ScheduleAsync(databaseId, new ScheduleInput { IntervalMinutes = minutes ?? 0 }));
+
     // --- Profilage des colonnes ---
 
     /// <summary>Profil enregistré d'une table (vide tant qu'elle n'a pas été profilée) ; <c>null</c> si la table n'existe pas.</summary>
@@ -109,19 +113,22 @@ public class Client(HttpClient http)
     private static CapabilitiesView Refused => new() { AllowSqlServerSources = false, AllowLocalPaths = false };
 
     /// <summary>
-    ///     Essaie une connexion SQL Server sans rien enregistrer. Un échec de connexion revient avec <c>Ok</c> faux et sa
+    ///     Essaie une connexion à une base client/serveur sans rien enregistrer. Un échec de connexion revient avec <c>Ok</c> faux et sa
     ///     consigne ; une demande refusée par l'API (désactivée, champ manquant) lève <see cref="ApiException" />.
     /// </summary>
-    public Task<ConnectionTestResult> TestSqlServerAsync(SqlServerConnectionInput connection) =>
-        CallAsync(() => _api.SqlServerImport.TestAsync(connection));
+    public Task<ConnectionTestResult> TestServerAsync(ServerConnectionInput connection) =>
+        CallAsync(() => IsSqlServer(connection) ? _api.SqlServerImport.TestAsync(connection) : _api.ServerImport.TestAsync(connection));
 
-    /// <summary>Documente la base SQL Server ; la connexion est enregistrée chiffrée côté serveur.</summary>
-    public Task<ImportView> ImportSqlServerAsync(SqlServerConnectionInput connection) =>
-        CallAsync(() => _api.SqlServerImport.ImportAsync(connection));
+    /// <summary>Documente la base client/serveur (SQL Server, PostgreSQL, MySQL) ; la connexion est enregistrée chiffrée côté serveur.</summary>
+    public Task<ImportView> ImportServerAsync(ServerConnectionInput connection) =>
+        CallAsync(() => IsSqlServer(connection) ? _api.SqlServerImport.ImportAsync(connection) : _api.ServerImport.ImportAsync(connection));
 
-    /// <summary>Remplace la connexion d'une base déjà documentée et la resynchronise.</summary>
-    public Task<ImportView> UpdateSqlServerConnectionInputAsync(string id, SqlServerConnectionInput connection) =>
-        CallAsync(() => _api.SqlServerImport.ReplaceAsync(id, connection));
+    /// <summary>Remplace la connexion d'une base déjà documentée (même moteur) et la resynchronise.</summary>
+    public Task<ImportView> UpdateServerConnectionAsync(string id, ServerConnectionInput connection) =>
+        CallAsync(() => IsSqlServer(connection) ? _api.SqlServerImport.ReplaceAsync(id, connection) : _api.ServerImport.ReplaceAsync(id, connection));
+
+    // SQL Server garde sa route d'origine (import/sqlserver) ; les autres moteurs passent par la route générique import/server.
+    private static bool IsSqlServer(ServerConnectionInput connection) => string.IsNullOrEmpty(connection.Engine) || connection.Engine == ServerEngines.SqlServer;
 
     // --- Documentation, sensibilité, complétude ---
 

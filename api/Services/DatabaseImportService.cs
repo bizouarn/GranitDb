@@ -173,8 +173,38 @@ public class DatabaseImportService(
         if (read == null) return null;
         var sync = await synchronizer.SyncAsync(id, read.Value.Schema, ct: ct);
         NotifySchemaChange(sync);
+        await RecordSyncAsync(id, null, ct);
         return new ImportResult(sync.Database, sync);
     }
+
+    /// <summary>
+    ///     Note le résultat de la dernière relecture de la source (<c>error</c> nul : réussie) sans toucher au reste de la base ; une
+    ///     panne d'enregistrement ne fait pas échouer la synchronisation.
+    /// </summary>
+    public async Task RecordSyncAsync(string id, string? error, CancellationToken ct = default)
+    {
+        try
+        {
+            var database = await repository.GetAsync<DatabaseInfo>(id, ct);
+            if (database == null) return;
+            database.LastSyncAt = DateTime.UtcNow;
+            database.LastSyncOk = error == null;
+            database.LastSyncError = error is { Length: > 500 } ? error[..500] : error;
+            await repository.UpdateAsync(id, database, ct);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            // Le suivi est un confort : la relecture elle-même a réussi ou échoué indépendamment.
+        }
+    }
+
+    /// <summary>Annonce aux webhooks qu'une relecture planifiée a échoué.</summary>
+    public void NotifySyncFailed(DatabaseInfo database, string error) =>
+        webhooks.Enqueue(WebhookEvents.SyncFailed, database.Id, new
+        {
+            database = new { id = database.Id, name = database.Name, type = database.Type },
+            error
+        });
 
     /// <summary>Ce que ferait <see cref="ResyncAsync" />, sans rien modifier. <c>null</c> si la base n'existe pas.</summary>
     public async Task<SyncPreview?> PreviewResyncAsync(string id, CancellationToken ct = default)
@@ -188,8 +218,8 @@ public class DatabaseImportService(
     {
         var database = await repository.GetAsync<DatabaseInfo>(id, ct);
         if (database == null) return null;
-        if (database.Type.Equals(SqlServerSchemaConnector.TypeName, StringComparison.OrdinalIgnoreCase))
-            return (database, await ReadSqlServerSourceAsync(database, ct));
+        if (ServerEngines.IsServer(database.Type))
+            return (database, await ReadServerSourceAsync(database, ct));
         EnsureSqlite(database);
         if (string.IsNullOrWhiteSpace(database.SourcePath))
             throw new InvalidSourceException(
@@ -203,24 +233,26 @@ public class DatabaseImportService(
 
     // --- SQL Server ---
 
-    private void EnsureSqlServerAllowed()
+    /// <summary>Les sources client/serveur (SQL Server, PostgreSQL, MySQL) partagent un même interrupteur, <c>Catalog:AllowSqlServerSources</c>.</summary>
+    private void EnsureServerAllowed(ServerEngine engine)
     {
         if (!Options.AllowSqlServerSources)
             throw new InvalidSourceException(
-                "Les sources SQL Server sont désactivées (Catalog:AllowSqlServerSources = false) : l'API ne se connecte pas à un serveur choisi par l'appelant.");
+                $"Les sources {engine.DisplayName} sont désactivées (Catalog:AllowSqlServerSources = false) : l'API ne se connecte pas à un serveur choisi par l'appelant.");
     }
 
-    private async Task<SourceSchema> ReadSqlServerSourceAsync(DatabaseInfo database, CancellationToken ct)
+    private async Task<SourceSchema> ReadServerSourceAsync(DatabaseInfo database, CancellationToken ct)
     {
-        var connection = SqlServerConnectionOf(database);
-        var schema = await Connector(SqlServerSchemaConnector.TypeName).ReadSchemaAsync(connection.ConnectionString, ct);
-        return SourceSchemaFilter.Apply(schema, connection.Schemas);
+        var engine = ServerEngines.Of(database.Type);
+        var connection = ServerConnectionOf(database);
+        var schema = await Connector(engine.Type).ReadSchemaAsync(connection.ConnectionString, ct);
+        return SourceSchemaFilter.Apply(schema, connection.Schemas, engine);
     }
 
-    /// <summary>La connexion enregistrée (déchiffrée) d'une base SQL Server ; mêmes contrôles pour le schéma et le profilage.</summary>
-    private SourceConnection SqlServerConnectionOf(DatabaseInfo database)
+    /// <summary>La connexion enregistrée (déchiffrée) d'une base client/serveur ; mêmes contrôles pour le schéma et le profilage.</summary>
+    private SourceConnection ServerConnectionOf(DatabaseInfo database)
     {
-        EnsureSqlServerAllowed();
+        EnsureServerAllowed(ServerEngines.Of(database.Type));
         if (string.IsNullOrWhiteSpace(database.SourceSecret))
             throw new InvalidSourceException(
                 "Aucune connexion n'est enregistrée pour cette base (elle est lue au démarrage par Catalog:StartupSources) : enregistrez-la depuis « Connecter un serveur SQL Server ».");
@@ -248,8 +280,8 @@ public class DatabaseImportService(
     /// </summary>
     public Task<(string Type, string Source)?> ResolveSourceAsync(DatabaseInfo database)
     {
-        if (database.Type.Equals(SqlServerSchemaConnector.TypeName, StringComparison.OrdinalIgnoreCase))
-            return Task.FromResult<(string, string)?>((SqlServerSchemaConnector.TypeName, SqlServerConnectionOf(database).ConnectionString));
+        if (ServerEngines.Find(database.Type) is { } engine)
+            return Task.FromResult<(string, string)?>((engine.Type, ServerConnectionOf(database).ConnectionString));
         EnsureSqlite(database);
         if (string.IsNullOrWhiteSpace(database.SourcePath))
             throw new InvalidSourceException("Aucun fichier source n'est conservé pour cette base : renvoyez le fichier (PUT).");
@@ -262,33 +294,42 @@ public class DatabaseImportService(
     ///     Essaie la connexion et dit ce qui serait documenté. Un échec de connexion n'est pas une erreur de requête : il
     ///     revient avec la consigne à suivre (<c>Ok</c> faux).
     /// </summary>
-    public async Task<ConnectionTestResult> TestSqlServerAsync(SqlServerConnectionInput input, CancellationToken ct = default)
+    public async Task<ConnectionTestResult> TestServerAsync(ServerConnectionInput input, CancellationToken ct = default)
     {
-        EnsureSqlServerAllowed();
+        var engine = input.ServerEngine;
+        EnsureServerAllowed(engine);
         SourceSchema schema;
         try
         {
-            schema = await Connector(SqlServerSchemaConnector.TypeName).ReadSchemaAsync(input.BuildConnectionString(), ct);
+            schema = await Connector(engine.Type).ReadSchemaAsync(input.BuildConnectionString(), ct);
         }
         catch (InvalidSourceException e)
         {
             return new ConnectionTestResult(false, e.Message, 0, 0, []);
         }
 
-        var schemas = schema.Tables.GroupBy(t => SourceSchemaFilter.SchemaOf(t.Name))
+        var schemas = schema.Tables.GroupBy(t => engine.SupportsSchemas ? engine.SchemaOf(t.Name) : schema.DatabaseName)
             .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase).Select(g => new SchemaCount(g.Key, g.Count())).ToList();
         var views = schema.Tables.Count(t => t.TableType == "View");
         var tables = schema.Tables.Count - views;
         var message = schema.Tables.Count == 0
-            ? "Connexion réussie, mais aucune table n'est visible : le compte doit pouvoir lire les métadonnées (VIEW DEFINITION)."
+            ? $"Connexion réussie, mais aucune table n'est visible : le compte doit pouvoir lire les métadonnées ({MetadataRight(engine)})."
             : $"Connexion réussie : {tables} table(s) et {views} vue(s) dans {schemas.Count} schéma(s).";
         return new ConnectionTestResult(true, message, tables, views, schemas);
     }
 
-    /// <summary>Documente une base SQL Server : la connexion est enregistrée chiffrée, la base se resynchronise ensuite par l'API.</summary>
-    public async Task<ImportResult> ImportSqlServerAsync(SqlServerConnectionInput input, CancellationToken ct = default)
+    /// <summary>Le droit qui permet de lire les métadonnées, pour les messages.</summary>
+    private static string MetadataRight(ServerEngine engine) => engine.Type switch
     {
-        EnsureSqlServerAllowed();
+        SqlServerSchemaConnector.TypeName => "VIEW DEFINITION",
+        PostgreSqlSchemaConnector.TypeName => "USAGE sur les schémas",
+        _ => "SELECT sur la base"
+    };
+
+    /// <summary>Documente une base client/serveur : la connexion est enregistrée chiffrée, la base se resynchronise ensuite par l'API.</summary>
+    public async Task<ImportResult> ImportServerAsync(ServerConnectionInput input, CancellationToken ct = default)
+    {
+        EnsureServerAllowed(input.ServerEngine);
         var (schema, secret) = await ReadForImportAsync(input, ct);
         var id = Guid.NewGuid().ToString();
         var name = string.IsNullOrWhiteSpace(input.Name) ? schema.DatabaseName : input.Name.Trim();
@@ -307,15 +348,15 @@ public class DatabaseImportService(
         return imported;
     }
 
-    /// <summary>Remplace la connexion d'une base SQL Server (mot de passe changé, autre schéma…) et la resynchronise.</summary>
-    public async Task<ImportResult?> ReplaceSqlServerConnectionAsync(string id, SqlServerConnectionInput input,
+    /// <summary>Remplace la connexion d'une base client/serveur (mot de passe changé, autre schéma…) et la resynchronise ; le moteur ne change pas.</summary>
+    public async Task<ImportResult?> ReplaceServerConnectionAsync(string id, ServerConnectionInput input,
         CancellationToken ct = default)
     {
-        EnsureSqlServerAllowed();
+        EnsureServerAllowed(input.ServerEngine);
         var existing = await repository.GetAsync<DatabaseInfo>(id, ct);
         if (existing == null) return null;
-        if (!existing.Type.Equals(SqlServerSchemaConnector.TypeName, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidSourceException($"Cette base est de type {existing.Type}, pas SqlServer.");
+        if (!existing.Type.Equals(input.ServerEngine.Type, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidSourceException($"Cette base est de type {existing.Type}, pas {input.ServerEngine.Type}.");
 
         var (schema, secret) = await ReadForImportAsync(input, ct);
         var replaced = await repository.InTransactionAsync(async repo =>
@@ -331,14 +372,15 @@ public class DatabaseImportService(
         return replaced;
     }
 
-    private async Task<(SourceSchema Schema, string Secret)> ReadForImportAsync(SqlServerConnectionInput input, CancellationToken ct)
+    private async Task<(SourceSchema Schema, string Secret)> ReadForImportAsync(ServerConnectionInput input, CancellationToken ct)
     {
+        var engine = input.ServerEngine;
         var connectionString = input.BuildConnectionString();
         var schema = SourceSchemaFilter.Apply(
-            await Connector(SqlServerSchemaConnector.TypeName).ReadSchemaAsync(connectionString, ct), input.SelectedSchemas);
+            await Connector(engine.Type).ReadSchemaAsync(connectionString, ct), input.SelectedSchemas, engine);
         if (schema.Tables.Count == 0)
             throw new InvalidSourceException(
-                "Aucune table à documenter : vérifiez les schémas choisis et que le compte peut lire les métadonnées (VIEW DEFINITION).");
+                $"Aucune table à documenter : vérifiez les schémas choisis et que le compte peut lire les métadonnées ({MetadataRight(engine)}).");
         var secret = protector.Protect(JsonSerializer.Serialize(new SourceConnection(connectionString, input.SelectedSchemas)));
         return (schema, secret);
     }

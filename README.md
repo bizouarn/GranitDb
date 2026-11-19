@@ -134,7 +134,15 @@ Désactivé par défaut. Quand il est activé, un **administrateur** peut demand
 - API : `GET TableInfo/{id}/profile` (lecteur), `POST TableInfo/{id}/profile` et `POST DatabaseInfo/{id}/profile` (administrateur). `GET Capabilities` indique `allowProfiling`.
 - Limite : sur SQL Server, une table hors `dbo` s'appelle `schéma.table` dans le catalogue ; un nom de table de `dbo` qui contient un point serait mal interprété.
 
-## Documenter une base SQL Server
+## Synchronisation planifiée (`Catalog:AllowScheduledSync`)
+
+Un **administrateur** règle, sur la page d'une base qui a une source à relire (fichier conservé ou connexion enregistrée), une **synchronisation automatique** : toutes les 15 minutes, toutes les heures, toutes les 6 heures ou tous les jours (`PUT DatabaseInfo/{id}/schedule`, `intervalMinutes`). Le planificateur de l'API (`SyncScheduler`, un service d'arrière-plan qui regarde les échéances toutes les `Catalog:SchedulerTickSeconds` secondes, 60 par défaut) relit alors la source comme « Resynchroniser » : les descriptions saisies sont conservées, les tables, colonnes et index qui changent sont mis à jour.
+
+- **Notification** : un changement de schéma déclenche le webhook `schema.changed` ; un échec (source injoignable, compte refusé, délai dépassé) déclenche `sync.failed` avec la raison, sans secret. Le dernier résultat reste sur la base (« Dernière synchronisation : … — réussie / échec : … » sur sa page).
+- Une base en échec n'est pas retentée avant l'intervalle suivant, pour ne pas martyriser une source en panne. `Catalog:MinSyncIntervalMinutes` (5) borne l'intervalle réglable, `Catalog:SyncTimeoutSeconds` (300) la durée d'une relecture. `Catalog:AllowScheduledSync` à `false` éteint tout. Sans intervalle réglé, rien ne tourne.
+- Une base SQLite importée par envoi de fichier relit le fichier conservé : la planification n'y a de sens qu'avec un chemin local (`Catalog:AllowLocalPaths`) ou un fichier que vous remplacez.
+
+## Documenter une base SQL Server, PostgreSQL ou MySQL
 
 > **API dans Docker et SQL Server sur votre poste :** `localhost` et les adresses IPv6 locales (`fe80::…%11`) désignent le conteneur, pas votre machine. Saisissez `host.docker.internal` comme serveur (et le port TCP de l'instance ; activez « Faire confiance au certificat » pour un certificat auto-signé). Le serveur doit accepter TCP/IP (SQL Server Configuration Manager) et le pare-feu Windows laisser passer le port.
 
@@ -142,6 +150,10 @@ Activé par défaut (désactivable : `Catalog:AllowSqlServerSources=false`, en D
 
 - **Seul le schéma est lu** (tables, colonnes, clés, index), jamais les données : un compte qui n'a que `VIEW DEFINITION` suffit. Créez-en un dédié, par exemple `CREATE LOGIN granitdb WITH PASSWORD = '…'; USE MaBase; CREATE USER granitdb FOR LOGIN granitdb; GRANT VIEW DEFINITION TO granitdb;`. La connexion déclare une intention de lecture seule.
 - **La connexion est chiffrée** (ASP.NET Core Data Protection) avant d'être enregistrée dans le catalogue ; seul un libellé « serveur / base » est affichable, et aucune réponse de l'API ne renvoie le mot de passe ni la connexion. Les clés sont des fichiers de `KeysDirectory` : **sauvegardez-les avec le catalogue** et protégez ce dossier. Sans elles, une connexion enregistrée n'est plus lisible et l'interface demande de la saisir de nouveau.
+- **Moteurs pris en charge** : Microsoft SQL Server, **PostgreSQL** et **MySQL / MariaDB** (champ « Type de base » de la page de connexion ; `engine` = `SqlServer`, `PostgreSql` ou `MySql` dans l'API, routes `import/server`, et `import/sqlserver` pour SQL Server). Le même interrupteur `Catalog:AllowSqlServerSources` couvre les trois.
+  - **PostgreSQL** : un compte qui peut se connecter à la base et a `USAGE` sur les schémas suffit ; les tables du schéma `public` gardent leur nom, les autres s'appellent `schéma.table` ; on choisit les schémas à documenter ; vues et vues matérialisées comprises. La connexion ouvre ses transactions en lecture seule (`default_transaction_read_only`).
+  - **MySQL / MariaDB** : un compte qui peut lire la base (`SELECT`) suffit ; « schéma » et « base » sont la même chose, on documente la base de la connexion (pas de choix de schémas) ; les clés étrangères vers une autre base sont ignorées. « Chiffrer » exige un certificat vérifiable (`VerifyCA`) sauf si « Faire confiance au certificat » est coché.
+  - Authentification : identifiant et mot de passe ; le compte Windows de l'API (`Integrated`) n'existe que pour SQL Server. Le profilage des colonnes fonctionne sur les trois moteurs.
 - **Activé par défaut** (le catalogue peut être SQLite) : l'API se connecte alors à un serveur choisi par l'appelant, ce qui revient à lui prêter le réseau du serveur. Tant qu'il n'y a pas d'authentification (jalon 6), désactivez ceci hors d'un poste ou d'un réseau de confiance.
 
 ## Tests

@@ -83,10 +83,39 @@ public partial class WebhookView
     }
 }
 
-public partial class SqlServerConnectionInput
+/// <summary>Les moteurs client/serveur que l'API sait documenter par connexion (<c>Engine</c>).</summary>
+public static class ServerEngines
 {
-    public SqlServerConnectionInput()
+    public const string SqlServer = "SqlServer";
+    public const string PostgreSql = "PostgreSql";
+    public const string MySql = "MySql";
+
+    public static string DisplayName(string? engine) => engine switch
     {
+        PostgreSql => "PostgreSQL",
+        MySql => "MySQL",
+        _ => "SQL Server"
+    };
+
+    public static int DefaultPort(string? engine) => engine switch
+    {
+        PostgreSql => 5432,
+        MySql => 3306,
+        _ => 1433
+    };
+
+    /// <summary>L'authentification par le compte Windows du processus de l'API n'existe que pour SQL Server.</summary>
+    public static bool SupportsIntegrated(string? engine) => engine is null or SqlServer;
+
+    /// <summary>Le moteur range les tables dans des schémas qu'on peut choisir (MySQL : la base est l'unité).</summary>
+    public static bool SupportsSchemas(string? engine) => engine != MySql;
+}
+
+public partial class ServerConnectionInput
+{
+    public ServerConnectionInput()
+    {
+        Engine = ServerEngines.SqlServer;
         AuthMode = "Sql";
         Encrypt = true;
         TimeoutSeconds = 15; // comme l'API (1 à 120) : 0 serait refusé

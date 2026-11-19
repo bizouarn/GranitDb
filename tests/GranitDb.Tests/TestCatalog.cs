@@ -20,7 +20,7 @@ public sealed class TestCatalog : IDisposable
         Factory = new DbConnectionFactory(wrapped);
         Repository = new CatalogRepository(Factory, wrapped);
         Synchronizer = new SchemaSynchronizer(Repository);
-        Connectors = [new SqliteSchemaConnector(), new SqlServerSchemaConnector()];
+        Connectors = [new SqliteSchemaConnector(), new SqlServerSchemaConnector(), new PostgreSqlSchemaConnector(), new MySqlSchemaConnector()];
         Protector = new DataProtectionSecretProtector(new Microsoft.AspNetCore.DataProtection.EphemeralDataProtectionProvider());
         Webhooks = new WebhookDispatcher(new WebhookStore(Factory), Protector,
             Microsoft.Extensions.Options.Options.Create(new GranitDB.API.Options.WebhookOptions()),

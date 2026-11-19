@@ -22,6 +22,7 @@ public sealed class GranitApi(HttpClient http)
     public RelationInfoClient Relations { get; } = new(http);
     public SearchClient Search { get; } = new(http);
     public SqliteImportClient SqliteImport { get; } = new(http);
+    public ServerImportClient ServerImport { get; } = new(http);
     public SqlServerImportClient SqlServerImport { get; } = new(http);
     public TableInfoClient Tables { get; } = new(http);
     public TagInfoClient Tags { get; } = new(http);

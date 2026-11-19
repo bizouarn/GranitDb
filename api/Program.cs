@@ -15,6 +15,10 @@ builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
 builder.Services.AddSingleton<ICatalogRepository, CatalogRepository>();
 builder.Services.AddSingleton<ISchemaConnector, SqliteSchemaConnector>();
 builder.Services.AddSingleton<ISchemaConnector, SqlServerSchemaConnector>();
+builder.Services.AddSingleton<ISchemaConnector, PostgreSqlSchemaConnector>();
+builder.Services.AddSingleton<ISchemaConnector, MySqlSchemaConnector>();
+builder.Services.AddSingleton<IColumnProfiler, PostgreSqlColumnProfiler>();
+builder.Services.AddSingleton<IColumnProfiler, MySqlColumnProfiler>();
 builder.Services.AddSingleton<IColumnProfiler, SqliteColumnProfiler>();
 builder.Services.AddSingleton<IColumnProfiler, SqlServerColumnProfiler>();
 builder.Services.AddSingleton<ColumnProfilingService>();
@@ -49,6 +53,8 @@ builder.Services.AddSingleton<WebhookStore>();
 builder.Services.AddSingleton<WebhookDispatcher>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WebhookDispatcher>());
 builder.Services.AddSingleton<DatabaseImportService>();
+builder.Services.AddSingleton<SyncScheduler>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<SyncScheduler>());
 
 // Authentification (GitHub, OpenID Connect) et rôles : inactifs tant que Auth:Enabled n'est pas vrai.
 builder.Services.AddGranitAuth(builder.Configuration);

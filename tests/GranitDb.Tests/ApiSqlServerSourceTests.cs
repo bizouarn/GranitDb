@@ -209,7 +209,8 @@ public sealed class ApiSqlServerSourceTests : IDisposable
         var stored = StoredSecret(id);
         Assert.False(string.IsNullOrWhiteSpace(stored));
         Assert.DoesNotContain(source.Password, stored);
-        Assert.DoesNotContain(source.User, stored);
+        // Le compte (« sa ») est trop court pour une recherche de sous-chaîne : le chiffré, en base64, peut le contenir par hasard.
+        Assert.DoesNotContain("User ID", stored, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(source.Host, stored);
         Assert.DoesNotContain(source.Database, stored);
     }

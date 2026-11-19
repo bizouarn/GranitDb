@@ -133,3 +133,5 @@ code {
 .login-brand { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.1rem; }
 .auth-loading { position: fixed; top: 0; left: 0; right: 0; }
 .read-only-chip { margin-right: 8px; }
+
+.sync-schedule { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }

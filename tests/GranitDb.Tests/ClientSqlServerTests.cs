@@ -11,7 +11,7 @@ namespace GranitDb.Tests;
 /// <summary>Client HTTP : capacités et connexion à un serveur SQL Server.</summary>
 public class ClientSqlServerApiTests
 {
-    private static GranitDb.Client.Models.SqlServerConnectionInput Connection() => new()
+    private static GranitDb.Client.Models.ServerConnectionInput Connection() => new()
     {
         Server = "srv", Port = 1444, Database = "Boutique", User = "lecteur", Password = "s3cret", Schemas = ["dbo"], Name = "Distante"
     };
@@ -39,7 +39,7 @@ public class ClientSqlServerApiTests
             Respond = _ => FakeApi.Json("""{"ok":false,"message":"Identifiants refusés par le serveur","tables":0,"views":0,"schemas":[]}""")
         };
 
-        var result = await api.Client.TestSqlServerAsync(Connection());
+        var result = await api.Client.TestServerAsync(Connection());
 
         Assert.False(result.Ok);
         Assert.Contains("Identifiants refusés", result.Message);
@@ -59,8 +59,8 @@ public class ClientSqlServerApiTests
         var disabled = new FakeApi { Respond = _ => FakeApi.Json("""{"title":"Les sources SQL Server sont désactivées","status":400}""", HttpStatusCode.BadRequest) };
         var invalid = new FakeApi { Respond = _ => FakeApi.Json("""{"title":"One or more validation errors occurred.","status":400,"errors":{"Server":["Le serveur est obligatoire."]}}""", HttpStatusCode.BadRequest) };
 
-        Assert.Contains("désactivées", (await Assert.ThrowsAsync<ApiException>(() => disabled.Client.TestSqlServerAsync(Connection()))).Message);
-        Assert.Equal("Le serveur est obligatoire.", (await Assert.ThrowsAsync<ApiException>(() => invalid.Client.TestSqlServerAsync(Connection()))).Message);
+        Assert.Contains("désactivées", (await Assert.ThrowsAsync<ApiException>(() => disabled.Client.TestServerAsync(Connection()))).Message);
+        Assert.Equal("Le serveur est obligatoire.", (await Assert.ThrowsAsync<ApiException>(() => invalid.Client.TestServerAsync(Connection()))).Message);
     }
 
     [Fact]
@@ -71,8 +71,8 @@ public class ClientSqlServerApiTests
             Respond = r => FakeApi.Json("""{"database":{"id":"d5","name":"Distante","type":"SqlServer","canResync":true,"sourceLabel":"srv:1444 / Boutique"},"sync":{"tablesAdded":3,"columnsAdded":9}}""", r.Method == HttpMethod.Post ? HttpStatusCode.Created : HttpStatusCode.OK)
         };
 
-        var imported = await api.Client.ImportSqlServerAsync(Connection());
-        await api.Client.UpdateSqlServerConnectionInputAsync("a/b c", Connection());
+        var imported = await api.Client.ImportServerAsync(Connection());
+        await api.Client.UpdateServerConnectionAsync("a/b c", Connection());
 
         Assert.Equal("d5", imported.Database.Id);
         Assert.True(imported.Database.CanResync);
@@ -329,7 +329,7 @@ public class ClientConnectSqlServerTests : ShellTestBase
     {
         Open();
 
-        Assert.Equal("Connecter SQL Server", State.Tabs.Single(t => t.Href == "/import/sqlserver").Title);
+        Assert.Equal("Connecter un serveur", State.Tabs.Single(t => t.Href == "/import/sqlserver").Title);
     }
 
     // --- Modifier la connexion d'une base ---
@@ -391,9 +391,9 @@ public class ClientSqlServerWorkspaceTests : ShellTestBase
         State.SetPalette(true);
         palette.WaitForAssertion(() => Assert.Contains("Ouvrir Boutique", palette.Markup));
 
-        palette.FindAll(".palette-item").First(i => i.QuerySelector(".palette-label")!.TextContent == "Connecter un serveur SQL Server").Click();
+        palette.FindAll(".palette-item").First(i => i.QuerySelector(".palette-label")!.TextContent == "Connecter un serveur de base de données").Click();
 
-        Assert.EndsWith("/import/sqlserver", Nav.Uri);
+        Assert.EndsWith("/import/server", Nav.Uri);
     }
 
     private const string SqlServerDatabase = """{"id":"d1","name":"Distante","type":"SqlServer","canResync":true,"sourceLabel":"srv:1444 / Boutique"}""";

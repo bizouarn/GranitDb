@@ -1,6 +1,6 @@
 namespace GranitDB.API.Connectors;
 
-/// <summary>Restreint un schéma lu à la source aux schémas choisis (SQL Server).</summary>
+/// <summary>Restreint un schéma lu à la source aux schémas choisis (SQL Server, PostgreSQL).</summary>
 public static class SourceSchemaFilter
 {
     /// <summary>
@@ -17,11 +17,12 @@ public static class SourceSchemaFilter
     ///     Garde les tables des <paramref name="schemas" /> (sans tenir compte de la casse ; tout si <c>null</c>) et ce qui ne
     ///     concerne plus que ces tables : clés étrangères dont les deux extrémités restent, index des tables gardées.
     /// </summary>
-    public static SourceSchema Apply(SourceSchema schema, IReadOnlyCollection<string>? schemas)
+    public static SourceSchema Apply(SourceSchema schema, IReadOnlyCollection<string>? schemas, ServerEngine? engine = null)
     {
         if (schemas == null || schemas.Count == 0) return schema;
+        var of = engine == null ? SchemaOf : (Func<string, string>)engine.SchemaOf;
         var wanted = schemas.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var tables = schema.Tables.Where(t => wanted.Contains(SchemaOf(t.Name))).ToList();
+        var tables = schema.Tables.Where(t => wanted.Contains(of(t.Name))).ToList();
         var names = tables.Select(t => t.Name).ToHashSet();
         return schema with
         {

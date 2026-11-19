@@ -43,13 +43,13 @@
         else if (_capabilities.AllowSqlServerSources)
         {
             <MudButton Variant="Variant.Outlined" Href="/import/sqlserver" StartIcon="@Icons.Material.Filled.Dns" Class="connect-sqlserver">
-                Connecter un serveur SQL Server
+                Connecter un serveur (SQL Server, PostgreSQL, MySQL)
             </MudButton>
         }
         else
         {
             <MudText Typo="Typo.caption" Class="sqlserver-disabled" Style="color: var(--mud-palette-text-secondary)">
-                Pour documenter une base Microsoft SQL Server, activez Catalog:AllowSqlServerSources sur le serveur de l'API.
+                Pour documenter une base SQL Server, PostgreSQL ou MySQL, activez Catalog:AllowSqlServerSources sur le serveur de l'API.
             </MudText>
         }
     </MudStack>

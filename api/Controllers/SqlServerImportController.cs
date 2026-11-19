@@ -31,29 +31,36 @@ public class CapabilitiesController(IOptions<CatalogOptions> options) : Controll
 [MinimumRole(Role.Admin)]
 public class SqlServerImportController(DatabaseImportService import) : ControllerBase
 {
+    /// <summary>Cette route est celle de SQL Server (la route générique <c>import/server</c> choisit le moteur) : le moteur y est imposé.</summary>
+    private static ServerConnectionInput Forced(ServerConnectionInput input)
+    {
+        input.Engine = GranitDB.API.Connectors.ServerEngines.SqlServer.Type;
+        return input;
+    }
+
     /// <summary>
     ///     Essaie la connexion sans rien enregistrer. Un échec de connexion revient en 200 avec <c>ok</c> faux et la
     ///     consigne à suivre ; une demande mal formée est un 400.
     /// </summary>
     [HttpPost("test")]
-    public async Task<IActionResult> Test([FromBody] SqlServerConnectionInput input, CancellationToken ct)
+    public async Task<IActionResult> Test([FromBody] ServerConnectionInput input, CancellationToken ct)
     {
-        return Ok(await import.TestSqlServerAsync(input, ct));
+        return Ok(await import.TestServerAsync(Forced(input), ct));
     }
 
     /// <summary>Documente la base : crée l'entrée du catalogue, extrait le schéma et enregistre la connexion chiffrée.</summary>
     [HttpPost]
-    public async Task<IActionResult> Import([FromBody] SqlServerConnectionInput input, CancellationToken ct)
+    public async Task<IActionResult> Import([FromBody] ServerConnectionInput input, CancellationToken ct)
     {
-        var result = await import.ImportSqlServerAsync(input, ct);
+        var result = await import.ImportServerAsync(Forced(input), ct);
         return Created($"/DatabaseInfo/{result.Database.Id}", ImportView.From(result));
     }
 
     /// <summary>Remplace la connexion d'une base déjà documentée (mot de passe changé, autres schémas) et la resynchronise.</summary>
     [HttpPut("{id}")]
-    public async Task<IActionResult> Replace(string id, [FromBody] SqlServerConnectionInput input, CancellationToken ct)
+    public async Task<IActionResult> Replace(string id, [FromBody] ServerConnectionInput input, CancellationToken ct)
     {
-        var result = await import.ReplaceSqlServerConnectionAsync(id, input, ct);
+        var result = await import.ReplaceServerConnectionAsync(id, Forced(input), ct);
         return result == null ? NotFound() : Ok(ImportView.From(result));
     }
 }

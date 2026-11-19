@@ -1,5 +1,6 @@
 using GranitDB.API.Controllers.Base;
 using GranitDB.API.Data;
+using GranitDB.API.Exceptions;
 using GranitDB.API.Models;
 using GranitDB.API.Models.Descriptions;
 using GranitDB.API.Models.Inputs;
@@ -11,11 +12,19 @@ using Microsoft.Extensions.Options;
 
 namespace GranitDB.API.Controllers;
 
+/// <summary>Réglage de la synchronisation automatique d'une base.</summary>
+public class ScheduleInput
+{
+    /// <summary>Minutes entre deux relectures de la source ; 0 ou absent : désactivée.</summary>
+    [System.ComponentModel.DataAnnotations.Range(0, 525600)]
+    public int? IntervalMinutes { get; set; }
+}
+
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
 [ApiController]
 public class DatabaseInfoController(ICatalogRepository repository, DatabaseImportService import, IOptions<AuthOptions> auth,
-    ColumnProfilingService profiling)
+    ColumnProfilingService profiling, IOptions<CatalogOptions> catalogOptions)
     : BaseDbInfoController<DatabaseInfo, DatabaseInput>(repository)
 {
     /// <summary>Appelant sans compte (possible seulement pour les bases publiques, avec l'authentification activée).</summary>
@@ -73,6 +82,33 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     {
         var run = await profiling.ProfileDatabaseAsync(id, ct);
         return run == null ? NotFound() : Ok(run);
+    }
+
+    /// <summary>
+    ///     Règle la synchronisation automatique : toutes les <c>intervalMinutes</c> minutes (au moins <c>Catalog:MinSyncIntervalMinutes</c>)
+    ///     l'API relit la source ; 0 ou absent la désactive. Réservé aux administrateurs (l'API se connecte alors seule à la source).
+    /// </summary>
+    [HttpPut("{id}/schedule")]
+    [MinimumRole(Role.Admin)]
+    public async Task<IActionResult> Schedule(string id, [FromBody] ScheduleInput input, CancellationToken ct)
+    {
+        var database = await Repository.GetAsync<DatabaseInfo>(id, ct);
+        if (database == null) return NotFound();
+        var minutes = input.IntervalMinutes is > 0 ? input.IntervalMinutes : null;
+        if (minutes != null)
+        {
+            var catalog = catalogOptions.Value;
+            if (!catalog.AllowScheduledSync)
+                throw new GranitExceptions("La synchronisation planifiée est désactivée (Catalog:AllowScheduledSync = false).");
+            if (string.IsNullOrWhiteSpace(database.SourcePath) && string.IsNullOrWhiteSpace(database.SourceSecret))
+                throw new GranitExceptions("Cette base n'a pas de source à relire : renvoyez le fichier ou enregistrez la connexion.");
+            if (minutes < catalog.MinSyncIntervalMinutes)
+                throw new GranitExceptions($"L'intervalle minimal est de {catalog.MinSyncIntervalMinutes} minute(s).");
+        }
+
+        database.SyncIntervalMinutes = minutes;
+        await Repository.UpdateAsync(id, database, ct);
+        return Ok(View(database));
     }
 
     /// <summary>Documentation de la base en un seul fichier HTML autonome (présentation type Dataedo), à télécharger.</summary>

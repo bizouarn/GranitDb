@@ -39,6 +39,21 @@ public class CatalogOptions
     /// <summary>Tables profilées au plus par demande de profilage d'une base (les plus anciennement profilées d'abord).</summary>
     public int ProfilingMaxTables { get; set; } = 100;
 
+    /// <summary>
+    ///     Autorise la synchronisation planifiée : un administrateur règle un intervalle par base, l'API relit alors la source à
+    ///     échéance. Sans intervalle réglé, rien ne tourne.
+    /// </summary>
+    public bool AllowScheduledSync { get; set; } = true;
+
+    /// <summary>Intervalle minimal réglable, en minutes (ne pas martyriser une source).</summary>
+    public int MinSyncIntervalMinutes { get; set; } = 5;
+
+    /// <summary>Durée maximale d'une relecture planifiée, en secondes.</summary>
+    public int SyncTimeoutSeconds { get; set; } = 300;
+
+    /// <summary>Fréquence à laquelle le planificateur regarde les échéances, en secondes.</summary>
+    public int SchedulerTickSeconds { get; set; } = 60;
+
     /// <summary>Dossier des clés qui chiffrent les connexions enregistrées (par défaut : <c>DataDirectory/keys</c>).</summary>
     public string? KeysDirectory { get; set; }
 

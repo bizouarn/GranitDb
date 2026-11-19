@@ -670,6 +670,55 @@
         }
       }
     },
+    "/api/v1/DatabaseInfo/{id}/schedule": {
+      "put": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_Schedule",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/DatabaseInfo/{id}/export/html": {
       "get": {
         "tags": [
@@ -1754,6 +1803,133 @@
         }
       }
     },
+    "/api/v1/import/server/test": {
+      "post": {
+        "tags": [
+          "ServerImport"
+        ],
+        "operationId": "ServerImport_Test",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionTestResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import/server": {
+      "post": {
+        "tags": [
+          "ServerImport"
+        ],
+        "operationId": "ServerImport_Import",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import/server/{id}": {
+      "put": {
+        "tags": [
+          "ServerImport"
+        ],
+        "operationId": "ServerImport_Replace",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServerConnectionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/import/sqlite": {
       "post": {
         "tags": [
@@ -1989,17 +2165,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             },
             "text/json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             },
             "application/*+json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             }
           }
@@ -2028,17 +2204,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             },
             "text/json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             },
             "application/*+json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             }
           }
@@ -2077,17 +2253,17 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             },
             "text/json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             },
             "application/*+json": {
               "schema": {
-                "$ref": "#/components/schemas/SqlServerConnectionInput"
+                "$ref": "#/components/schemas/ServerConnectionInput"
               }
             }
           }
@@ -3556,6 +3732,24 @@
           "sourceLabel": {
             "type": "string",
             "nullable": true
+          },
+          "syncIntervalMinutes": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "lastSyncAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "lastSyncOk": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "lastSyncError": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -4281,6 +4475,19 @@
         },
         "additionalProperties": false
       },
+      "ScheduleInput": {
+        "type": "object",
+        "properties": {
+          "intervalMinutes": {
+            "maximum": 525600,
+            "minimum": 0,
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "SchemaCount": {
         "type": "object",
         "properties": {
@@ -4336,54 +4543,17 @@
         },
         "additionalProperties": false
       },
-      "SessionView": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
-          "authenticated": {
-            "type": "boolean"
-          },
-          "login": {
-            "type": "string",
-            "nullable": true
-          },
-          "name": {
-            "type": "string",
-            "nullable": true
-          },
-          "avatarUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "role": {
-            "type": "string",
-            "nullable": true
-          },
-          "provider": {
-            "type": "string",
-            "nullable": true
-          },
-          "providers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AuthProviderView"
-            }
-          },
-          "allowAnonymousRead": {
-            "type": "boolean"
-          }
-        },
-        "additionalProperties": false
-      },
-      "SqlServerConnectionInput": {
+      "ServerConnectionInput": {
         "required": [
           "database",
           "server"
         ],
         "type": "object",
         "properties": {
+          "engine": {
+            "pattern": "^(SqlServer|PostgreSql|MySql)$",
+            "type": "string"
+          },
           "server": {
             "maxLength": 255,
             "minLength": 1,
@@ -4448,6 +4618,9 @@
             "type": "string",
             "nullable": true
           },
+          "serverEngine": {
+            "$ref": "#/components/schemas/ServerEngine"
+          },
           "label": {
             "type": "string",
             "readOnly": true
@@ -4459,6 +4632,72 @@
             },
             "nullable": true,
             "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ServerEngine": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "defaultSchema": {
+            "type": "string"
+          },
+          "defaultPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "supportsSchemas": {
+            "type": "boolean"
+          },
+          "supportsIntegrated": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SessionView": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "authenticated": {
+            "type": "boolean"
+          },
+          "login": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthProviderView"
+            }
+          },
+          "allowAnonymousRead": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -4927,6 +5166,9 @@
     },
     {
       "name": "Search"
+    },
+    {
+      "name": "ServerImport"
     },
     {
       "name": "SqliteImport"

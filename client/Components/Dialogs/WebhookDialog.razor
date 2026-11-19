@@ -57,7 +57,8 @@
     [
         ("schema.changed", "Schéma modifié", "une resynchronisation a changé des tables, colonnes ou index"),
         ("database.imported", "Base importée", "une nouvelle base vient d'être ajoutée au catalogue"),
-        ("database.deleted", "Base supprimée", "une base a été retirée du catalogue")
+        ("database.deleted", "Base supprimée", "une base a été retirée du catalogue"),
+        ("sync.failed", "Synchronisation en échec", "une synchronisation planifiée n'a pas pu relire la source")
     ];
 
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;

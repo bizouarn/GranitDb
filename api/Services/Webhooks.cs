@@ -23,10 +23,13 @@ public static class WebhookEvents
     /// <summary>Une base a été supprimée du catalogue (la base source n'est jamais touchée).</summary>
     public const string DatabaseDeleted = "database.deleted";
 
+    /// <summary>Une resynchronisation planifiée a échoué (source injoignable, compte refusé…) ; la charge dit pourquoi, sans secret.</summary>
+    public const string SyncFailed = "sync.failed";
+
     /// <summary>Envoi d'essai demandé par <c>POST Webhooks/{id}/test</c>.</summary>
     public const string Ping = "ping";
 
-    public static readonly string[] Subscribable = [SchemaChanged, DatabaseImported, DatabaseDeleted];
+    public static readonly string[] Subscribable = [SchemaChanged, DatabaseImported, DatabaseDeleted, SyncFailed];
 }
 
 /// <summary>Quelles adresses un webhook a le droit de joindre.</summary>

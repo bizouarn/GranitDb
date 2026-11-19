@@ -101,10 +101,10 @@ public class SqlServerProfilingTests(SqlServerFixture sql)
             o.AllowProfiling = true;
         });
         var host = builder.DataSource.Replace("tcp:", "").Split(',');
-        var imported = await env.Importer.ImportSqlServerAsync(new SqlServerConnectionInput
+        var imported = await env.Importer.ImportServerAsync(new ServerConnectionInput
         {
             Server = host[0], Port = host.Length > 1 ? int.Parse(host[1]) : null, Database = builder.InitialCatalog,
-            AuthMode = SqlServerConnectionInput.SqlAuth, User = builder.UserID, Password = builder.Password,
+            AuthMode = ServerConnectionInput.SqlAuth, User = builder.UserID, Password = builder.Password,
             Encrypt = false, TrustServerCertificate = true
         });
         var service = new ColumnProfilingService(env.Repository, env.Importer, [new SqliteColumnProfiler(), new SqlServerColumnProfiler()],

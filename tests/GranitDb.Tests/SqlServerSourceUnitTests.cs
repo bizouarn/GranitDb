@@ -14,11 +14,11 @@ using Microsoft.Data.SqlClient;
 namespace GranitDb.Tests;
 
 /// <summary>Connexion SQL Server : chaîne construite sans injection, libellé sans secret, schémas choisis.</summary>
-public class SqlServerConnectionInputTests
+public class ServerConnectionInputTests
 {
-    private static SqlServerConnectionInput Sql(Action<SqlServerConnectionInput>? change = null)
+    private static ServerConnectionInput Sql(Action<ServerConnectionInput>? change = null)
     {
-        var input = new SqlServerConnectionInput { Server = "srv-sql", Database = "Boutique", User = "lecteur", Password = "s3cret" };
+        var input = new ServerConnectionInput { Server = "srv-sql", Database = "Boutique", User = "lecteur", Password = "s3cret" };
         change?.Invoke(input);
         return input;
     }
@@ -106,7 +106,7 @@ public class SqlServerConnectionInputTests
         Assert.Equal(["dbo", "sales"], Sql(i => i.Schemas = [" dbo ", "DBO", "sales"]).SelectedSchemas);
     }
 
-    private static List<string> Errors(SqlServerConnectionInput input)
+    private static List<string> Errors(ServerConnectionInput input)
     {
         var context = new System.ComponentModel.DataAnnotations.ValidationContext(input);
         var results = new List<System.ComponentModel.DataAnnotations.ValidationResult>();
