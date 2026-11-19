@@ -349,6 +349,9 @@ public sealed class AuthFlowTests : IAsyncLifetime
         // Éditeur : écrit, mais pas d'administration.
         Assert.Equal(HttpStatusCode.Created, (await editor.SendAsync(Write(HttpMethod.Post, $"{V1}/TagInfo", new { name = "important" }))).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await editor.GetAsync($"{V1}/Audit")).StatusCode);
+        // Le profilage lit des données de la source : administrateur seulement.
+        Assert.Equal(HttpStatusCode.Forbidden, (await editor.SendAsync(Write(HttpMethod.Post, $"{V1}/TableInfo/x/profile"))).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await editor.SendAsync(Write(HttpMethod.Post, $"{V1}/DatabaseInfo/x/profile"))).StatusCode);
 
         // Administrateur : tout, et le journal nomme l'auteur de l'écriture de l'éditeur.
         var audit = await admin.GetAsync($"{V1}/Audit");

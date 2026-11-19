@@ -52,6 +52,12 @@
                 <MudButton Variant="Variant.Outlined" OnClick="PreviewSyncAsync" Disabled="_syncing"
                            StartIcon="@Icons.Material.Filled.Sync">Resynchroniser</MudButton>
             }
+            @if (!Single && CanProfile)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="ProfileDatabaseAsync" Disabled="_profilingDatabase"
+                           StartIcon="@Icons.Material.Filled.QueryStats" Class="profile-database"
+                           title="Compte les lignes, les nuls et les valeurs distinctes de chaque colonne, à la source (aucune valeur n'est lue ni gardée)">Profiler les colonnes</MudButton>
+            }
             @if (_database.Type == "Sqlite" && !Single && Auth.CanEdit)
             {
                 <label class="replace-file">
@@ -236,9 +242,27 @@
                                            OnRemove="RemoveTagAsync" />
                             </div>
 
+                            @if (table.TableType == "Table" && (CanProfile || _profiles.ContainsKey(table.Id)))
+                            {
+                                <div class="profile-bar mb-2">
+                                    @if (_profiles.TryGetValue(table.Id, out var tableProfile) && tableProfile.ProfiledAt != null)
+                                    {
+                                        <MudText Typo="Typo.caption" Class="profile-summary" Style="color: var(--mud-palette-text-secondary)">
+                                            Profil : @tableProfile.RowCount?.ToString("N0") ligne(s), calculé le @tableProfile.ProfiledAt.Value.ToLocalTime().ToString("g")
+                                        </MudText>
+                                    }
+                                    @if (CanProfile)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => ProfileTableAsync(table))"
+                                                   Disabled="@_profiling.Contains(table.Id)" StartIcon="@Icons.Material.Filled.QueryStats" Class="profile-table">
+                                            @(_profiles.ContainsKey(table.Id) ? "Actualiser le profil" : "Profiler la table")
+                                        </MudButton>
+                                    }
+                                </div>
+                            }
                             <MudSimpleTable Dense="true" Hover="true" Style="overflow-x: auto;">
                                 <thead>
-                                <tr><th>Colonne</th><th>Type</th><th>Null</th><th>Défaut</th><th>Description</th><th>Étiquettes</th><th></th></tr>
+                                <tr><th>Colonne</th><th>Type</th><th>Null</th><th>Défaut</th>@if (_profiles.ContainsKey(table.Id)) {<th>Profil</th>}<th>Description</th><th>Étiquettes</th><th></th></tr>
                                 </thead>
                                 <tbody>
                                 @foreach (var column in table.Columns.OrderBy(c => c.Position))
@@ -254,6 +278,19 @@
                                         <td>@column.DataType</td>
                                         <td>@(column.IsNullable ? "oui" : "non")</td>
                                         <td>@column.DefaultValue</td>
+                                        @if (_profiles.ContainsKey(table.Id))
+                                        {
+                                            <td class="column-profile">
+                                                @if (ProfileOf(table.Id, column.Id) is { } p)
+                                                {
+                                                    <span title="@($"{p.RowCount:N0} ligne(s) au moment du profilage")">@ProfileText(p)</span>
+                                                    @if (ProfileKindLabel(p.Kind) is { Length: > 0 } label)
+                                                    {
+                                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="profile-kind">@label</MudChip>
+                                                    }
+                                                }
+                                            </td>
+                                        }
                                         <td>
                                             <InlineText Value="@column.Description" Placeholder="Décrire" Label="@($"Description de {column.Name}")"
                                                         OnSave="@(text => SaveColumnDescriptionAsync(column, text))" />
@@ -402,6 +439,9 @@
     private SyncPreview? _preview;
     private readonly HashSet<string> _open = [];
     private readonly HashSet<string> _notesOpen = [];
+    private readonly Dictionary<string, TableProfileView> _profiles = new();
+    private readonly HashSet<string> _profiling = [];
+    private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
     private string? _scrollTo;
     private const int PageSize = 50;
     private int _limit = PageSize;
@@ -494,6 +534,7 @@
     {
         _loading = true;
         _database = await Api.GetDatabaseAsync(Id);
+        _capabilities = await Api.GetCapabilitiesAsync();
         await LoadTablesAsync();
         await LoadGovernanceAsync();
         if (Single && SingleTable != null)
@@ -509,6 +550,7 @@
 
         if (_database != null) Workspace.Describe(Navigation.Uri, Title);
         _loading = false;
+        foreach (var opened in _open.ToList()) _ = LoadProfileAsync(opened);
     }
 
     /// <summary>Le catalogue a été modifié ailleurs (panneau de détail, autre onglet) : on relit sans clignoter.</summary>
@@ -543,9 +585,88 @@
 
     private void SetOpen(string tableId, bool open)
     {
-        if (open) _open.Add(tableId);
+        if (open)
+        {
+            _open.Add(tableId);
+            _ = LoadProfileAsync(tableId);
+        }
         else _open.Remove(tableId);
     }
+
+    /// <summary>Le profil des colonnes (un complément : son absence n'empêche pas d'afficher la table).</summary>
+    private async Task LoadProfileAsync(string tableId)
+    {
+        if (_profiles.ContainsKey(tableId)) return;
+        var profile = await Api.GetTableProfileAsync(tableId);
+        if (profile?.ProfiledAt == null) return; // pas encore profilée : rien à montrer
+        _profiles[tableId] = profile;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private ColumnProfileView? ProfileOf(string tableId, string columnId) =>
+        _profiles.TryGetValue(tableId, out var profile) ? profile.Columns.FirstOrDefault(c => c.ColumnId == columnId) : null;
+
+    private bool CanProfile => _capabilities.AllowProfiling && Auth.IsAdmin;
+
+    private async Task ProfileTableAsync(TableInfo table)
+    {
+        _profiling.Add(table.Id);
+        try
+        {
+            _profiles[table.Id] = await Api.ProfileTableAsync(table.Id);
+            Notifier.Show($"Profil de {table.Name} calculé.");
+        }
+        catch (ApiException e)
+        {
+            (_message, _messageSeverity) = (e.Message, Severity.Error);
+        }
+        finally
+        {
+            _profiling.Remove(table.Id);
+        }
+    }
+
+    private async Task ProfileDatabaseAsync()
+    {
+        _profilingDatabase = true;
+        try
+        {
+            var run = await Api.ProfileDatabaseAsync(Id);
+            _profiles.Clear();
+            foreach (var id in _open.ToList()) await LoadProfileAsync(id);
+            var more = run.TablesRemaining > 0 ? $" ; {run.TablesRemaining} restante(s), relancez pour continuer" : "";
+            var failed = run.TablesFailed > 0 ? $", {run.TablesFailed} en échec ({string.Join(" ; ", run.Errors.Take(3))})" : "";
+            Notifier.Show($"{run.TablesProfiled} table(s) profilée(s){failed}{more}.", run.TablesFailed > 0 ? Severity.Warning : Severity.Success);
+        }
+        catch (ApiException e)
+        {
+            (_message, _messageSeverity) = (e.Message, Severity.Error);
+        }
+        finally
+        {
+            _profilingDatabase = false;
+        }
+    }
+
+    private bool _profilingDatabase;
+
+    /// <summary>« 60 % de nuls · 2 valeurs » : ce que le profil dit d'une colonne, en une ligne.</summary>
+    private static string ProfileText(ColumnProfileView p)
+    {
+        var nulls = p.NullRatio == 0 ? "aucun nul" : $"{p.NullRatio * 100:0.#} % de nuls";
+        var distinct = p.DistinctCount == null ? "" : p.DistinctCount == 1 ? " · 1 valeur" : $" · {p.DistinctCount:N0} valeurs";
+        return nulls + distinct;
+    }
+
+    private static string ProfileKindLabel(string kind) => kind switch
+    {
+        "unique" => "unique",
+        "constant" => "constante",
+        "low" => "peu de valeurs",
+        "high" => "variée",
+        "empty" => "vide",
+        _ => ""
+    };
 
     private async Task LoadTablesAsync()
     {

@@ -14,7 +14,8 @@ namespace GranitDB.API.Controllers;
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
 [ApiController]
-public class DatabaseInfoController(ICatalogRepository repository, DatabaseImportService import, IOptions<AuthOptions> auth)
+public class DatabaseInfoController(ICatalogRepository repository, DatabaseImportService import, IOptions<AuthOptions> auth,
+    ColumnProfilingService profiling)
     : BaseDbInfoController<DatabaseInfo, DatabaseInput>(repository)
 {
     /// <summary>Appelant sans compte (possible seulement pour les bases publiques, avec l'authentification activée).</summary>
@@ -60,6 +61,18 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public override async Task<IActionResult> DeleteT(string id, CancellationToken ct)
     {
         return await import.DeleteDatabaseAsync(id, Actor, ct) ? NoContent() : NotFound();
+    }
+
+    /// <summary>
+    ///     Profile les tables de la base (les plus anciennement profilées d'abord, au plus <c>Catalog:ProfilingMaxTables</c> par
+    ///     demande) : la réponse dit combien ont été profilées, combien ont échoué et combien restent pour une demande suivante.
+    /// </summary>
+    [HttpPost("{id}/profile")]
+    [MinimumRole(Role.Admin)]
+    public async Task<IActionResult> Profile(string id, CancellationToken ct)
+    {
+        var run = await profiling.ProfileDatabaseAsync(id, ct);
+        return run == null ? NotFound() : Ok(run);
     }
 
     /// <summary>Documentation de la base en un seul fichier HTML autonome (présentation type Dataedo), à télécharger.</summary>

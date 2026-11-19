@@ -31,7 +31,7 @@ public sealed class PublicAccess(ICatalogRepository repository, IOptions<AuthOpt
                 return await IsPublicDatabaseAsync(Value("id"), ct);
             case "TableInfo" when action == "GetTablesByDatabaseId":
                 return await IsPublicDatabaseAsync(Value("databaseId"), ct);
-            case "TableInfo" when action is "GetT" or "GetColumns" or "GetIndexes" or "GetRelations":
+            case "TableInfo" when action is "GetT" or "GetColumns" or "GetIndexes" or "GetRelations" or "GetProfile":
             case "Impact" when action == "OfTable":
                 return await IsPublicTableAsync(Value("id"), ct);
             case "Impact" when action == "OfColumn":

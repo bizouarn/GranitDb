@@ -26,6 +26,19 @@ public class CatalogOptions
     /// </summary>
     public bool AllowSqlServerSources { get; set; }
 
+    /// <summary>
+    ///     Autorise le profilage des colonnes (nombre de lignes, de nuls et de valeurs distinctes, calculés par la source en lecture
+    ///     seule ; aucune valeur n'est lue ni stockée). Désactivé par défaut : c'est la seule fonction qui lit des données de la
+    ///     source et pas seulement son schéma ; SQL Server demande alors le droit de lecture des tables (db_datareader).
+    /// </summary>
+    public bool AllowProfiling { get; set; }
+
+    /// <summary>Durée maximale du profilage d'une table, en secondes.</summary>
+    public int ProfilingTimeoutSeconds { get; set; } = 60;
+
+    /// <summary>Tables profilées au plus par demande de profilage d'une base (les plus anciennement profilées d'abord).</summary>
+    public int ProfilingMaxTables { get; set; } = 100;
+
     /// <summary>Dossier des clés qui chiffrent les connexions enregistrées (par défaut : <c>DataDirectory/keys</c>).</summary>
     public string? KeysDirectory { get; set; }
 

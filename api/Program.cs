@@ -15,6 +15,9 @@ builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
 builder.Services.AddSingleton<ICatalogRepository, CatalogRepository>();
 builder.Services.AddSingleton<ISchemaConnector, SqliteSchemaConnector>();
 builder.Services.AddSingleton<ISchemaConnector, SqlServerSchemaConnector>();
+builder.Services.AddSingleton<IColumnProfiler, SqliteColumnProfiler>();
+builder.Services.AddSingleton<IColumnProfiler, SqlServerColumnProfiler>();
+builder.Services.AddSingleton<ColumnProfilingService>();
 // Les connexions des sources sont chiffrées dans le catalogue ; les clés vivent dans un dossier à part.
 var catalogSection = builder.Configuration.GetSection(CatalogOptions.Section).Get<CatalogOptions>() ?? new CatalogOptions();
 var dataProtection = builder.Services.AddDataProtection().SetApplicationName("GranitDb")

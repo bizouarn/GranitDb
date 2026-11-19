@@ -444,6 +444,7 @@ public class CatalogRepository : ICatalogRepository
                 """DELETE FROM "RelationColumns" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id))""",
                 """DELETE FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id)""",
                 """DELETE FROM "Indexes" WHERE "DatabaseId" = @id""",
+                """DELETE FROM "ColumnProfiles" WHERE "TableId" IN (SELECT "Id" FROM "Tables" WHERE "DatabaseId" = @id)""",
                 """DELETE FROM "Columns" WHERE "DatabaseId" = @id""",
                 """DELETE FROM "Tables" WHERE "DatabaseId" = @id"""
             ];
@@ -459,6 +460,7 @@ public class CatalogRepository : ICatalogRepository
                 """DELETE FROM "RelationColumns" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id))""",
                 """DELETE FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id)""",
                 """DELETE FROM "Indexes" WHERE "TableId" = @id""",
+                """DELETE FROM "ColumnProfiles" WHERE "TableId" = @id""",
                 """DELETE FROM "Columns" WHERE "TableId" = @id"""
             ];
         else if (typeof(T) == typeof(ColumnInfo))
@@ -466,6 +468,7 @@ public class CatalogRepository : ICatalogRepository
             [
                 """DELETE FROM "DomainHiddenRelations" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id)""",
                 """DELETE FROM "TagLinks" WHERE "EntityType" = 'column' AND "EntityId" = @id""",
+                """DELETE FROM "ColumnProfiles" WHERE "ColumnId" = @id""",
                 """DELETE FROM "RelationColumns" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id)""",
                 """DELETE FROM "RelationColumns" WHERE "FirstId" = @id OR "SecondId" = @id""",
                 """DELETE FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id"""

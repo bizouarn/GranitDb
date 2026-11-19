@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 namespace GranitDB.API.Controllers;
 
 /// <summary>Capacités activées sur ce serveur : l'interface propose seulement ce qui est permis.</summary>
-public record CapabilitiesView(bool AllowSqlServerSources, bool AllowLocalPaths);
+public record CapabilitiesView(bool AllowSqlServerSources, bool AllowLocalPaths, bool AllowProfiling = false);
 
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
@@ -17,7 +17,7 @@ public record CapabilitiesView(bool AllowSqlServerSources, bool AllowLocalPaths)
 public class CapabilitiesController(IOptions<CatalogOptions> options) : ControllerBase
 {
     [HttpGet]
-    public IActionResult Get() => Ok(new CapabilitiesView(options.Value.AllowSqlServerSources, options.Value.AllowLocalPaths));
+    public IActionResult Get() => Ok(new CapabilitiesView(options.Value.AllowSqlServerSources, options.Value.AllowLocalPaths, options.Value.AllowProfiling));
 }
 
 /// <summary>

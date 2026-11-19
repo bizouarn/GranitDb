@@ -3,6 +3,8 @@ using GranitDB.API.Data;
 using GranitDB.API.Models;
 using GranitDB.API.Models.Descriptions;
 using GranitDB.API.Models.Inputs;
+using GranitDB.API.Security;
+using GranitDB.API.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GranitDB.API.Controllers;
@@ -10,7 +12,7 @@ namespace GranitDB.API.Controllers;
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
 [ApiController]
-public class TableInfoController(ICatalogRepository repository) : BaseDbInfoController<TableInfo, TableInput>(repository)
+public class TableInfoController(ICatalogRepository repository, ColumnProfilingService profiling) : BaseDbInfoController<TableInfo, TableInput>(repository)
 {
     /// <summary>
     ///     Filtres : <c>databaseId</c>, <c>name</c> (contient), <c>tableType</c> (Table, View, Virtual), <c>domainId</c>
@@ -80,6 +82,29 @@ public class TableInfoController(ICatalogRepository repository) : BaseDbInfoCont
         // d'une table se lisent à l'ouverture (<c>{id}/columns</c>).
         if (!summary) await FillAsync(tables, ct);
         return Ok(tables);
+    }
+
+    /// <summary>
+    ///     Profil enregistré des colonnes d'une table (lignes, nuls, valeurs distinctes : des comptes, jamais de valeur) ; vide tant
+    ///     qu'elle n'a pas été profilée.
+    /// </summary>
+    [HttpGet("{id}/profile")]
+    public async Task<IActionResult> GetProfile(string id, CancellationToken ct)
+    {
+        var profile = await profiling.GetAsync(id, ct);
+        return profile == null ? NotFound() : Ok(profile);
+    }
+
+    /// <summary>
+    ///     Profile la table à la source (lecture seule) et remplace son profil. Demande <c>Catalog:AllowProfiling</c> et le rôle
+    ///     administrateur : c'est la seule route qui lit des données de la source.
+    /// </summary>
+    [HttpPost("{id}/profile")]
+    [MinimumRole(Role.Admin)]
+    public async Task<IActionResult> Profile(string id, CancellationToken ct)
+    {
+        var profile = await profiling.ProfileTableAsync(id, ct);
+        return profile == null ? NotFound() : Ok(profile);
     }
 
     /// <summary>Colonnes d'une table, dans l'ordre de la table.</summary>

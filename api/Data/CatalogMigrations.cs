@@ -521,6 +521,44 @@ public static class CatalogMigrations
                     MetaInfo NVARCHAR(MAX) NULL)
                 """,
                 Index("IX_RelationColumns_RelationId", "RelationColumns", "RelationId")
+            ]),
+
+        new(13, "Profilage léger des colonnes",
+            Sqlite:
+            [
+                """
+                CREATE TABLE IF NOT EXISTS "ColumnProfiles" (
+                    "Id" TEXT PRIMARY KEY,
+                    "TableId" TEXT NOT NULL,
+                    "ColumnId" TEXT NOT NULL,
+                    "RowCount" INTEGER NOT NULL,
+                    "NullCount" INTEGER NOT NULL,
+                    "DistinctCount" INTEGER,
+                    "ProfiledAt" TEXT NOT NULL,
+                    "Description" TEXT,
+                    "MetaInfo" TEXT
+                )
+                """,
+                """CREATE INDEX IF NOT EXISTS "IX_ColumnProfiles_TableId" ON "ColumnProfiles"("TableId")""",
+                """CREATE INDEX IF NOT EXISTS "IX_ColumnProfiles_ColumnId" ON "ColumnProfiles"("ColumnId")"""
+            ],
+            SqlServer:
+            [
+                """
+                IF OBJECT_ID(N'dbo.ColumnProfiles', N'U') IS NULL
+                CREATE TABLE dbo.ColumnProfiles (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    TableId VARCHAR(36) NOT NULL,
+                    ColumnId VARCHAR(36) NOT NULL,
+                    [RowCount] BIGINT NOT NULL,
+                    NullCount BIGINT NOT NULL,
+                    DistinctCount BIGINT NULL,
+                    ProfiledAt DATETIME2 NOT NULL,
+                    Description NVARCHAR(MAX) NULL,
+                    MetaInfo NVARCHAR(MAX) NULL)
+                """,
+                Index("IX_ColumnProfiles_TableId", "ColumnProfiles", "TableId"),
+                Index("IX_ColumnProfiles_ColumnId", "ColumnProfiles", "ColumnId")
             ])
     ];
 

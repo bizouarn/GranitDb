@@ -17,6 +17,8 @@ services:
       Catalog__ConnectionString: ${CATALOG_CONNECTION_STRING:-}
       # Autorise l'API à se connecter à un serveur SQL Server choisi depuis l'interface (voir le README : à n'ouvrir qu'à des personnes de confiance).
       Catalog__AllowSqlServerSources: ${ALLOW_SQLSERVER_SOURCES:-true}
+      # Profilage des colonnes (comptes de lignes, nuls et valeurs distinctes calculés par la source, administrateurs) : ALLOW_PROFILING=true pour l'activer.
+      Catalog__AllowProfiling: ${ALLOW_PROFILING:-false}
       # Authentification (voir « Authentification et rôles » du README) : désactivée par défaut. Pour l'activer, AUTH_ENABLED=true,
       # une OAuth App GitHub (adresse de retour http://localhost:5105/auth/callback/github) et le login du premier administrateur.
       Auth__Enabled: ${AUTH_ENABLED:-false}

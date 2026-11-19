@@ -640,6 +640,36 @@
         }
       }
     },
+    "/api/v1/DatabaseInfo/{id}/profile": {
+      "post": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_Profile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileRunView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/DatabaseInfo/{id}/export/html": {
       "get": {
         "tags": [
@@ -2230,6 +2260,64 @@
         }
       }
     },
+    "/api/v1/TableInfo/{id}/profile": {
+      "get": {
+        "tags": [
+          "TableInfo"
+        ],
+        "operationId": "TableInfo_GetProfile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableProfileView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "TableInfo"
+        ],
+        "operationId": "TableInfo_Profile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableProfileView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/TableInfo/{id}/columns": {
       "get": {
         "tags": [
@@ -3150,6 +3238,9 @@
           },
           "allowLocalPaths": {
             "type": "boolean"
+          },
+          "allowProfiling": {
+            "type": "boolean"
           }
         },
         "additionalProperties": false
@@ -3264,6 +3355,42 @@
             "minimum": 0,
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ColumnProfileView": {
+        "type": "object",
+        "properties": {
+          "columnId": {
+            "type": "string"
+          },
+          "column": {
+            "type": "string"
+          },
+          "rowCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nullCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nullRatio": {
+            "type": "number",
+            "format": "double"
+          },
+          "distinctCount": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "kind": {
+            "type": "string"
+          },
+          "profiledAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false
@@ -4037,6 +4164,30 @@
         },
         "additionalProperties": false
       },
+      "ProfileRunView": {
+        "type": "object",
+        "properties": {
+          "tablesProfiled": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tablesFailed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tablesRemaining": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
       "RelationColumnPair": {
         "type": "object",
         "properties": {
@@ -4514,6 +4665,31 @@
           "tableType": {
             "pattern": "^(Table|View|Virtual)$",
             "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TableProfileView": {
+        "type": "object",
+        "properties": {
+          "tableId": {
+            "type": "string"
+          },
+          "rowCount": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "profiledAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "columns": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ColumnProfileView"
+            }
           }
         },
         "additionalProperties": false

@@ -212,6 +212,14 @@ public class DatabaseImportService(
 
     private async Task<SourceSchema> ReadSqlServerSourceAsync(DatabaseInfo database, CancellationToken ct)
     {
+        var connection = SqlServerConnectionOf(database);
+        var schema = await Connector(SqlServerSchemaConnector.TypeName).ReadSchemaAsync(connection.ConnectionString, ct);
+        return SourceSchemaFilter.Apply(schema, connection.Schemas);
+    }
+
+    /// <summary>La connexion enregistrée (déchiffrée) d'une base SQL Server ; mêmes contrôles pour le schéma et le profilage.</summary>
+    private SourceConnection SqlServerConnectionOf(DatabaseInfo database)
+    {
         EnsureSqlServerAllowed();
         if (string.IsNullOrWhiteSpace(database.SourceSecret))
             throw new InvalidSourceException(
@@ -231,8 +239,23 @@ public class DatabaseImportService(
 
         if (connection == null || string.IsNullOrWhiteSpace(connection.ConnectionString))
             throw new InvalidSourceException("La connexion enregistrée est vide : saisissez-la de nouveau.");
-        var schema = await Connector(SqlServerSchemaConnector.TypeName).ReadSchemaAsync(connection.ConnectionString, ct);
-        return SourceSchemaFilter.Apply(schema, connection.Schemas);
+        return connection;
+    }
+
+    /// <summary>
+    ///     Ce qu'il faut pour lire les données d'une base (profilage) : le type et le chemin du fichier ou la chaîne de connexion,
+    ///     avec les contrôles de la lecture du schéma. <c>null</c> si la base n'existe pas.
+    /// </summary>
+    public Task<(string Type, string Source)?> ResolveSourceAsync(DatabaseInfo database)
+    {
+        if (database.Type.Equals(SqlServerSchemaConnector.TypeName, StringComparison.OrdinalIgnoreCase))
+            return Task.FromResult<(string, string)?>((SqlServerSchemaConnector.TypeName, SqlServerConnectionOf(database).ConnectionString));
+        EnsureSqlite(database);
+        if (string.IsNullOrWhiteSpace(database.SourcePath))
+            throw new InvalidSourceException("Aucun fichier source n'est conservé pour cette base : renvoyez le fichier (PUT).");
+        if (!IsManagedFile(database.SourcePath) && !Options.AllowLocalPaths)
+            throw new InvalidSourceException("Ce chemin source n'est pas autorisé.");
+        return Task.FromResult<(string, string)?>((SqliteSchemaConnector.TypeName, database.SourcePath));
     }
 
     /// <summary>

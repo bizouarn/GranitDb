@@ -148,6 +148,11 @@ namespace GranitDb.Client.Models
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ProfileRunView> ProfileAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task ExportHtmlAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
@@ -407,6 +412,16 @@ namespace GranitDb.Client.Models
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<TableProfileView> GetProfileAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<TableProfileView> ProfileAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<System.Collections.Generic.List<ColumnInfo>> GetColumnsAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
@@ -608,6 +623,9 @@ namespace GranitDb.Client.Models
         [System.Text.Json.Serialization.JsonPropertyName("allowLocalPaths")]
         public bool AllowLocalPaths { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("allowProfiling")]
+        public bool AllowProfiling { get; set; } = default!;
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -701,6 +719,36 @@ namespace GranitDb.Client.Models
         [System.Text.Json.Serialization.JsonPropertyName("position")]
         [System.ComponentModel.DataAnnotations.Range(0, 100000)]
         public int Position { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ColumnProfileView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("columnId")]
+        public string ColumnId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("column")]
+        public string Column { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("rowCount")]
+        public long RowCount { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("nullCount")]
+        public long NullCount { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("nullRatio")]
+        public double NullRatio { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("distinctCount")]
+        public long? DistinctCount { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("kind")]
+        public string Kind { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("profiledAt")]
+        public System.DateTimeOffset ProfiledAt { get; set; } = default!;
 
     }
 
@@ -1300,6 +1348,24 @@ namespace GranitDb.Client.Models
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ProfileRunView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("tablesProfiled")]
+        public int TablesProfiled { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("tablesFailed")]
+        public int TablesFailed { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("tablesRemaining")]
+        public int TablesRemaining { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("errors")]
+        public System.Collections.Generic.List<string> Errors { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class RelationColumnPair
     {
 
@@ -1677,6 +1743,24 @@ namespace GranitDb.Client.Models
         [System.Text.Json.Serialization.JsonPropertyName("tableType")]
         [System.ComponentModel.DataAnnotations.RegularExpression(@"^(Table|View|Virtual)$")]
         public string TableType { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class TableProfileView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("tableId")]
+        public string TableId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("rowCount")]
+        public long? RowCount { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("profiledAt")]
+        public System.DateTimeOffset? ProfiledAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("columns")]
+        public System.Collections.Generic.List<ColumnProfileView> Columns { get; set; } = default!;
 
     }
 

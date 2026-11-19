@@ -125,6 +125,15 @@ Désactivée par défaut (`Auth:Enabled` à `false`) : le poste de développemen
 - **Journal et historique** : l'auteur de chaque écriture est le login du compte (`History.ChangedBy`, `GET Audit`).
 - `GET /api/v1/Auth/me` dit si l'authentification est active, qui est connecté et avec quel rôle ; `POST /api/v1/Auth/logout` ferme la session.
 
+## Profilage léger des colonnes (`Catalog:AllowProfiling`)
+
+Désactivé par défaut. Quand il est activé, un **administrateur** peut demander, table par table (« Profiler la table ») ou pour toute une base (« Profiler les colonnes »), le **nombre de lignes, de valeurs nulles et de valeurs distinctes** de chaque colonne. Ces comptes sont calculés **par la source elle-même** (`COUNT`, `COUNT(DISTINCT …)`, en lecture seule) : aucune valeur n'est lue par l'API ni stockée, seuls des comptes remontent. C'est la seule fonction qui lit des données de la source et pas seulement son schéma ; un compte SQL Server doit alors pouvoir lire les tables (`db_datareader`, au lieu du seul `VIEW DEFINITION`).
+
+- La page d'une table montre pour chaque colonne « 25 % de nuls · 850 valeurs » et un genre : *unique* (un identifiant probable), *constante*, *peu de valeurs* (une liste de codes), *variée*, *vide*.
+- Seules les tables se profilent (pas les vues). `Catalog:ProfilingTimeoutSeconds` (60) borne une table ; `Catalog:ProfilingMaxTables` (100) borne une demande sur une base : les tables les plus anciennement profilées passent d'abord, une grosse base se profile en plusieurs demandes. Une table en échec est signalée sans arrêter les autres.
+- API : `GET TableInfo/{id}/profile` (lecteur), `POST TableInfo/{id}/profile` et `POST DatabaseInfo/{id}/profile` (administrateur). `GET Capabilities` indique `allowProfiling`.
+- Limite : sur SQL Server, une table hors `dbo` s'appelle `schéma.table` dans le catalogue ; un nom de table de `dbo` qui contient un point serait mal interprété.
+
 ## Documenter une base SQL Server
 
 > **API dans Docker et SQL Server sur votre poste :** `localhost` et les adresses IPv6 locales (`fe80::…%11`) désignent le conteneur, pas votre machine. Saisissez `host.docker.internal` comme serveur (et le port TCP de l'instance ; activez « Faire confiance au certificat » pour un certificat auto-signé). Le serveur doit accepter TCP/IP (SQL Server Configuration Manager) et le pare-feu Windows laisser passer le port.

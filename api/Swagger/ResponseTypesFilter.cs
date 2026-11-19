@@ -16,6 +16,9 @@ public sealed class ResponseTypesFilter : IOperationFilter
 {
     private static readonly Dictionary<string, (Type Type, string Status)> Declared = new()
     {
+        ["TableInfo_GetProfile"] = (typeof(TableProfileView), "200"),
+        ["TableInfo_Profile"] = (typeof(TableProfileView), "200"),
+        ["DatabaseInfo_Profile"] = (typeof(ProfileRunView), "200"),
         ["Auth_Me"] = (typeof(GranitDB.API.Security.SessionView), "200"),
         ["Audit_Get"] = (typeof(IReadOnlyList<AuditEntry>), "200"),
         ["ColumnInfo_SetSensitivity"] = (typeof(ColumnInfo), "200"),

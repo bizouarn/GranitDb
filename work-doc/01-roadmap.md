@@ -6,39 +6,20 @@ Priorités : **P0** bloquant · **P1** cœur de valeur · **P2** confort · **P3
 
 ## Avancement (mis à jour le 2026-11-18)
 
-Jalons **1** (SQLite sans serveur), **2** (fondations : migrations, Docker, CI), **4** (interface de consultation), **3** (API catalogue complète : routes `/api/v1`, entrées validées, vues de sortie, filtres, historique, impact, import et resynchronisation d'une base SQL Server depuis l'interface avec connexion chiffrée), **5** (édition et gouvernance : descriptions et notes modifiables, relations manuelles, étiquettes, domaines et diagrammes par domaine, colonnes sensibles, complétude, aperçu de la synchronisation), **7** (visualisation : diagramme entité-relation interactif, analyse d'impact, exports SVG/PNG/Mermaid) et **9** (exports HTML, Markdown, CSV, Excel natif et PDF imprimable ; client typé généré depuis OpenAPI, adopté par l'interface, projet `interfaces` supprimé) : terminés à 100 %, retirés de ce document (leur contenu est dans l'historique git).
+Jalons **1** (SQLite sans serveur), **2** (fondations : migrations, Docker, CI), **4** (interface de consultation), **3** (API catalogue complète : routes `/api/v1`, entrées validées, vues de sortie, filtres, historique, impact, import et resynchronisation d'une base SQL Server depuis l'interface avec connexion chiffrée), **5** (édition et gouvernance : descriptions et notes modifiables, relations manuelles, étiquettes, domaines et diagrammes par domaine, colonnes sensibles, complétude, aperçu de la synchronisation), **7** (visualisation : diagramme entité-relation interactif, analyse d'impact, exports SVG/PNG/Mermaid) **9** (exports HTML, Markdown, CSV, Excel natif et PDF imprimable ; client typé généré depuis OpenAPI, adopté par l'interface, projet `interfaces` supprimé) et **6** (sécurité : connexion GitHub et OpenID Connect générique configurable, session par cookie, rôles lecteur/éditeur/administrateur, CORS restreint, journal d'audit réservé aux administrateurs, bases publiques lisibles sans compte, secrets de sources hors fichier, clés chiffrées par DPAPI ou certificat) : terminés à 100 %, retirés de ce document (leur contenu est dans l'historique git).
 
 | Ordre | Jalon | État | Pourquoi à cette place |
 |---|---|---|---|
-| 1 | 6 — Sécurité et multi-utilisateurs (authentification via GitHub et OpenID Connect) | ✅ Terminé | authentification, rôles, CORS, journal réservé aux administrateurs, bases publiques et secrets hors fichier sont faits (authentification désactivée par défaut : `Auth:Enabled`) ; reste hors périmètre un coffre de clés distant |
-| 2 | 12 — Gestion des rôles et des droits (écran d'administration, droits par base et par domaine, jetons) | ⬜ Non commencé | prolonge le jalon 6 : les rôles sont encore déclarés en configuration et figés à la connexion |
-| 3 | 11 — Refonte UI/UX du client | 🟢 Presque terminé | l'espace de travail est en place ; reste la validation avec de vrais utilisateurs et appareils (tests, lecteur d'écran, petits écrans) |
-| 4 | 8 — Autres moteurs | ⬜ Non commencé | élargit les sources, une fois le cœur stabilisé |
-| 5 | 10 — Fonctions avancées | ⬜ Non commencé | exploratoire |
+| 1 | 12 — Gestion des rôles et des droits (écran d'administration, droits par base et par domaine, jetons) | ⬜ Non commencé | prolonge le jalon 6 : les rôles sont encore déclarés en configuration et figés à la connexion |
+| 2 | 11 — Refonte UI/UX du client | 🟢 Presque terminé | l'espace de travail est en place ; reste la validation avec de vrais utilisateurs et appareils (tests, lecteur d'écran, petits écrans) |
+| 3 | 8 — Autres moteurs | ⬜ Non commencé | élargit les sources, une fois le cœur stabilisé |
+| 4 | 10 — Fonctions avancées | ⬜ Non commencé | exploratoire |
 
-**Prochain jalon : 12 (gestion des rôles et des droits), puis 11 (validation de l'interface).** Le jalon 6 (sécurité) est terminé : l'API peut exiger une connexion GitHub ou OpenID Connect, avec rôles, CORS restreint, journal d'audit réservé aux administrateurs, bases publiques et secrets hors fichier. **Elle reste ouverte tant que `Auth:Enabled` est faux** (valeur par défaut) : ne l'exposer hors poste de dev ou réseau de confiance qu'avec l'authentification activée (voir le README). Les jalons ci-dessous sont classés dans l'ordre où les traiter ; leurs numéros sont conservés pour ne pas être confondus avec les jalons déjà terminés.
+**Prochain jalon : 12 (gestion des rôles et des droits), puis 11 (validation de l'interface).** L'API peut exiger une connexion (`Auth:Enabled`, voir le README) mais **reste ouverte tant que cette option est fausse** (valeur par défaut, pour le poste de développement) : ne l'exposer hors poste de dev ou réseau de confiance qu'avec l'authentification activée. Les jalons ci-dessous sont classés dans l'ordre où les traiter ; leurs numéros sont conservés pour ne pas être confondus avec les jalons déjà terminés.
 
 Chiffres : 611 tests sous .NET 10 hors SQL Server (les tests SQL Server nécessitent Docker), CI GitHub Actions, pile `docker compose` vérifiée en SQLite et en SQL Server. Catalogue en version 12. L'interface (espace de travail, diagramme, glisser-déposer, édition en place) est couverte par des tests bUnit et de modèle ; sa vérification dans un vrai navigateur reste manuelle.
 
 ---
-
-## Jalon 6 — Sécurité et multi-utilisateurs (P1) — terminé
-
-À planifier **avant toute exposition hors réseau de confiance** (l'upload de fichiers du jalon 1 en fait partie).
-
-- [x] **Authentification via GitHub** (connexion OAuth « Se connecter avec GitHub ») côté API et client. _L'historique des modifications et le journal d'audit inscrivent déjà l'auteur dès que l'appelant est identifié (`User.Identity.Name`) : ils se rempliront tout seuls, avec le login GitHub._ À décider et à faire :
-  - une **OAuth App GitHub** (identifiant et secret client en configuration ou coffre, jamais dans le dépôt ; adresse de retour par environnement) et le flux « code d'autorisation » côté API (`AddOAuth` avec les points d'accès GitHub, lecture de `/user` pour le login, le nom et l'avatar) ;
-  - comment le client Blazor WASM garde la session : **cookie de session émis par l'API** (recommandé : pas de jeton lisible par le script de la page ; demande CORS avec identifiants et origine précise, donc après la restriction de CORS ci-dessous) plutôt qu'un jeton stocké dans le navigateur ;
-  - qui a le droit d'entrer : liste de logins autorisés, ou appartenance à une **organisation / équipe GitHub** (portée `read:org`), vérifiée à la connexion ;
-  - déconnexion, expiration de session, et un mode « sans authentification » conservé pour le poste de développement (`Auth:Enabled` à faux), pour que le catalogue SQLite local reste utilisable sans compte ;
-  - tests : faux fournisseur GitHub (aucun appel réseau), refus sans session (401), session invalide, login visible dans l'historique.
-- [x] **Connecteur d'identité générique configurable** (en plus de GitHub) : un fournisseur **OpenID Connect** déclaré par configuration seule (`Auth:Providers:<nom>` : autorité ou adresse de découverte, identifiant et secret client, portées, nom de la revendication du login, du nom d'affichage et des groupes, libellé du bouton), pour brancher Entra ID, Keycloak, Okta, Google… sans modifier le code. Mêmes règles que GitHub (cookie de session émis par l'API, liste de comptes ou de groupes autorisés, mode sans authentification pour le poste de développement) ; plusieurs fournisseurs possibles côte à côte, la page de connexion proposant un bouton par fournisseur configuré. Tests avec un faux fournisseur (aucun appel réseau).
-- [x] Rôles : lecteur, éditeur, administrateur, **attribués d'après GitHub ou d'après les groupes du fournisseur configuré** (équipe, groupe ou liste de logins par rôle) ; le premier administrateur est déclaré en configuration.
-- [x] Autoriser l'enregistrement de sources SQL Server (`Catalog:AllowSqlServerSources`) selon un rôle (administrateur) plutôt que pour tous les appelants.
-- [x] Mise en œuvre de `IsPublic` : bases publiques lisibles sans compte GitHub.
-- [x] Restreindre CORS aux origines configurées (`Cors:AllowedOrigins`, avec cookies de session).
-- [x] Secrets de connexion hors fichier, chiffrés dans le catalogue. _Fait pour les sources SQL Server enregistrées depuis l'interface (chiffrées, jamais renvoyées par l'API, clés dans `Catalog:KeysDirectory`). Reste `Catalog:StartupSources`, dont la chaîne de connexion reste en clair dans la configuration, et le coffre de clés (Key Vault, DPAPI…) pour ne pas laisser les clés en fichiers._
-- [x] **Journal d'audit : suite** : la page `/audit` du client (filtres, pagination) et la conservation (`Audit:RetentionDays`) sont faites. Reste l'auteur réel (login GitHub) une fois l'authentification en place, et la réserver aux administrateurs.
 
 ## Jalon 12 — Gestion des rôles et des droits (P1)
 
@@ -82,7 +63,7 @@ Fait : un **espace de travail** à la Postman (explorateur à gauche, onglets, p
 - [ ] Suggestions de descriptions par IA à partir des noms et types, avec relecture humaine.
 - [ ] Glossaire métier relié aux colonnes.
 - [ ] Lignage de données entre bases.
-- [ ] Profilage léger des colonnes (cardinalité, taux de nuls), sans exposer de données brutes.
+- [x] Profilage léger des colonnes (cardinalité, taux de nuls), sans exposer de données brutes : fait (`Catalog:AllowProfiling`, comptes calculés par la source, page d'une table, API réservée aux administrateurs). Suite possible : profils dans les exports et la complétude, valeurs les plus fréquentes (à décider : ce sont des données), profilage planifié.
 
 ---
 
@@ -92,8 +73,6 @@ _La dette soldée (index, position des colonnes, schémas SQL Server, pagination
 
 | Sujet | Jalon |
 |---|---|
-| Aucune authentification, CORS ouvert à toutes les origines, upload de fichiers accessible à tous | 6 |
-| `StartupSources` stocke les chaînes de connexion SQL Server en clair dans la configuration (une source enregistrée depuis l'interface, elle, est chiffrée) | 6 |
 | Analyse d'impact limitée à la base de l'élément (une relation manuelle entre deux bases n'est pas suivie) ; le diagramme place les tables par couches sans minimiser les croisements de relations | — |
 | Index : seuls les noms de colonnes sont stockés (pas l'ordre ASC/DESC, ni les prédicats d'index partiels, ni les colonnes `INCLUDE`) | 8 |
 
@@ -102,8 +81,8 @@ _La dette soldée (index, position des colonnes, schémas SQL Server, pagination
 ## Ordre recommandé
 
 ```
-J1, J2, J3, J4, J5, J7, J9 terminés (J11 : validation utilisateurs à faire) → J6 Sécurité
-                                                        └→ J8 Autres moteurs → J10 Avancé
+J1, J2, J3, J4, J5, J6, J7, J9 terminés → J12 Rôles et droits → J11 Validation de l'UI/UX
+                                                          └→ J8 Autres moteurs → J10 Avancé
 ```
 
-Le livrable « documenter un fichier SQLite sans serveur » (jalon 1) est en place et déployable en une commande (jalon 2). Pour qu'il soit utilisable par d'autres personnes que son auteur, l'étape suivante la plus utile est **J6 (sécurité)** : GranitDb sait désormais documenter (descriptions, relations, étiquettes, domaines, colonnes sensibles) mais n'a toujours ni compte ni droits, donc personne ne devrait pouvoir l'ouvrir à d'autres. Vient ensuite **J11 (refonte de l'UI/UX)**.
+GranitDb sait documenter (descriptions, relations, étiquettes, domaines, colonnes sensibles) et peut exiger une connexion avec des rôles (jalon 6, désactivée par défaut). L'étape suivante la plus utile est **J12** : gérer ces rôles et ces droits depuis l'application plutôt que par la configuration. Vient ensuite **J11 (validation de l'interface avec de vraies personnes)**.

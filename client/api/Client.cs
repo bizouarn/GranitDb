@@ -66,6 +66,18 @@ public class Client(HttpClient http)
     /// <summary>Importe la base d'exemple livrée avec l'API.</summary>
     public Task<ImportView> ImportSampleAsync() => CallAsync(() => _api.SqliteImport.SampleAsync());
 
+    // --- Profilage des colonnes ---
+
+    /// <summary>Profil enregistré d'une table (vide tant qu'elle n'a pas été profilée) ; <c>null</c> si la table n'existe pas.</summary>
+    public Task<TableProfileView?> GetTableProfileAsync(string tableId) =>
+        OptionalAsync<TableProfileView?>(() => _api.Tables.GetProfileAsync(tableId), null);
+
+    /// <summary>Profile une table à la source ; lève <see cref="ApiException" /> avec la raison si c'est refusé ou impossible.</summary>
+    public Task<TableProfileView> ProfileTableAsync(string tableId) => CallAsync(() => _api.Tables.ProfileAsync(tableId));
+
+    /// <summary>Profile les tables d'une base (par lots) et dit combien l'ont été.</summary>
+    public Task<ProfileRunView> ProfileDatabaseAsync(string databaseId) => CallAsync(() => _api.Databases.ProfileAsync(databaseId));
+
     /// <summary>Aperçu du remplacement du fichier d'une base SQLite : rien n'est modifié.</summary>
     public Task<SyncPreview> PreviewReplaceSqliteAsync(string id, byte[] file, string fileName) =>
         CallAsync(() => _api.SqliteImport.PreviewReplaceAsync(id, new FileParameter(new MemoryStream(file), fileName, "application/octet-stream")));
