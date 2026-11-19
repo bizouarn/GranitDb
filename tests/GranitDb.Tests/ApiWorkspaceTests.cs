@@ -209,6 +209,7 @@ public sealed class ApiWorkspaceTests : IDisposable
         Assert.Contains("function zoom", html);
         Assert.Contains("HEAD = 30", html);
         Assert.Contains("ROW = 20", html);
+        Assert.Contains("function inkOn", html); // texte lisible sur la couleur d'un domaine
         Assert.Contains("Clés primaires seulement", html);
     }
 

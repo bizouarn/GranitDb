@@ -343,6 +343,16 @@ function tablePage(id){
 
 function notFound(){ return el('div', {}, [el('h1', {text: 'Introuvable'}), link('#/', 'Retour à l\'accueil')]); }
 // --- Diagrammes (ERD) ---
+// Texte lisible sur une couleur choisie par l'utilisateur : blanc ou presque noir, selon le meilleur contraste (WCAG).
+function inkOn(bg){
+  var m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(bg || '');
+  if (!m) return {name: '#ffffff', caption: '#dfe9f1'};
+  var h = m[1].length === 3 ? m[1].replace(/./g, function(c){ return c + c; }) : m[1];
+  var lin = [0, 2, 4].map(function(i){ var v = parseInt(h.substr(i, 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  var lum = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  var white = 1.05 / (lum + 0.05), dark = (lum + 0.05) / 0.0556; // contre #ffffff et #111111 (luminance 0,0056)
+  return white >= dark ? {name: '#ffffff', caption: '#e8eff5'} : {name: '#111111', caption: '#2b2b2b'};
+}
 // Mêmes mesures que le diagramme de l'application (en-tête, lignes, largeur, légende) : une table posée à la place
 // enregistrée occupe donc la même surface qu'à l'écran. Le diagramme se zoome, se déplace et ses tables se déplacent.
 var NS = 'http://www.w3.org/2000/svg', ROW = 20, HEAD = 30, CAPH = 16, MARGIN = 24;
@@ -467,8 +477,9 @@ function drawErd(nodes, edges, color, center, mode, remeasure){
     g.appendChild(sv('title', {}, t.name));
     g.appendChild(sv('rect', {'class': 'box', x: 0, y: 0, width: n.w, height: n.h, rx: 3}));
     g.appendChild(sv('rect', {'class': 'hd', x: 0, y: 0, width: n.w, height: n.head, rx: 3, style: color ? 'fill:' + color : ''}));
-    g.appendChild(sv('text', {'class': 'hdt', x: 8, y: n.cap ? 19 : 20}, t.name));
-    if (n.cap) g.appendChild(sv('text', {'class': 'cap', x: 8, y: 37}, n.cap));
+    var ink = color ? inkOn(color) : null;
+    g.appendChild(sv('text', {'class': 'hdt', x: 8, y: n.cap ? 19 : 20, style: ink ? 'fill:' + ink.name : ''}, t.name));
+    if (n.cap) g.appendChild(sv('text', {'class': 'cap', x: 8, y: 37, style: ink ? 'fill:' + ink.caption : ''}, n.cap));
     n.rows.forEach(function(c, i){
       g.appendChild(sv('text', {'class': c.pk ? 'pkc' : '', x: 8, y: n.head + i * ROW + 14}, c.name + (c.type ? ' : ' + c.type : '')));
     });
