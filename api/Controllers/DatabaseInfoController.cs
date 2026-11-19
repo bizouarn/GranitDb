@@ -3,19 +3,57 @@ using GranitDB.API.Data;
 using GranitDB.API.Models;
 using GranitDB.API.Models.Descriptions;
 using GranitDB.API.Models.Inputs;
+using GranitDB.API.Options;
+using GranitDB.API.Security;
 using GranitDB.API.Services;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace GranitDB.API.Controllers;
 
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
 [ApiController]
-public class DatabaseInfoController(ICatalogRepository repository, DatabaseImportService import)
+public class DatabaseInfoController(ICatalogRepository repository, DatabaseImportService import, IOptions<AuthOptions> auth)
     : BaseDbInfoController<DatabaseInfo, DatabaseInput>(repository)
 {
-    /// <summary>Une base se présente par sa vue : ni chemin de fichier, ni connexion enregistrée.</summary>
-    protected override object View(DatabaseInfo entity) => DatabaseView.From(entity);
+    /// <summary>Appelant sans compte (possible seulement pour les bases publiques, avec l'authentification activée).</summary>
+    private bool IsVisitor => auth.Value.Enabled && User.Identity?.IsAuthenticated != true;
+
+    private bool IsAdmin => !auth.Value.Enabled || RoleAuthorizationFilter.RoleOf(User) == Role.Admin;
+
+    /// <summary>
+    ///     Une base se présente par sa vue : ni chemin de fichier, ni connexion enregistrée. Un visiteur sans compte ne voit
+    ///     pas non plus d'où elle vient (serveur et base source).
+    /// </summary>
+    protected override object View(DatabaseInfo entity)
+    {
+        var view = DatabaseView.From(entity);
+        return IsVisitor ? view with { SourceLabel = null, CanResync = false } : view;
+    }
+
+    /// <summary>Un visiteur ne voit que les bases publiques.</summary>
+    protected override async Task<List<CatalogFilter>> ReadAllFiltersAsync(CancellationToken ct)
+    {
+        var filters = await base.ReadAllFiltersAsync(ct);
+        if (IsVisitor) filters.Add(new CatalogFilter(nameof(DatabaseInfo.IsPublic), "true", FilterMode.Bool));
+        return filters;
+    }
+
+    /// <summary>Rendre une base publique est une décision d'administrateur : pour les autres, la valeur existante est conservée.</summary>
+    [HttpPost]
+    public override Task<IActionResult> CreateT([FromBody] DatabaseInput input, CancellationToken ct)
+    {
+        if (!IsAdmin) input.IsPublic = false;
+        return base.CreateT(input, ct);
+    }
+
+    [HttpPut("{id}")]
+    public override async Task<IActionResult> UpdateT(string id, [FromBody] DatabaseInput input, CancellationToken ct)
+    {
+        if (!IsAdmin && await Repository.GetAsync<DatabaseInfo>(id, ct) is { } existing) input.IsPublic = existing.IsPublic;
+        return await base.UpdateT(id, input, ct);
+    }
 
     /// <summary>Supprime la documentation de la base (et son fichier source conservé) ; la base source n'est pas touchée.</summary>
     [HttpDelete("{id}")]

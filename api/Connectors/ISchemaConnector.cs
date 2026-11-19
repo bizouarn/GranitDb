@@ -28,6 +28,14 @@ public record SourceSchema(
     IReadOnlyList<SourceIndex>? Indexes = null)
 {
     public IReadOnlyList<SourceIndex> Indexes { get; init; } = Indexes ?? [];
+
+    /// <summary>
+    ///     Les clés étrangères groupées par relation : une clé composite (même <c>Constraint</c>) forme un seul groupe, dans
+    ///     l'ordre de la clé ; une clé à une colonne forme un groupe à elle seule. Règle commune à la synchronisation et à
+    ///     l'aperçu.
+    /// </summary>
+    public IEnumerable<IGrouping<object, SourceForeignKey>> ForeignKeyGroups() =>
+        ForeignKeys.GroupBy(fk => fk.Constraint == null ? (object)fk : (fk.Table, fk.Constraint));
 }
 
 /// <summary>Lit le schéma d'une base source, sans jamais la modifier.</summary>

@@ -10,6 +10,7 @@ namespace GranitDb.Client.Generated;
 public sealed class GranitApi(HttpClient http)
 {
     public AuditClient Audit { get; } = new(http);
+    public AuthClient Auth { get; } = new(http);
     public CapabilitiesClient Capabilities { get; } = new(http);
     public ColumnInfoClient Columns { get; } = new(http);
     public CompletenessClient Completeness { get; } = new(http);

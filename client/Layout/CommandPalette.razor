@@ -4,6 +4,7 @@
 @using GranitDb.Client.Workspace
 @inject Client Api
 @inject WorkspaceState Workspace
+@inject AuthState Auth
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -144,12 +145,15 @@
         if (term.Length >= 2)
             items.Add(new PaletteItem("Actions", $"Rechercher « {term} » dans tout le catalogue", "Entrée dans la barre de recherche",
                 () => Go($"/search?q={Uri.EscapeDataString(term)}")));
-        Action("Importer une base SQLite", "accueil", () => Go("/"));
+        if (Auth.CanEdit) Action("Importer une base SQLite", "accueil", () => Go("/"));
         Action("Aller à l'accueil", null, () => Go("/"));
-        Action("Gérer les étiquettes et les domaines", "renommer, colorer, supprimer", () => Go("/manage"));
-        Action("Ouvrir le journal d'audit", "qui a modifié quoi", () => Go("/audit"));
-        Action("Gérer les webhooks", "notifications de changement de schéma", () => Go("/webhooks"));
-        Action("Connecter un serveur SQL Server", "documenter une base du serveur", () => Go("/import/sqlserver"));
+        if (Auth.CanEdit) Action("Gérer les étiquettes et les domaines", "renommer, colorer, supprimer", () => Go("/manage"));
+        if (Auth.IsAdmin)
+        {
+            Action("Ouvrir le journal d'audit", "qui a modifié quoi", () => Go("/audit"));
+            Action("Gérer les webhooks", "notifications de changement de schéma", () => Go("/webhooks"));
+            Action("Connecter un serveur SQL Server", "documenter une base du serveur", () => Go("/import/sqlserver"));
+        }
         if (CurrentDatabaseId is { } current)
         {
             Action("Ouvrir le diagramme de cette base", null, () => Go($"/databases/{current}/diagram"));

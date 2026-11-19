@@ -22,8 +22,19 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         _ctx.Services.AddMudServices();
         _ctx.Services.AddGranitWorkspace();
         _ctx.Services.AddScoped(_ => _api.Client);
-        _ctx.Render<MudBlazor.MudPopoverProvider>();
+        _popovers = _ctx.Render<MudBlazor.MudPopoverProvider>();
         _api.Respond = Serve;
+    }
+
+    private IRenderedComponent<MudBlazor.MudPopoverProvider> _popovers = null!;
+
+    /// <summary>Ouvre le menu « Exporter » et choisit l'entrée de classe donnée.</summary>
+    private void Export(IRenderedComponent<Diagram> page, string item)
+    {
+        page.Find(".export-menu button").Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(_popovers.FindAll("." + item)));
+        _popovers.Find("." + item).Click();
+        _popovers.WaitForAssertion(() => Assert.Empty(_popovers.FindAll("." + item)));
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -444,7 +455,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         var page = Open();
         SelectDomain(page, "Ventes");
 
-        page.FindAll("button").First(b => b.TextContent.Trim() == "Mermaid").Click();
+        Export(page, "export-mermaid");
 
         var call = _ctx.JSInterop.Invocations.Single(c => c.Identifier == "granitdb.download");
         Assert.Equal("Boutique_Ventes.mmd", (string)call.Arguments[0]!);

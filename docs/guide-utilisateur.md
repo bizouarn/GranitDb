@@ -120,7 +120,7 @@ La configuration du serveur (fournisseur du catalogue, taille maximale d'import,
 
 ## 11. Pas à pas avec `shop.sqlite`
 
-1. Importez `shop.sqlite` (nom : « Boutique »).
+1. Sur la page Bases, cliquez « Essayer avec un exemple » (ou déposez `shop.sqlite` vous-même) : la base « Boutique (exemple) » est importée.
 2. Ouvrez la table `customers`, décrivez-la, marquez `email`, `phone`, `birth_date` comme sensibles.
 3. Créez les domaines « Catalogue » (`categories`, `suppliers`, `products`, `stock`, `warehouses`), « Clients » (`customers`, `addresses`) et « Ventes » (`orders`, `order_items`, `payments`, `reviews`).
 4. Ouvrez le diagramme du domaine « Ventes » ; activez les voisines pour voir les tables liées.

@@ -5,6 +5,7 @@
 @inject Client Api
 @inject CatalogCache Cache
 @inject WorkspaceState Workspace
+@inject AuthState Auth
 @inject Notifier Notifier
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -20,9 +21,15 @@
         @* Un menu libellé plutôt que des icônes seules : on sait où l'on va avant de cliquer. *@
         <MudMenu Label="Gérer" StartIcon="@Icons.Material.Filled.Tune" Size="Size.Small" Variant="Variant.Text" Dense="true" Class="manage-menu"
                  aria-label="Gérer le catalogue">
-            <MudMenuItem Icon="@Icons.Material.Filled.Sell" Href="/manage" Class="manage-link">Étiquettes et domaines</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.Webhook" Href="/webhooks" Class="webhooks-link">Webhooks</MudMenuItem>
-            <MudMenuItem Icon="@Icons.Material.Filled.History" Href="/audit" Class="audit-link">Journal d'audit</MudMenuItem>
+            @if (Auth.CanEdit)
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.Sell" Href="/manage" Class="manage-link">Étiquettes et domaines</MudMenuItem>
+            }
+            @if (Auth.IsAdmin)
+            {
+                <MudMenuItem Icon="@Icons.Material.Filled.Webhook" Href="/webhooks" Class="webhooks-link">Webhooks</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.History" Href="/audit" Class="audit-link">Journal d'audit</MudMenuItem>
+            }
         </MudMenu>
     </div>
 

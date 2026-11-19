@@ -38,6 +38,22 @@ namespace GranitDb.Client.Models
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial interface IAuthClient
+    {
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SessionView> MeAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task LogoutAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial interface ICapabilitiesClient
     {
 
@@ -105,6 +121,21 @@ namespace GranitDb.Client.Models
     {
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>Created</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<DatabaseView> CreateAsync(DatabaseInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SwaggerResponse<System.Collections.Generic.List<DatabaseView>>> GetAllAsync(int? skip = null, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<DatabaseView> UpdateAsync(string id, DatabaseInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>No Content</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task DeleteAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
@@ -113,11 +144,6 @@ namespace GranitDb.Client.Models
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<DatabaseView> GetAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <returns>OK</returns>
-        /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<DatabaseView> UpdateAsync(string id, DatabaseInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
@@ -148,16 +174,6 @@ namespace GranitDb.Client.Models
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<SyncPreview> PreviewSyncAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <returns>OK</returns>
-        /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<SwaggerResponse<System.Collections.Generic.List<DatabaseView>>> GetAllAsync(int? skip = null, int? take = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
-
-        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
-        /// <returns>Created</returns>
-        /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<DatabaseView> CreateAsync(DatabaseInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
@@ -330,6 +346,11 @@ namespace GranitDb.Client.Models
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<SyncPreview> PreviewReplaceAsync(string id, FileParameter file = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>Created</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<ImportView> SampleAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>Created</returns>
@@ -562,6 +583,18 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("ip")]
         public string? Ip { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class AuthProviderView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("displayName")]
+        public string DisplayName { get; set; } = default!;
 
     }
 
@@ -1388,6 +1421,39 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("isSensitive")]
         public bool IsSensitive { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class SessionView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("authenticated")]
+        public bool Authenticated { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("login")]
+        public string? Login { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("name")]
+        public string? Name { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("avatarUrl")]
+        public string? AvatarUrl { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("role")]
+        public string? Role { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("provider")]
+        public string? Provider { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("providers")]
+        public System.Collections.Generic.List<AuthProviderView> Providers { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("allowAnonymousRead")]
+        public bool AllowAnonymousRead { get; set; } = default!;
 
     }
 

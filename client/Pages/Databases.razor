@@ -8,12 +8,15 @@
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
+@inject AuthState Auth
 
 <PageTitle>Bases documentées</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     <MudText Typo="Typo.h4" Class="mb-4">Bases documentées</MudText>
 
+    @if (Auth.CanEdit)
+    {
     <MudPaper Class="pa-6 mb-6 dropzone" Outlined="true">
         <InputFile class="dropzone-input" OnChange="OnFileSelected" accept=".db,.sqlite,.sqlite3,.db3" disabled="@_busy" />
         <MudStack AlignItems="AlignItems.Center" Spacing="1">
@@ -29,17 +32,27 @@
         </MudStack>
     </MudPaper>
 
-    @if (_capabilities.AllowSqlServerSources)
-    {
-        <MudButton Variant="Variant.Outlined" Href="/import/sqlserver" StartIcon="@Icons.Material.Filled.Dns" Class="mb-4 connect-sqlserver">
-            Connecter un serveur SQL Server
+    <MudStack Row="true" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-4">
+        <MudButton Variant="Variant.Outlined" OnClick="TrySampleAsync" Disabled="_busy" StartIcon="@Icons.Material.Filled.AutoAwesome" Class="try-sample">
+            Essayer avec un exemple
         </MudButton>
-    }
-    else
-    {
-        <MudText Typo="Typo.caption" Class="mb-4 sqlserver-disabled" Style="color: var(--mud-palette-text-secondary)">
-            Pour documenter une base Microsoft SQL Server, activez Catalog:AllowSqlServerSources sur le serveur de l'API.
-        </MudText>
+        @if (!Auth.IsAdmin)
+        {
+            @* Les sources SQL Server sont réservées aux administrateurs. *@
+        }
+        else if (_capabilities.AllowSqlServerSources)
+        {
+            <MudButton Variant="Variant.Outlined" Href="/import/sqlserver" StartIcon="@Icons.Material.Filled.Dns" Class="connect-sqlserver">
+                Connecter un serveur SQL Server
+            </MudButton>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Class="sqlserver-disabled" Style="color: var(--mud-palette-text-secondary)">
+                Pour documenter une base Microsoft SQL Server, activez Catalog:AllowSqlServerSources sur le serveur de l'API.
+            </MudText>
+        }
+    </MudStack>
     }
 
     @if (_error != null)
@@ -59,7 +72,7 @@
     {
         <MudText Style="color: var(--mud-palette-text-secondary)">Aucune base pour le moment. Envoyez un fichier SQLite pour commencer.</MudText>
         <ol class="welcome-steps" aria-label="Pour commencer">
-            <li><strong>1. Importez</strong>Déposez un fichier SQLite : tables, colonnes, clés et relations sont lues sans serveur.</li>
+            <li><strong>1. Importez</strong>Déposez un fichier SQLite (ou essayez l'exemple) : tables, colonnes, clés et relations sont lues sans serveur.</li>
             <li><strong>2. Explorez et documentez</strong>Parcourez l'arbre à gauche, cliquez une table ou une colonne et décrivez-la sur place.</li>
             <li><strong>3. Partagez</strong>Ouvrez le diagramme d'un domaine et exportez-le en SVG, PNG ou Mermaid.</li>
         </ol>
@@ -84,9 +97,12 @@
                             <MudButton Href="@($"/databases/{db.Id}")" Color="Color.Primary">Ouvrir</MudButton>
                             <MudButton Href="@($"/databases/{db.Id}/diagram")">Diagramme</MudButton>
                         </MudCardActions>
-                        <div class="px-2 pb-2 d-flex justify-end">
-                            <DeleteDatabaseButton Database="db" Size="Size.Small" OnDeleted="LoadPageAsync" />
-                        </div>
+                        @if (Auth.CanEdit)
+                        {
+                            <div class="px-2 pb-2 d-flex justify-end">
+                                <DeleteDatabaseButton Database="db" Size="Size.Small" OnDeleted="LoadPageAsync" />
+                            </div>
+                        }
                     </MudCard>
                 </MudItem>
             }
@@ -142,14 +158,18 @@
         await LoadPageAsync();
     }
 
-    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    private Task OnFileSelected(InputFileChangeEventArgs e) =>
+        ImportAsync(() => { var stream = e.File.OpenReadStream(MaxFileSize); return Api.UploadSqliteAsync(stream, e.File.Name, null, null); });
+
+    private Task TrySampleAsync() => ImportAsync(Api.ImportSampleAsync);
+
+    private async Task ImportAsync(Func<Task<ImportView>> import)
     {
         _error = null;
         _busy = true;
         try
         {
-            await using var stream = e.File.OpenReadStream(MaxFileSize);
-            var result = await Api.UploadSqliteAsync(stream, e.File.Name, null, null);
+            var result = await import();
             Workspace.NotifyCatalogChanged(null, this);
             Notifier.Show($"Base {result.Database.Name} importée : {result.Sync.TablesAdded} table(s), {result.Sync.ColumnsAdded} colonne(s).");
             Navigation.NavigateTo($"/databases/{result.Database.Id}");

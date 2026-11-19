@@ -1,6 +1,7 @@
 using GranitDB.API.Connectors;
 using GranitDB.API.Data;
 using GranitDB.API.Options;
+using GranitDB.API.Security;
 using GranitDB.API.Services;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
@@ -16,8 +17,26 @@ builder.Services.AddSingleton<ISchemaConnector, SqliteSchemaConnector>();
 builder.Services.AddSingleton<ISchemaConnector, SqlServerSchemaConnector>();
 // Les connexions des sources sont chiffrées dans le catalogue ; les clés vivent dans un dossier à part.
 var catalogSection = builder.Configuration.GetSection(CatalogOptions.Section).Get<CatalogOptions>() ?? new CatalogOptions();
-builder.Services.AddDataProtection().SetApplicationName("GranitDb")
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("GranitDb")
     .PersistKeysToFileSystem(new DirectoryInfo(catalogSection.ResolveKeysDirectory()));
+// Les clés ne restent pas forcément en clair sur le disque : DPAPI (Windows) ou un certificat.
+if (catalogSection.KeysProtection.Equals("Dpapi", StringComparison.OrdinalIgnoreCase))
+{
+    if (!OperatingSystem.IsWindows()) throw new InvalidOperationException("Catalog:KeysProtection = Dpapi n'existe que sous Windows : utilisez Certificate.");
+    dataProtection.ProtectKeysWithDpapi();
+}
+else if (catalogSection.KeysProtection.Equals("Certificate", StringComparison.OrdinalIgnoreCase))
+{
+    if (string.IsNullOrWhiteSpace(catalogSection.KeysCertificatePath))
+        throw new InvalidOperationException("Catalog:KeysProtection = Certificate demande Catalog:KeysCertificatePath.");
+    var certificatePassword = string.IsNullOrEmpty(catalogSection.KeysCertificatePassword)
+        ? null
+        : SecretReference.Resolve(catalogSection.KeysCertificatePassword);
+    dataProtection.ProtectKeysWithCertificate(System.Security.Cryptography.X509Certificates.X509CertificateLoader
+        .LoadPkcs12FromFile(catalogSection.KeysCertificatePath, certificatePassword));
+}
+else if (!catalogSection.KeysProtection.Equals("None", StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException($"Catalog:KeysProtection inconnu : {catalogSection.KeysProtection} (None, Dpapi ou Certificate).");
 builder.Services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 builder.Services.AddSingleton<SchemaSynchronizer>();
 builder.Services.Configure<WebhookOptions>(builder.Configuration.GetSection(WebhookOptions.Section));
@@ -28,19 +47,28 @@ builder.Services.AddSingleton<WebhookDispatcher>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<WebhookDispatcher>());
 builder.Services.AddSingleton<DatabaseImportService>();
 
+// Authentification (GitHub, OpenID Connect) et rôles : inactifs tant que Auth:Enabled n'est pas vrai.
+builder.Services.AddGranitAuth(builder.Configuration);
+builder.Services.AddSingleton<PublicAccess>();
+builder.Services.Configure<CorsSettings>(builder.Configuration.GetSection(CorsSettings.Section));
+var allowedOrigins = (builder.Configuration.GetSection(CorsSettings.Section).Get<CorsSettings>() ?? new CorsSettings())
+    .AllowedOrigins.Select(o => o.Trim().TrimEnd('/')).Where(o => o.Length > 0).ToArray();
+
 var corsPolicy = "_myAllowSpecificOrigins";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy(corsPolicy,
         policy =>
         {
-            policy.SetIsOriginAllowed(_ => true) // Autorise toutes les origines
-                .AllowAnyMethod()
+            // Origines déclarées : avec les cookies de session. Aucune : toutes les origines, sans cookies (développement).
+            if (allowedOrigins.Length > 0) policy.WithOrigins(allowedOrigins).AllowCredentials();
+            else policy.SetIsOriginAllowed(_ => true);
+            policy.AllowAnyMethod()
                 .AllowAnyHeader()
                 .WithExposedHeaders("X-Total-Count");
         });
 });
-builder.Services.AddControllers();
+builder.Services.AddControllers(options => options.Filters.Add<RoleAuthorizationFilter>());
 builder.Services.AddExceptionHandler<GranitExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();
@@ -64,6 +92,10 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+var authOptions = app.Services.GetRequiredService<IOptions<AuthOptions>>().Value;
+if (authOptions.Enabled && allowedOrigins.Length == 0)
+    app.Logger.LogWarning("Auth:Enabled sans Cors:AllowedOrigins : seule l'origine de l'API peut ouvrir une session. " +
+                          "Déclarez l'adresse de l'interface dans Cors:AllowedOrigins.");
 // Création du catalogue (fichier SQLite compris) et synchronisation des sources déclarées.
 var catalogOptions = app.Services.GetRequiredService<IOptions<CatalogOptions>>().Value;
 await app.Services.GetRequiredService<ICatalogRepository>().InitializeAsync();
@@ -83,6 +115,10 @@ catch (Exception e)
 foreach (var source in catalogOptions.StartupSources)
     try
     {
+        if (source.Type.Equals("SqlServer", StringComparison.OrdinalIgnoreCase) && !SecretReference.IsReference(source.Source) &&
+            source.Source.Contains("password", StringComparison.OrdinalIgnoreCase))
+            startupLogger.LogWarning("La source {Id} garde son mot de passe en clair dans la configuration : utilisez env:NOM ou file:/chemin.",
+                source.Id);
         var result = await importer.SyncSourceAsync(source);
         startupLogger.LogInformation("Source {Id} synchronisée : {Tables} tables ajoutées, {Columns} colonnes ajoutées",
             source.Id, result.TablesAdded, result.ColumnsAdded);
@@ -111,6 +147,8 @@ app.Use(async (context, next) =>
     using (app.Logger.BeginScope(new Dictionary<string, object> { ["RequestId"] = id }))
         await next();
 });
+// L'authentification précède le journal d'audit : l'acteur de chaque écriture est le compte connecté.
+app.UseAuthentication();
 app.UseMiddleware<AuditMiddleware>();
 app.UseExceptionHandler();
 

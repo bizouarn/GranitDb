@@ -17,6 +17,7 @@ WORKDIR /src
 COPY api/GranitDB.API.csproj api/
 RUN dotnet restore api/GranitDB.API.csproj
 COPY api/ api/
+COPY shop.sqlite ./
 RUN dotnet publish api/GranitDB.API.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final

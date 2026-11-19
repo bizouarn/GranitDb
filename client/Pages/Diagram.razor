@@ -178,14 +178,14 @@
                     <MudButton Size="Size.Small" Variant="@(_legendOpen ? Variant.Filled : Variant.Outlined)" OnClick="() => _legendOpen = !_legendOpen"
                                StartIcon="@Icons.Material.Filled.HelpOutline" Class="er-legend-toggle" aria-expanded="@(_legendOpen ? "true" : "false")">Légende</MudButton>
                     <MudSpacer />
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ExportSvgAsync"
-                               StartIcon="@Icons.Material.Filled.Download">SVG</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ExportPngAsync"
-                               StartIcon="@Icons.Material.Filled.Image">PNG</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ExportMermaidAsync"
-                               StartIcon="@Icons.Material.Filled.Download">Mermaid</MudButton>
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="CopyMermaidAsync"
-                               StartIcon="@Icons.Material.Filled.ContentCopy">Copier Mermaid</MudButton>
+                    @* Un seul menu pour tous les exports du diagramme. *@
+                    <MudMenu Label="Exporter" StartIcon="@Icons.Material.Filled.Download" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                             Size="Size.Small" Variant="Variant.Outlined" Dense="true" Class="export-menu" aria-label="Exporter le diagramme">
+                        <MudMenuItem OnClick="ExportSvgAsync" Class="export-svg">SVG</MudMenuItem>
+                        <MudMenuItem OnClick="ExportPngAsync" Class="export-png">PNG</MudMenuItem>
+                        <MudMenuItem OnClick="ExportMermaidAsync" Class="export-mermaid">Mermaid (fichier .mmd)</MudMenuItem>
+                        <MudMenuItem OnClick="CopyMermaidAsync" Class="export-copy-mermaid">Copier Mermaid</MudMenuItem>
+                    </MudMenu>
                 </MudStack>
 
                 @if (_diagram.Nodes.Count == 0)

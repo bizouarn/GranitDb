@@ -98,10 +98,8 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
     [HttpPut("{id}/settings")]
     public async Task<IActionResult> Settings(string id, [FromBody] DomainSettingsInput input, CancellationToken ct)
     {
-        return await Repository.InTransactionAsync<IActionResult>(async repo =>
+        return await InDomainAsync(id, ct, async (repo, domain) =>
         {
-            var domain = await repo.GetAsync<DomainInfo>(id, ct);
-            if (domain == null) return NotFound();
             if (input.ShowNeighbors != null && input.ShowNeighbors != domain.ShowNeighbors)
             {
                 domain.ShowNeighbors = input.ShowNeighbors.Value;
@@ -124,7 +122,7 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
             }
 
             return Ok(await ViewAsync(repo, domain, ct));
-        }, ct);
+        });
     }
 
     /// <summary>
@@ -135,11 +133,10 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
     public async Task<IActionResult> AddTable(string id, string tableId, [FromQuery] string? moveFrom,
         [FromBody] PlacementInput? placement, CancellationToken ct)
     {
-        return await Repository.InTransactionAsync<IActionResult>(async repo =>
+        return await InDomainAsync(id, ct, async (repo, domain) =>
         {
-            var domain = await repo.GetAsync<DomainInfo>(id, ct);
             var table = await repo.GetAsync<TableInfo>(tableId, ct);
-            if (domain == null || table == null) return NotFound();
+            if (table == null) return NotFound();
             if (table.DatabaseId != domain.DatabaseId)
                 throw new GranitExceptions("La table n'appartient pas à la base de ce domaine.");
 
@@ -162,7 +159,7 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
                     await repo.DeleteAsync<DomainTableInfo>(old.Id, ct);
 
             return Ok(await ViewAsync(repo, domain, ct));
-        }, ct);
+        });
     }
 
     /// <summary>Retire la table du domaine (la table elle-même n'est pas touchée).</summary>
@@ -180,10 +177,8 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
     [HttpPut("{id}/layout")]
     public async Task<IActionResult> SaveLayout(string id, [FromBody] List<LayoutItem> items, CancellationToken ct)
     {
-        return await Repository.InTransactionAsync<IActionResult>(async repo =>
+        return await InDomainAsync(id, ct, async (repo, domain) =>
         {
-            var domain = await repo.GetAsync<DomainInfo>(id, ct);
-            if (domain == null) return NotFound();
             var links = (await repo.FindAsync<DomainTableInfo>(nameof(DomainTableInfo.DomainId), id, ct))
                 .ToDictionary(l => l.TableId);
             foreach (var item in items)
@@ -196,6 +191,17 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
             }
 
             return Ok(await ViewAsync(repo, domain, ct));
+        });
+    }
+
+    /// <summary>Exécute <paramref name="work" /> dans une transaction sur le domaine <paramref name="id" /> ; 404 s'il n'existe pas.</summary>
+    private Task<IActionResult> InDomainAsync(string id, CancellationToken ct,
+        Func<ICatalogRepository, DomainInfo, Task<IActionResult>> work)
+    {
+        return Repository.InTransactionAsync<IActionResult>(async repo =>
+        {
+            var domain = await repo.GetAsync<DomainInfo>(id, ct);
+            return domain == null ? NotFound() : await work(repo, domain);
         }, ct);
     }
 

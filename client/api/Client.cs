@@ -63,6 +63,9 @@ public class Client(HttpClient http)
         CallAsync(() => _api.SqliteImport.UploadAsync(new FileParameter(file, fileName, "application/octet-stream"),
             name?.Trim() ?? "", description ?? "", true));
 
+    /// <summary>Importe la base d'exemple livrée avec l'API.</summary>
+    public Task<ImportView> ImportSampleAsync() => CallAsync(() => _api.SqliteImport.SampleAsync());
+
     /// <summary>Aperçu du remplacement du fichier d'une base SQLite : rien n'est modifié.</summary>
     public Task<SyncPreview> PreviewReplaceSqliteAsync(string id, byte[] file, string fileName) =>
         CallAsync(() => _api.SqliteImport.PreviewReplaceAsync(id, new FileParameter(new MemoryStream(file), fileName, "application/octet-stream")));
@@ -169,19 +172,18 @@ public class Client(HttpClient http)
     public Task<string> ExportHtmlAsync(string id) => ExportAsync(id, "html");
 
     /// <summary>Exporte la documentation d'une base : <paramref name="format" /> = <c>html</c>, <c>markdown</c> ou <c>csv</c>.</summary>
-    public async Task<string> ExportAsync(string id, string format)
+    public async Task<string> ExportAsync(string id, string format) =>
+        await (await GetExportAsync(id, format)).Content.ReadAsStringAsync();
+
+    /// <summary>Classeur Excel (.xlsx) de la documentation d'une base, en base64 pour le téléchargement par le navigateur.</summary>
+    public async Task<string> ExportXlsxBase64Async(string id) =>
+        Convert.ToBase64String(await (await GetExportAsync(id, "xlsx")).Content.ReadAsByteArrayAsync());
+
+    private async Task<HttpResponseMessage> GetExportAsync(string id, string format)
     {
         var response = await http.GetAsync($"api/v1/DatabaseInfo/{Uri.EscapeDataString(id)}/export/{format}");
         await EnsureFileAsync(response);
-        return await response.Content.ReadAsStringAsync();
-    }
-
-    /// <summary>Classeur Excel (.xlsx) de la documentation d'une base, en base64 pour le téléchargement par le navigateur.</summary>
-    public async Task<string> ExportXlsxBase64Async(string id)
-    {
-        var response = await http.GetAsync($"api/v1/DatabaseInfo/{Uri.EscapeDataString(id)}/export/xlsx");
-        await EnsureFileAsync(response);
-        return Convert.ToBase64String(await response.Content.ReadAsByteArrayAsync());
+        return response;
     }
 
     // --- Relations manuelles ---
@@ -280,6 +282,38 @@ public class Client(HttpClient http)
     public async Task<WebhookDelivery[]> GetWebhookDeliveriesAsync(string id, int take = 20) =>
         (await CallAsync(() => _api.Webhooks.DeliveriesAsync(id, take))).ToArray();
 
+    // --- Session ---
+
+    /// <summary>Levé quand l'API répond 401 : la session a expiré (ou n'a jamais existé), l'interface doit proposer la connexion.</summary>
+    public static event Action? Unauthorized;
+
+    /// <summary>La session de l'appelant ; sans authentification (ou si l'API ne la décrit pas) : désactivée.</summary>
+    public async Task<SessionView> GetSessionAsync()
+    {
+        try
+        {
+            return await _api.Auth.MeAsync() ?? NoAuthentication;
+        }
+        catch (Exception e) when (e is GranitApiException or HttpRequestException or JsonException)
+        {
+            return NoAuthentication;
+        }
+    }
+
+    private static SessionView NoAuthentication => new() { Enabled = false, Authenticated = false, Providers = [] };
+
+    /// <summary>Ferme la session.</summary>
+    public Task LogoutAsync() => SendAsync(() => _api.Auth.LogoutAsync());
+
+    /// <summary>Adresse qui lance la connexion chez un fournisseur puis revient à <paramref name="returnUrl" /> (navigation du navigateur, pas un appel d'API).</summary>
+    public string LoginUrl(string provider, string returnUrl) =>
+        new Uri(http.BaseAddress!, $"api/v1/Auth/login/{Uri.EscapeDataString(provider)}?returnUrl={Uri.EscapeDataString(returnUrl)}").AbsoluteUri;
+
+    private static void NoteUnauthorized(GranitApiException e)
+    {
+        if (e.StatusCode == 401) Unauthorized?.Invoke();
+    }
+
     // --- Politique d'erreurs ---
 
     private static int TotalOf(IReadOnlyDictionary<string, IEnumerable<string>> headers, int fallback) =>
@@ -294,6 +328,7 @@ public class Client(HttpClient http)
         }
         catch (GranitApiException e)
         {
+            NoteUnauthorized(e);
             throw new ApiException(MessageOf(e));
         }
     }
@@ -314,6 +349,7 @@ public class Client(HttpClient http)
         }
         catch (GranitApiException e)
         {
+            NoteUnauthorized(e);
             throw new ApiException(MessageOf(e));
         }
     }
@@ -327,6 +363,7 @@ public class Client(HttpClient http)
         }
         catch (GranitApiException e)
         {
+            NoteUnauthorized(e);
             throw new HttpRequestException($"Réponse {e.StatusCode} de l'API.", e, (System.Net.HttpStatusCode)e.StatusCode);
         }
     }
@@ -343,12 +380,14 @@ public class Client(HttpClient http)
         }
         catch (Exception e) when (e is GranitApiException or JsonException)
         {
+            if (e is GranitApiException api) NoteUnauthorized(api);
             return fallback;
         }
     }
 
     private static async Task EnsureFileAsync(HttpResponseMessage response)
     {
+        if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized) Unauthorized?.Invoke();
         if (!response.IsSuccessStatusCode) throw new ApiException(MessageOf((int)response.StatusCode, await response.Content.ReadAsStringAsync()));
     }
 

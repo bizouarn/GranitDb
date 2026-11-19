@@ -16,6 +16,7 @@ public sealed class ResponseTypesFilter : IOperationFilter
 {
     private static readonly Dictionary<string, (Type Type, string Status)> Declared = new()
     {
+        ["Auth_Me"] = (typeof(GranitDB.API.Security.SessionView), "200"),
         ["Audit_Get"] = (typeof(IReadOnlyList<AuditEntry>), "200"),
         ["ColumnInfo_SetSensitivity"] = (typeof(ColumnInfo), "200"),
         ["Completeness_OfDatabase"] = (typeof(CompletenessReport), "200"),
@@ -33,6 +34,7 @@ public sealed class ResponseTypesFilter : IOperationFilter
         ["SqliteImport_Upload"] = (typeof(ImportView), "201"),
         ["SqliteImport_Replace"] = (typeof(ImportView), "200"),
         ["SqliteImport_PreviewReplace"] = (typeof(SyncPreview), "200"),
+        ["SqliteImport_Sample"] = (typeof(ImportView), "201"),
         ["SqliteImport_Local"] = (typeof(ImportView), "201"),
         ["Capabilities_Get"] = (typeof(CapabilitiesView), "200"),
         ["SqlServerImport_Test"] = (typeof(ConnectionTestResult), "200"),

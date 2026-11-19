@@ -323,7 +323,8 @@ public class DatabaseImportService(
     /// <summary>Synchronise une source (SqlServer ou Sqlite) avec un identifiant imposé, ex : au démarrage.</summary>
     public async Task<SyncResult> SyncSourceAsync(StartupSource source, CancellationToken ct = default)
     {
-        var schema = await Connector(source.Type).ReadSchemaAsync(source.Source, ct);
+        // La chaîne de connexion peut être une référence (env:NOM, file:/chemin) : le secret reste hors du fichier de configuration.
+        var schema = await Connector(source.Type).ReadSchemaAsync(SecretReference.Resolve(source.Source), ct);
         var result = await synchronizer.SyncAsync(source.Id, schema, source.Name, ct);
         NotifySchemaChange(result);
         return result;

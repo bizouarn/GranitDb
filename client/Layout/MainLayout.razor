@@ -5,12 +5,24 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject WorkspaceState Workspace
+@inject AuthState Auth
 
 <MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+@if (Auth.Session == null)
+{
+    @* La session se lit avant d'afficher quoi que ce soit : une page chargée sans compte n'aurait que des erreurs 401. *@
+    <MudProgressLinear Indeterminate="true" Class="auth-loading" aria-label="Chargement" />
+}
+else if (Auth.NeedsLogin)
+{
+    <LoginScreen />
+}
+else
+{
 <a class="skip-link" href="#main-content">Aller au contenu</a>
 
 <MudLayout>
@@ -32,6 +44,7 @@
                        Color="Color.Inherit" OnClick="ToggleThemeAsync"
                        aria-label="@(_isDarkMode ? "Passer au thème clair" : "Passer au thème sombre")"
                        title="@(_isDarkMode ? "Thème clair" : "Thème sombre")" />
+        <UserMenu />
     </MudAppBar>
 
     <MudDrawer Open="Workspace.ExplorerOpen" OpenChanged="@(open => Workspace.SetExplorerOpen(open, remember: false))" Anchor="Anchor.Start"
@@ -53,6 +66,7 @@
 </MudLayout>
 
 <CommandPalette OnToggleTheme="ToggleThemeAsync" />
+}
 <ToastHost />
 
 @code {
@@ -99,15 +113,20 @@
     private bool _workspaceRestored;
     private DotNetObjectReference<MainLayout>? _shortcuts;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Workspace.Open(Navigation.Uri);
         Navigation.LocationChanged += OnLocationChanged;
         Workspace.Changed += OnWorkspaceChanged;
+        Auth.Changed += OnAuthChanged;
+        await Auth.LoadAsync();
     }
+
+    private void OnAuthChanged() => _ = InvokeAsync(StateHasChanged);
 
     public void Dispose()
     {
+        Auth.Changed -= OnAuthChanged;
         Navigation.LocationChanged -= OnLocationChanged;
         Workspace.Changed -= OnWorkspaceChanged;
     }

@@ -70,77 +70,66 @@ public class SqliteSchemaConnector : ISchemaConnector
         }
     }
 
-    private static async Task<List<(string Name, string Type, string? Sql)>> ReadObjectsAsync(DbConnection db,
+    /// <summary>Exécute une requête (au plus un paramètre <c>$p</c>) et convertit chaque ligne.</summary>
+    private static async Task<List<T>> QueryAsync<T>(DbConnection db, string sql, string? parameter,
+        Func<DbDataReader, T> map, CancellationToken ct)
+    {
+        await using var cmd = db.CreateCommand();
+        cmd.CommandText = sql;
+        if (parameter != null)
+        {
+            var p = cmd.CreateParameter();
+            p.ParameterName = "$p";
+            p.Value = parameter;
+            cmd.Parameters.Add(p);
+        }
+
+        var rows = new List<T>();
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        while (await reader.ReadAsync(ct)) rows.Add(map(reader));
+        return rows;
+    }
+
+    private static Task<List<(string Name, string Type, string? Sql)>> ReadObjectsAsync(DbConnection db,
         CancellationToken ct)
     {
-        var result = new List<(string, string, string?)>();
-        await using var cmd = db.CreateCommand();
-        cmd.CommandText =
-            "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name";
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-            result.Add((reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetString(2)));
-        return result;
+        return QueryAsync(db,
+            "SELECT name, type, sql FROM sqlite_master WHERE type IN ('table','view') AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' ORDER BY name",
+            null, r => (r.GetString(0), r.GetString(1), r.IsDBNull(2) ? (string?)null : r.GetString(2)), ct);
     }
 
     private static async Task<List<SourceColumn>> ReadColumnsAsync(DbConnection db, string table, CancellationToken ct)
     {
-        var columns = new List<SourceColumn>();
-        await using var cmd = db.CreateCommand();
         // table_xinfo inclut les colonnes générées ; hidden = 1 désigne les colonnes cachées des tables virtuelles.
-        cmd.CommandText = "SELECT cid, name, type, \"notnull\", dflt_value, pk, hidden FROM pragma_table_xinfo($t)";
-        var p = cmd.CreateParameter();
-        p.ParameterName = "$t";
-        p.Value = table;
-        cmd.Parameters.Add(p);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            if (reader.GetInt64(6) == 1) continue;
-            var declared = reader.IsDBNull(2) ? "" : reader.GetString(2);
-            var pk = reader.GetInt64(5);
-            columns.Add(new SourceColumn(
-                reader.GetString(1),
-                string.IsNullOrWhiteSpace(declared) ? "ANY" : declared,
-                reader.GetInt64(3) == 0 && pk == 0,
-                pk > 0,
-                reader.IsDBNull(4) ? null : reader.GetString(4),
-                (int)reader.GetInt64(0)));
-        }
-
-        return columns;
+        var rows = await QueryAsync(db,
+            "SELECT cid, name, type, \"notnull\", dflt_value, pk, hidden FROM pragma_table_xinfo($p)", table, reader =>
+            {
+                var declared = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                var pk = reader.GetInt64(5);
+                return (Hidden: reader.GetInt64(6) == 1, Column: new SourceColumn(
+                    reader.GetString(1),
+                    string.IsNullOrWhiteSpace(declared) ? "ANY" : declared,
+                    reader.GetInt64(3) == 0 && pk == 0,
+                    pk > 0,
+                    reader.IsDBNull(4) ? null : reader.GetString(4),
+                    (int)reader.GetInt64(0)));
+            }, ct);
+        return rows.Where(r => !r.Hidden).Select(r => r.Column).ToList();
     }
 
     /// <summary>Index créés (<c>CREATE INDEX</c>) et contraintes UNIQUE ; l'index de la clé primaire est exclu.</summary>
     private static async Task<List<SourceIndex>> ReadIndexesAsync(DbConnection db, string table, CancellationToken ct)
     {
-        var headers = new List<(string Name, bool Unique)>();
-        await using (var cmd = db.CreateCommand())
-        {
-            cmd.CommandText = "SELECT name, \"unique\", origin FROM pragma_index_list($t) ORDER BY seq";
-            var p = cmd.CreateParameter();
-            p.ParameterName = "$t";
-            p.Value = table;
-            cmd.Parameters.Add(p);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                if (reader.GetString(2) != "pk") // 'c' = CREATE INDEX, 'u' = UNIQUE, 'pk' = clé primaire
-                    headers.Add((reader.GetString(0), reader.GetInt64(1) == 1));
-        }
+        // 'c' = CREATE INDEX, 'u' = UNIQUE, 'pk' = clé primaire
+        var headers = (await QueryAsync(db, "SELECT name, \"unique\", origin FROM pragma_index_list($p) ORDER BY seq",
+            table, r => (Name: r.GetString(0), Unique: r.GetInt64(1) == 1, Origin: r.GetString(2)), ct))
+            .Where(h => h.Origin != "pk");
 
         var result = new List<SourceIndex>();
-        foreach (var (name, unique) in headers)
+        foreach (var (name, unique, _) in headers)
         {
-            var columns = new List<string>();
-            await using var cmd = db.CreateCommand();
-            cmd.CommandText = "SELECT name FROM pragma_index_info($i) ORDER BY seqno";
-            var p = cmd.CreateParameter();
-            p.ParameterName = "$i";
-            p.Value = name;
-            cmd.Parameters.Add(p);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                columns.Add(reader.IsDBNull(0) ? "<expression>" : reader.GetString(0)); // colonne calculée
+            var columns = await QueryAsync(db, "SELECT name FROM pragma_index_info($p) ORDER BY seqno", name,
+                r => r.IsDBNull(0) ? "<expression>" : r.GetString(0), ct); // colonne calculée
             result.Add(new SourceIndex(table, name, unique, columns));
         }
 
@@ -150,19 +139,10 @@ public class SqliteSchemaConnector : ISchemaConnector
     private static async Task<List<SourceForeignKey>> ReadForeignKeysAsync(DbConnection db, string table,
         Dictionary<string, List<string>> primaryKeys, CancellationToken ct)
     {
-        var rows = new List<(long Id, long Seq, string RefTable, string From, string? To)>();
-        await using (var cmd = db.CreateCommand())
-        {
-            cmd.CommandText = "SELECT id, seq, \"table\", \"from\", \"to\" FROM pragma_foreign_key_list($t) ORDER BY id, seq";
-            var p = cmd.CreateParameter();
-            p.ParameterName = "$t";
-            p.Value = table;
-            cmd.Parameters.Add(p);
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            while (await reader.ReadAsync(ct))
-                rows.Add((reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4)));
-        }
+        var rows = await QueryAsync(db,
+            "SELECT id, seq, \"table\", \"from\", \"to\" FROM pragma_foreign_key_list($p) ORDER BY id, seq", table,
+            r => (Id: r.GetInt64(0), Seq: r.GetInt64(1), RefTable: r.GetString(2), From: r.GetString(3),
+                To: r.IsDBNull(4) ? null : r.GetString(4)), ct);
 
         var result = new List<SourceForeignKey>();
         foreach (var row in rows)

@@ -164,30 +164,19 @@
             { x => x.ConfirmText, "Supprimer le webhook" }
         };
         if (!await Dialogs.ShowFormAsync("Supprimer un webhook", parameters)) return;
-        try
+        await RunAsync(async () =>
         {
             await Api.DeleteWebhookAsync(hook.Id);
             Notifier.Show("Webhook supprimé.");
             await LoadAsync();
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
+        });
     }
 
-    private async Task TestAsync(WebhookView hook)
+    private Task TestAsync(WebhookView hook) => RunAsync(async () =>
     {
-        try
-        {
-            _testResult[hook.Id] = await Api.TestWebhookAsync(hook.Id);
-            _error = null;
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-    }
+        _testResult[hook.Id] = await Api.TestWebhookAsync(hook.Id);
+        _error = null;
+    });
 
     private async Task ToggleDeliveriesAsync(WebhookView hook)
     {
@@ -197,10 +186,19 @@
             return;
         }
 
-        try
+        await RunAsync(async () =>
         {
             _deliveries = await Api.GetWebhookDeliveriesAsync(hook.Id);
             _open = hook.Id;
+        });
+    }
+
+    /// <summary>Exécute une action ; une erreur de l'API s'affiche en haut de la page.</summary>
+    private async Task RunAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
         }
         catch (ApiException e)
         {

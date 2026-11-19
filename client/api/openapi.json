@@ -100,6 +100,39 @@
         }
       }
     },
+    "/api/v1/Auth/me": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "Auth_Me",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/Auth/logout": {
+      "post": {
+        "tags": [
+          "Auth"
+        ],
+        "operationId": "Auth_Logout",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/v1/Capabilities": {
       "get": {
         "tags": [
@@ -431,7 +464,132 @@
         }
       }
     },
+    "/api/v1/DatabaseInfo": {
+      "post": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_Create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_GetAll",
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "take",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DatabaseView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/DatabaseInfo/{id}": {
+      "put": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_Update",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseView"
+                }
+              }
+            }
+          }
+        }
+      },
       "delete": {
         "tags": [
           "DatabaseInfo"
@@ -468,53 +626,6 @@
             }
           }
         ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DatabaseView"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "DatabaseInfo"
-        ],
-        "operationId": "DatabaseInfo_Update",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DatabaseInput"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DatabaseInput"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/DatabaseInput"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "OK",
@@ -674,84 +785,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SyncPreview"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/DatabaseInfo": {
-      "get": {
-        "tags": [
-          "DatabaseInfo"
-        ],
-        "operationId": "DatabaseInfo_GetAll",
-        "parameters": [
-          {
-            "name": "skip",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "take",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/DatabaseView"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "DatabaseInfo"
-        ],
-        "operationId": "DatabaseInfo_Create",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DatabaseInput"
-              }
-            },
-            "text/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DatabaseInput"
-              }
-            },
-            "application/*+json": {
-              "schema": {
-                "$ref": "#/components/schemas/DatabaseInput"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DatabaseView"
                 }
               }
             }
@@ -1850,6 +1883,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SyncPreview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import/sqlite/sample": {
+      "post": {
+        "tags": [
+          "SqliteImport"
+        ],
+        "operationId": "SqliteImport_Sample",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportView"
                 }
               }
             }
@@ -3077,6 +3130,18 @@
         },
         "additionalProperties": false
       },
+      "AuthProviderView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "CapabilitiesView": {
         "type": "object",
         "properties": {
@@ -4120,6 +4185,47 @@
         },
         "additionalProperties": false
       },
+      "SessionView": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "authenticated": {
+            "type": "boolean"
+          },
+          "login": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          },
+          "provider": {
+            "type": "string",
+            "nullable": true
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuthProviderView"
+            }
+          },
+          "allowAnonymousRead": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "SqlServerConnectionInput": {
         "required": [
           "database",
@@ -4612,6 +4718,9 @@
   "tags": [
     {
       "name": "Audit"
+    },
+    {
+      "name": "Auth"
     },
     {
       "name": "Capabilities"

@@ -11,6 +11,7 @@
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
+@inject AuthState Auth
 @inject IDialogService Dialogs
 
 <PageTitle>@(Title)</PageTitle>
@@ -31,7 +32,7 @@
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2 db-actions">
             <MudText Typo="Typo.h4">@_database.Name</MudText>
             <MudChip T="string" Size="Size.Small">@_database.Type</MudChip>
-            @if (!string.IsNullOrWhiteSpace(_database.SourceLabel))
+            @if (!string.IsNullOrWhiteSpace(_database.SourceLabel) && Auth.IsAdmin)
             {
                 <MudText Typo="Typo.caption" Class="source-label" Style="color: var(--mud-palette-text-secondary)">@_database.SourceLabel</MudText>
             }
@@ -41,7 +42,7 @@
                 <MudButton Variant="Variant.Outlined" Href="@($"/databases/{Uri.EscapeDataString(Id)}/diagram")"
                            StartIcon="@Icons.Material.Filled.AccountTree">Diagramme</MudButton>
             }
-            @if (_database.CanResync && !Single)
+            @if (_database.CanResync && !Single && Auth.CanEdit)
             {
                 @if (!string.IsNullOrWhiteSpace(_database.SourceLabel))
                 {
@@ -51,7 +52,7 @@
                 <MudButton Variant="Variant.Outlined" OnClick="PreviewSyncAsync" Disabled="_syncing"
                            StartIcon="@Icons.Material.Filled.Sync">Resynchroniser</MudButton>
             }
-            @if (_database.Type == "Sqlite" && !Single)
+            @if (_database.Type == "Sqlite" && !Single && Auth.CanEdit)
             {
                 <label class="replace-file">
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" Disabled="_syncing" Class="replace-file-button">Remplacer le fichier</MudButton>
@@ -72,7 +73,10 @@
                     <MudMenuItem OnClick="ExportXlsxAsync" Class="export-xlsx">Excel (.xlsx : tables, colonnes, relations, index)</MudMenuItem>
                     <MudMenuItem OnClick="ExportPdfAsync" Class="export-pdf">PDF (version imprimable à enregistrer)</MudMenuItem>
                 </MudMenu>
-                <DeleteDatabaseButton Database="_database" Size="Size.Small" />
+                @if (Auth.CanEdit)
+                {
+                    <DeleteDatabaseButton Database="_database" Size="Size.Small" />
+                }
             </div>
         }
 

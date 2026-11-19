@@ -58,7 +58,7 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
 
         // Tables
         var existingTables = (await repository.FindAsync<TableInfo>(nameof(TableInfo.DatabaseId), databaseId, ct))
-            .GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.First());
+            .ToFirstDictionary(t => t.Name);
         int tablesAdded = 0, tablesRemoved = 0;
         var tableIds = new Dictionary<string, string>();
         foreach (var source in schema.Tables)
@@ -87,7 +87,7 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
 
         // Colonnes
         var existingColumns = await repository.FindAsync<ColumnInfo>(nameof(ColumnInfo.DatabaseId), databaseId, ct);
-        var columnsByKey = existingColumns.GroupBy(c => (c.TableId, c.Name)).ToDictionary(g => g.Key, g => g.First());
+        var columnsByKey = existingColumns.ToFirstDictionary(c => (c.TableId, c.Name));
         var columnIds = new Dictionary<(string Table, string Column), string>();
         var keptColumnIds = new HashSet<string>();
         int columnsAdded = 0, columnsUpdated = 0;
@@ -151,7 +151,7 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
 
         var relationsCreated = 0;
         // Une clé composite (même Constraint) donne une seule relation : sa première paire, puis les suivantes à part.
-        foreach (var group in schema.ForeignKeys.GroupBy(fk => fk.Constraint == null ? (object)fk : (fk.Table, fk.Constraint)))
+        foreach (var group in schema.ForeignKeyGroups())
         {
             var pairs = group.Select(fk => columnIds.TryGetValue((fk.RefTable, fk.RefColumn), out var first) &&
                                            columnIds.TryGetValue((fk.Table, fk.Column), out var second)
@@ -180,7 +180,7 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
 
         // Index : clé (table, nom). Ceux d'une table supprimée partent avec elle (suppression en cascade).
         var existingIndexes = (await repository.FindAsync<IndexInfo>(nameof(IndexInfo.DatabaseId), databaseId, ct))
-            .GroupBy(i => (i.TableId, i.Name)).ToDictionary(g => g.Key, g => g.First());
+            .ToFirstDictionary(i => (i.TableId, i.Name));
         var keptIndexIds = new HashSet<string>();
         int indexesAdded = 0, indexesRemoved = 0;
         foreach (var si in schema.Indexes)

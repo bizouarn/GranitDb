@@ -55,6 +55,17 @@ public sealed class GeneratedClientTests : IDisposable
     }
 
     [Fact]
+    public async Task The_bundled_sample_database_imports_in_one_call_with_its_tables_and_relations()
+    {
+        var imported = await _api.SqliteImport.SampleAsync();
+
+        Assert.Equal("Boutique (exemple)", imported.Database.Name);
+        Assert.Equal(11, imported.Sync.TablesAdded);
+        var tables = await _api.Tables.GetTablesByDatabaseIdAsync(imported.Database.Id);
+        Assert.Contains(tables, t => t.Name == "orders" && t.Relations.Count > 0);
+    }
+
+    [Fact]
     public async Task A_refused_call_raises_the_generated_exception_with_the_status_code()
     {
         var error = await Assert.ThrowsAsync<GranitApiException>(() => _api.Databases.GetAsync("n-existe-pas"));

@@ -233,8 +233,19 @@ public class ClientDiagramPageTests : IAsyncLifetime
         _ctx.Services.AddMudServices();
         _ctx.Services.AddGranitWorkspace();
         _ctx.Services.AddScoped(_ => _api.Client);
-        _ctx.Render<MudBlazor.MudPopoverProvider>();
+        _popovers = _ctx.Render<MudBlazor.MudPopoverProvider>();
         _api.Respond = Serve;
+    }
+
+    private IRenderedComponent<MudBlazor.MudPopoverProvider> _popovers = null!;
+
+    /// <summary>Ouvre le menu « Exporter » et choisit l'entrée de classe donnée.</summary>
+    private void Export(IRenderedComponent<Diagram> page, string item)
+    {
+        page.Find(".export-menu button").Click();
+        page.WaitForAssertion(() => Assert.NotEmpty(_popovers.FindAll("." + item)));
+        _popovers.Find("." + item).Click();
+        _popovers.WaitForAssertion(() => Assert.Empty(_popovers.FindAll("." + item)));
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
@@ -439,10 +450,10 @@ public class ClientDiagramPageTests : IAsyncLifetime
     {
         var page = Open();
 
-        page.FindAll("button").First(b => b.TextContent.Trim() == "SVG").Click();
-        page.FindAll("button").First(b => b.TextContent.Trim() == "Mermaid").Click();
-        page.FindAll("button").First(b => b.TextContent.Trim() == "PNG").Click();
-        page.FindAll("button").First(b => b.TextContent.Contains("Copier")).Click();
+        Export(page, "export-svg");
+        Export(page, "export-mermaid");
+        Export(page, "export-png");
+        Export(page, "export-copy-mermaid");
 
         var calls = _ctx.JSInterop.Invocations.ToList();
         var svg = calls.Single(c => c.Identifier == "granitdb.download" && (string?)c.Arguments[0] == "Boutique.svg");
@@ -460,7 +471,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
         Uncheck(page, "tags");
         page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("g.er-node").Count));
 
-        page.FindAll("button").First(b => b.TextContent.Trim() == "Mermaid").Click();
+        Export(page, "export-mermaid");
 
         var mermaid = (string)_ctx.JSInterop.Invocations.Single(c => c.Identifier == "granitdb.download").Arguments[2]!;
         Assert.DoesNotContain("tags", mermaid);

@@ -1,0 +1,40 @@
+@using GranitDb.Client.Workspace
+@inject AuthState Auth
+
+@* Écran de connexion : montré à la place de l'application tant que l'API exige une session et qu'il n'y en a pas. *@
+<main class="login-screen" aria-labelledby="login-title">
+    <MudPaper Class="login-card pa-6" Elevation="2">
+        <div class="login-brand"><img src="menhir.svg" alt="" class="brand-icon" />Granit DB</div>
+        <MudText Typo="Typo.h5" Class="mt-2 mb-1" id="login-title">Connexion</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+            Ce catalogue demande un compte. Choisissez votre fournisseur de connexion.
+        </MudText>
+
+        @if (Auth.LoginError == "refused")
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-3 login-error">
+                Connexion réussie, mais aucun rôle ne vous est attribué sur ce catalogue. Demandez l'accès à un administrateur.
+            </MudAlert>
+        }
+        else if (Auth.LoginError != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3 login-error">La connexion a échoué. Réessayez, ou prévenez un administrateur si cela se répète.</MudAlert>
+        }
+
+        @if (Auth.Providers.Count == 0)
+        {
+            <MudAlert Severity="Severity.Info">Aucun fournisseur de connexion n'est proposé par le serveur.</MudAlert>
+        }
+
+        <MudStack Spacing="2">
+            @foreach (var provider in Auth.Providers)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Href="@Auth.LoginUrl(provider.Id)"
+                           StartIcon="@(provider.Id == "github" ? Icons.Custom.Brands.GitHub : Icons.Material.Filled.Login)"
+                           Class="login-provider" data-provider="@provider.Id">
+                    Se connecter avec @provider.DisplayName
+                </MudButton>
+            }
+        </MudStack>
+    </MudPaper>
+</main>

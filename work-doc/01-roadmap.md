@@ -10,33 +10,52 @@ Jalons **1** (SQLite sans serveur), **2** (fondations : migrations, Docker, CI),
 
 | Ordre | Jalon | État | Pourquoi à cette place |
 |---|---|---|---|
-| 1 | 6 — Sécurité et multi-utilisateurs (authentification via GitHub) | ⬜ Non commencé | l'API accepte des uploads sans authentification : à faire avant toute exposition et avant d'ouvrir l'édition |
-| 2 | 11 — Refonte UI/UX du client | 🟢 Presque terminé | l'espace de travail est en place ; reste la validation avec de vrais utilisateurs et appareils (tests, lecteur d'écran, petits écrans) |
-| 3 | 8 — Autres moteurs | ⬜ Non commencé | élargit les sources, une fois le cœur stabilisé |
-| 4 | 10 — Fonctions avancées | ⬜ Non commencé | exploratoire |
+| 1 | 6 — Sécurité et multi-utilisateurs (authentification via GitHub et OpenID Connect) | ✅ Terminé | authentification, rôles, CORS, journal réservé aux administrateurs, bases publiques et secrets hors fichier sont faits (authentification désactivée par défaut : `Auth:Enabled`) ; reste hors périmètre un coffre de clés distant |
+| 2 | 12 — Gestion des rôles et des droits (écran d'administration, droits par base et par domaine, jetons) | ⬜ Non commencé | prolonge le jalon 6 : les rôles sont encore déclarés en configuration et figés à la connexion |
+| 3 | 11 — Refonte UI/UX du client | 🟢 Presque terminé | l'espace de travail est en place ; reste la validation avec de vrais utilisateurs et appareils (tests, lecteur d'écran, petits écrans) |
+| 4 | 8 — Autres moteurs | ⬜ Non commencé | élargit les sources, une fois le cœur stabilisé |
+| 5 | 10 — Fonctions avancées | ⬜ Non commencé | exploratoire |
 
-**Prochain jalon : 6 (sécurité).** Les jalons ci-dessous sont classés dans l'ordre où les traiter ; leurs numéros sont conservés pour ne pas être confondus avec les jalons 1, 2, 3, 4, 5, 7 et 9 déjà terminés. Depuis les jalons 1 et 2, l'API accepte des uploads de fichiers, expose `docker-compose` sur le réseau et n'a toujours ni authentification ni CORS restreint : elle ne doit pas être joignable hors poste de dev ou réseau de confiance.
+**Prochain jalon : 12 (gestion des rôles et des droits), puis 11 (validation de l'interface).** Le jalon 6 (sécurité) est terminé : l'API peut exiger une connexion GitHub ou OpenID Connect, avec rôles, CORS restreint, journal d'audit réservé aux administrateurs, bases publiques et secrets hors fichier. **Elle reste ouverte tant que `Auth:Enabled` est faux** (valeur par défaut) : ne l'exposer hors poste de dev ou réseau de confiance qu'avec l'authentification activée (voir le README). Les jalons ci-dessous sont classés dans l'ordre où les traiter ; leurs numéros sont conservés pour ne pas être confondus avec les jalons déjà terminés.
 
 Chiffres : 611 tests sous .NET 10 hors SQL Server (les tests SQL Server nécessitent Docker), CI GitHub Actions, pile `docker compose` vérifiée en SQLite et en SQL Server. Catalogue en version 12. L'interface (espace de travail, diagramme, glisser-déposer, édition en place) est couverte par des tests bUnit et de modèle ; sa vérification dans un vrai navigateur reste manuelle.
 
 ---
 
-## Jalon 6 — Sécurité et multi-utilisateurs (P1)
+## Jalon 6 — Sécurité et multi-utilisateurs (P1) — terminé
 
 À planifier **avant toute exposition hors réseau de confiance** (l'upload de fichiers du jalon 1 en fait partie).
 
-- [ ] **Authentification via GitHub** (connexion OAuth « Se connecter avec GitHub ») côté API et client. _L'historique des modifications et le journal d'audit inscrivent déjà l'auteur dès que l'appelant est identifié (`User.Identity.Name`) : ils se rempliront tout seuls, avec le login GitHub._ À décider et à faire :
+- [x] **Authentification via GitHub** (connexion OAuth « Se connecter avec GitHub ») côté API et client. _L'historique des modifications et le journal d'audit inscrivent déjà l'auteur dès que l'appelant est identifié (`User.Identity.Name`) : ils se rempliront tout seuls, avec le login GitHub._ À décider et à faire :
   - une **OAuth App GitHub** (identifiant et secret client en configuration ou coffre, jamais dans le dépôt ; adresse de retour par environnement) et le flux « code d'autorisation » côté API (`AddOAuth` avec les points d'accès GitHub, lecture de `/user` pour le login, le nom et l'avatar) ;
   - comment le client Blazor WASM garde la session : **cookie de session émis par l'API** (recommandé : pas de jeton lisible par le script de la page ; demande CORS avec identifiants et origine précise, donc après la restriction de CORS ci-dessous) plutôt qu'un jeton stocké dans le navigateur ;
   - qui a le droit d'entrer : liste de logins autorisés, ou appartenance à une **organisation / équipe GitHub** (portée `read:org`), vérifiée à la connexion ;
   - déconnexion, expiration de session, et un mode « sans authentification » conservé pour le poste de développement (`Auth:Enabled` à faux), pour que le catalogue SQLite local reste utilisable sans compte ;
   - tests : faux fournisseur GitHub (aucun appel réseau), refus sans session (401), session invalide, login visible dans l'historique.
-- [ ] Rôles : lecteur, éditeur, administrateur, **attribués d'après GitHub** (équipe ou liste de logins par rôle) ; le premier administrateur est déclaré en configuration.
-- [ ] Autoriser l'enregistrement de sources SQL Server (`Catalog:AllowSqlServerSources`) selon un rôle (administrateur) plutôt que pour tous les appelants.
-- [ ] Mise en œuvre de `IsPublic` : bases publiques lisibles sans compte GitHub.
-- [ ] Restreindre CORS aux origines configurées.
-- [ ] Secrets de connexion hors fichier, chiffrés dans le catalogue. _Fait pour les sources SQL Server enregistrées depuis l'interface (chiffrées, jamais renvoyées par l'API, clés dans `Catalog:KeysDirectory`). Reste `Catalog:StartupSources`, dont la chaîne de connexion reste en clair dans la configuration, et le coffre de clés (Key Vault, DPAPI…) pour ne pas laisser les clés en fichiers._
-- [ ] **Journal d'audit : suite** : la page `/audit` du client (filtres, pagination) et la conservation (`Audit:RetentionDays`) sont faites. Reste l'auteur réel (login GitHub) une fois l'authentification en place, et la réserver aux administrateurs.
+- [x] **Connecteur d'identité générique configurable** (en plus de GitHub) : un fournisseur **OpenID Connect** déclaré par configuration seule (`Auth:Providers:<nom>` : autorité ou adresse de découverte, identifiant et secret client, portées, nom de la revendication du login, du nom d'affichage et des groupes, libellé du bouton), pour brancher Entra ID, Keycloak, Okta, Google… sans modifier le code. Mêmes règles que GitHub (cookie de session émis par l'API, liste de comptes ou de groupes autorisés, mode sans authentification pour le poste de développement) ; plusieurs fournisseurs possibles côte à côte, la page de connexion proposant un bouton par fournisseur configuré. Tests avec un faux fournisseur (aucun appel réseau).
+- [x] Rôles : lecteur, éditeur, administrateur, **attribués d'après GitHub ou d'après les groupes du fournisseur configuré** (équipe, groupe ou liste de logins par rôle) ; le premier administrateur est déclaré en configuration.
+- [x] Autoriser l'enregistrement de sources SQL Server (`Catalog:AllowSqlServerSources`) selon un rôle (administrateur) plutôt que pour tous les appelants.
+- [x] Mise en œuvre de `IsPublic` : bases publiques lisibles sans compte GitHub.
+- [x] Restreindre CORS aux origines configurées (`Cors:AllowedOrigins`, avec cookies de session).
+- [x] Secrets de connexion hors fichier, chiffrés dans le catalogue. _Fait pour les sources SQL Server enregistrées depuis l'interface (chiffrées, jamais renvoyées par l'API, clés dans `Catalog:KeysDirectory`). Reste `Catalog:StartupSources`, dont la chaîne de connexion reste en clair dans la configuration, et le coffre de clés (Key Vault, DPAPI…) pour ne pas laisser les clés en fichiers._
+- [x] **Journal d'audit : suite** : la page `/audit` du client (filtres, pagination) et la conservation (`Audit:RetentionDays`) sont faites. Reste l'auteur réel (login GitHub) une fois l'authentification en place, et la réserver aux administrateurs.
+
+## Jalon 12 — Gestion des rôles et des droits (P1)
+
+Le jalon 6 donne trois rôles globaux (lecteur, éditeur, administrateur) **déclarés en configuration** et calculés à la connexion. Ce jalon les rend **gérables depuis l'application** et plus fins.
+
+- [ ] **Écran d'administration des accès** (M) : la liste des comptes qui se sont connectés (login, fournisseur, rôle, dernière connexion, rôle obtenu par liste ou par groupe), réservée aux administrateurs. Les comptes sont enregistrés à la première connexion (table `Users`, migration à ajouter).
+- [ ] **Attribuer un rôle dans l'interface** (M) : un administrateur change le rôle d'un compte sans toucher à `appsettings` ni redémarrer ; ces attributions s'ajoutent aux listes et groupes de la configuration (la configuration garde le premier administrateur, jamais retirable depuis l'interface). Même principe pour **bloquer / débloquer** un compte.
+- [ ] **Correspondance groupes → rôles éditable** (M) : gérer dans l'interface les groupes GitHub (`organisation`, `organisation/équipe`) et les groupes du fournisseur OpenID Connect qui donnent chaque rôle, avec un aperçu « qui obtiendrait quoi » avant d'enregistrer.
+- [ ] **Prise en compte immédiate d'un changement de rôle** (M) : aujourd'hui le rôle vit dans le cookie jusqu'à la prochaine connexion. Relire le rôle (et le blocage) du compte à chaque requête ou toutes les quelques minutes, pour qu'une rétrogradation ou un blocage agisse tout de suite.
+- [ ] **Droits par base** (L) : un rôle peut être limité à certaines bases (ex. éditeur de « Boutique », lecteur de « RH »), avec des **groupes de bases** ; l'explorateur et la recherche ne montrent que les bases accessibles. Les bases publiques deviennent un cas particulier (« tout le monde en lecture »).
+- [ ] **Droits par domaine** (M) : éditeur d'un domaine seulement (ex. « Ventes »), pour déléguer la documentation à ses responsables métier.
+- [ ] **Colonnes sensibles selon le rôle** (M) : masquer les descriptions ou valeurs d'exemple des colonnes marquées sensibles aux lecteurs, les montrer aux éditeurs et administrateurs.
+- [ ] **Demande d'accès** (M) : un compte sans rôle peut demander l'accès (message), les administrateurs voient les demandes en attente et acceptent ou refusent depuis l'écran d'administration.
+- [ ] **Jetons d'API / comptes de service** (M) : un jeton à portée et rôle limités, révocable, pour la CI ou un script (resynchronisation, import de documentation) sans session de navigateur ; le jeton n'est montré qu'une fois et n'est stocké que haché.
+- [ ] **Matrice des droits visible** (S) : une page « Qui peut faire quoi » dans l'interface (rôles × actions), générée depuis les attributs de l'API pour ne pas dériver du code.
+- [ ] **Audit des droits** (S) : le journal d'audit inscrit chaque changement de rôle, de blocage et de groupe (qui, pour qui, avant/après), et chaque refus 403.
+- [ ] Tests : changement de rôle appliqué sans reconnexion, blocage, droits par base et par domaine (lecture et écriture refusées hors périmètre), jeton révoqué refusé, dernier administrateur non retirable.
 
 ## Jalon 11 — Refonte de l'UI/UX du client (P1)
 

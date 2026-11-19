@@ -36,7 +36,7 @@ public static class SchemaDiffer
         CancellationToken ct = default)
     {
         var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
-        var tables = (await repository.GetAllAsync<TableInfo>(byDatabase, ct)).GroupBy(t => t.Name).ToDictionary(g => g.Key, g => g.First());
+        var tables = (await repository.GetAllAsync<TableInfo>(byDatabase, ct)).ToFirstDictionary(t => t.Name);
         var columns = await repository.GetAllAsync<ColumnInfo>(byDatabase, ct);
         var indexes = await repository.GetAllAsync<IndexInfo>(byDatabase, ct);
         var relations = await repository.GetRelationsOfDatabaseAsync(databaseId, ct);
@@ -73,7 +73,7 @@ public static class SchemaDiffer
             if (table.TableType != source.TableType)
                 changes.Add(new SyncChange("table", "changed", source.Name, null, $"{table.TableType} → {source.TableType}", false));
 
-            var existing = columnsByTable[table.Id].GroupBy(c => c.Name).ToDictionary(g => g.Key, g => g.First());
+            var existing = columnsByTable[table.Id].ToFirstDictionary(c => c.Name);
             foreach (var sc in source.Columns)
             {
                 if (!existing.TryGetValue(sc.Name, out var column))
@@ -102,7 +102,7 @@ public static class SchemaDiffer
 
         // Index
         var existingIndexes = indexes.Where(i => tableNameById.ContainsKey(i.TableId))
-            .GroupBy(i => (Table: tableNameById[i.TableId], i.Name)).ToDictionary(g => g.Key, g => g.First());
+            .ToFirstDictionary(i => (Table: tableNameById[i.TableId], i.Name));
         var sourceIndexKeys = new HashSet<(string, string)>();
         foreach (var si in schema.Indexes.OrderBy(i => i.Table, StringComparer.Ordinal).ThenBy(i => i.Name, StringComparer.Ordinal))
         {
@@ -133,9 +133,10 @@ public static class SchemaDiffer
         }
 
         // Une clé composite est une seule relation, repérée par sa première paire (comme à la synchronisation).
-        var wanted = schema.ForeignKeys
-            .Where(fk => sourceColumnSet.Contains((fk.Table, fk.Column)) && sourceColumnSet.Contains((fk.RefTable, fk.RefColumn)))
-            .GroupBy(fk => fk.Constraint == null ? (object)fk : (fk.Table, fk.Constraint)).Select(g => g.First())
+        var wanted = schema.ForeignKeyGroups()
+            .Select(g => g.FirstOrDefault(fk => sourceColumnSet.Contains((fk.Table, fk.Column)) &&
+                                                sourceColumnSet.Contains((fk.RefTable, fk.RefColumn))))
+            .Where(fk => fk != null).Select(fk => fk!)
             .Select(fk => ((fk.RefTable, fk.RefColumn), (fk.Table, fk.Column))).Distinct().ToList();
         var current = new HashSet<((string, string), (string, string))>();
         foreach (var relation in relations)

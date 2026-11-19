@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using GranitDB.API.Security;
 using GranitDB.API.Data;
 using GranitDB.API.Models;
 using GranitDB.API.Models.Descriptions;
@@ -43,6 +44,7 @@ public record WebhookView(string Id, string? DatabaseId, string Url, IReadOnlyLi
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
 [ApiController]
+[MinimumRole(Role.Admin)]
 public class WebhooksController(WebhookStore store, WebhookDispatcher dispatcher, ICatalogRepository repository,
     ISecretProtector protector, IOptions<WebhookOptions> options) : ControllerBase
 {

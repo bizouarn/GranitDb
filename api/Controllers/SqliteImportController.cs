@@ -1,4 +1,5 @@
 using GranitDB.API.Models;
+using GranitDB.API.Security;
 using GranitDB.API.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -58,8 +59,21 @@ public class SqliteImportController(DatabaseImportService import) : ControllerBa
         return preview == null ? NotFound() : Ok(preview);
     }
 
+    /// <summary>Importe la base d'exemple livrée avec l'API (une boutique en ligne) pour découvrir sans rien préparer.</summary>
+    [HttpPost("sample")]
+    public async Task<IActionResult> Sample(CancellationToken ct)
+    {
+        var path = Path.Combine(AppContext.BaseDirectory, "Samples", "shop.sqlite");
+        if (!System.IO.File.Exists(path)) return NotFound("La base d'exemple n'est pas installée sur ce serveur.");
+        await using var stream = System.IO.File.OpenRead(path);
+        var result = await import.ImportSqliteAsync(stream, "shop.sqlite", "Boutique (exemple)",
+            "Base d'exemple : une boutique en ligne (catalogue, stock, clients, commandes, paiements, avis).", true, ct);
+        return Created($"/DatabaseInfo/{result.Database.Id}", ImportView.From(result));
+    }
+
     /// <summary>Documente un fichier SQLite présent sur le serveur (désactivé par défaut).</summary>
     [HttpPost("local")]
+    [MinimumRole(Role.Admin)]
     public async Task<IActionResult> Local([FromBody] LocalSqliteRequest request, CancellationToken ct)
     {
         var result = await import.ImportLocalSqliteAsync(request.Path, request.Name, request.Description, ct);

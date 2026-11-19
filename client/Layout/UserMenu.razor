@@ -1,0 +1,56 @@
+@implements IDisposable
+@using GranitDb.Client.Workspace
+@inject AuthState Auth
+
+@* Le compte connecté, son rôle et la déconnexion ; rien sans authentification côté API. *@
+@if (Auth.Enabled && Auth.IsAuthenticated)
+{
+    @if (Auth.IsReadOnly)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="read-only-chip"
+                 title="Votre rôle ne permet pas de modifier le catalogue">Lecture seule</MudChip>
+    }
+    <MudMenu Class="user-menu" aria-label="Compte" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+        <ActivatorContent>
+            <MudAvatar Size="Size.Small" Class="user-avatar" title="@Auth.Session!.Login">
+                @if (!string.IsNullOrEmpty(Auth.Session!.AvatarUrl))
+                {
+                    <MudImage Src="@Auth.Session.AvatarUrl" Alt="" />
+                }
+                else
+                {
+                    @Initial
+                }
+            </MudAvatar>
+        </ActivatorContent>
+        <ChildContent>
+            <MudMenuItem Disabled="true" Class="user-identity">
+                <b>@(Auth.Session!.Name ?? Auth.Session.Login)</b> · @AuthState.RoleLabel(Auth.Role)
+            </MudMenuItem>
+            <MudMenuItem OnClick="Auth.LogoutAsync" Icon="@Icons.Material.Filled.Logout" Class="logout">Se déconnecter</MudMenuItem>
+        </ChildContent>
+    </MudMenu>
+}
+
+else if (Auth.IsVisitor)
+{
+    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="visitor-chip"
+             title="Seules les bases publiques sont visibles">Visiteur</MudChip>
+    <MudMenu Label="Se connecter" StartIcon="@Icons.Material.Filled.Login" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit"
+             Class="visitor-login" Dense="true">
+        @foreach (var provider in Auth.Providers)
+        {
+            <MudMenuItem Href="@Auth.LoginUrl(provider.Id)" Class="@("visitor-login-" + provider.Id)">@provider.DisplayName</MudMenuItem>
+        }
+    </MudMenu>
+}
+
+@code {
+    private string Initial => (Auth.Session?.Name ?? Auth.Session?.Login ?? "?").Trim().Substring(0, 1).ToUpperInvariant();
+
+    protected override void OnInitialized() => Auth.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Auth.Changed -= OnChanged;
+}

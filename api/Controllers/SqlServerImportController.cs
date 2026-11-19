@@ -1,4 +1,5 @@
 using GranitDB.API.Models;
+using GranitDB.API.Security;
 using GranitDB.API.Models.Inputs;
 using GranitDB.API.Options;
 using GranitDB.API.Services;
@@ -27,6 +28,7 @@ public class CapabilitiesController(IOptions<CatalogOptions> options) : Controll
 [Route("api/v1/import/sqlserver")]
 [Route("import/sqlserver")]
 [ApiController]
+[MinimumRole(Role.Admin)]
 public class SqlServerImportController(DatabaseImportService import) : ControllerBase
 {
     /// <summary>

@@ -205,6 +205,11 @@ public sealed class ApiWorkspaceTests : IDisposable
         Assert.Contains("\"hidden\":[\"" + relation + "\"]", html);
         Assert.Contains("function domainErd", html);
         Assert.Contains("function neighboursErd", html);
+        // Diagramme interactif (zoom, déplacement) et mêmes mesures que l'application pour respecter les places enregistrées.
+        Assert.Contains("function zoom", html);
+        Assert.Contains("HEAD = 30", html);
+        Assert.Contains("ROW = 20", html);
+        Assert.Contains("Clés primaires seulement", html);
     }
 
     [Fact]

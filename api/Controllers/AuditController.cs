@@ -1,4 +1,5 @@
 using GranitDB.API.Services;
+using GranitDB.API.Security;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GranitDB.API.Controllers;
@@ -7,6 +8,7 @@ namespace GranitDB.API.Controllers;
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
 [ApiController]
+[MinimumRole(Role.Admin)]
 public class AuditController(AuditLog log) : ControllerBase
 {
     /// <summary>

@@ -167,18 +167,27 @@ table.grid tr:hover td{background:#f8fafb}
 .badge.warn{background:#fde8d8;color:#8a4b12}
 .pk{font-weight:700}
 .meta{margin-top:30px;color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:8px}
-.erd-wrap{border:1px solid var(--line);border-radius:4px;overflow:auto;max-height:78vh;background:#fcfdfe}
-.erd-wrap svg{display:block}
+.erd-wrap{border:1px solid var(--line);border-radius:0 0 4px 4px;overflow:hidden;background:#fcfdfe}
+.erd{display:block;touch-action:none;cursor:grab;user-select:none}.erd:active{cursor:grabbing}
+.erd .node{cursor:pointer}
+.erd-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px 8px;border:1px solid var(--line);border-bottom:0;border-radius:4px 4px 0 0;background:#f4f7f9}
+.erd-tools button{font:inherit;min-width:32px;padding:2px 10px;border:1px solid #b9c7d2;border-radius:3px;background:#fff;color:var(--primary900);cursor:pointer}
+.erd-tools button:hover{background:var(--primary200)}
+.erd-tools select{font:inherit;padding:2px 6px;border:1px solid #b9c7d2;border-radius:3px;background:#fff}
+.erd-hint{color:var(--muted);font-size:12px;margin-left:6px}
 .erd text{font-size:12px;fill:#222}
-.erd .hd{fill:var(--primary800)}.erd .hdt{fill:#fff;font-weight:700}
+.erd .hd{fill:var(--primary800)}.erd .hdt{fill:#fff;font-weight:700}.erd .cap{fill:#dfe9f1;font-size:11px}
 .erd .box{fill:#fff;stroke:#8fa6b8}.erd .pkc{font-weight:700}
 .erd .edge{fill:none;stroke:#757575;stroke-width:1.2}
 .erd .card{font-size:10px;fill:#555}
-.erd a:hover .box{stroke:var(--primary700);stroke-width:2}
+.erd .hl .edge{stroke:var(--primary700);stroke-width:2.4}.erd .hl .card{fill:var(--primary900);font-weight:700}
+.erd .node:hover .box{stroke:var(--primary700);stroke-width:2}
 .erd .center .box{stroke:var(--primary800);stroke-width:2}
 .menu-btn{display:none}
 @media(max-width:800px){.layout{flex-direction:column;height:auto}.side{width:100%;max-height:50vh}.content{padding:14px}}
 @media print{.side,.no-print{display:none}.content{overflow:visible}.print-sheet{break-before:page}.print-sheet:first-of-type{break-before:auto}}
+@media print{.erd-wrap{height:auto!important}.erd{height:auto}}
+.print-view .erd-wrap{height:auto!important}.print-view .erd{height:auto}.print-view .erd-tools{display:none}
 .print-view .side{display:none}.print-view .layout{display:block;height:auto}.print-view .content{overflow:visible;height:auto}
 .print-bar{position:sticky;top:0;background:#fff;border-bottom:1px solid #ccc;padding:10px 0;margin-bottom:12px;display:flex;gap:12px;align-items:center}
 .print-bar button{font:inherit;padding:6px 14px;cursor:pointer}
@@ -333,17 +342,27 @@ function tablePage(id){
 }
 
 function notFound(){ return el('div', {}, [el('h1', {text: 'Introuvable'}), link('#/', 'Retour à l\'accueil')]); }
-
 // --- Diagrammes (ERD) ---
-var NS = 'http://www.w3.org/2000/svg', ROW = 18, HEAD = 26;
+// Mêmes mesures que le diagramme de l'application (en-tête, lignes, largeur, légende) : une table posée à la place
+// enregistrée occupe donc la même surface qu'à l'écran. Le diagramme se zoome, se déplace et ses tables se déplacent.
+var NS = 'http://www.w3.org/2000/svg', ROW = 20, HEAD = 30, CAPH = 16, MARGIN = 24;
 function sv(tag, attrs, text){
   var e = document.createElementNS(NS, tag);
   for (var k in (attrs || {})) e.setAttribute(k, attrs[k]);
   if (text != null) e.textContent = text;
   return e;
 }
-// Mesure les tables d'un diagramme : colonnes montrées (celles des relations tracées, plus la clé de la table centrale), largeur, hauteur.
-function measure(nodes, edges, center){
+// Première ligne non vide de la description, tronquée pour tenir sous le nom (omise si elle répète le nom).
+function captionOf(t){
+  var line = (t.description || '').split('\n').map(function(s){ return s.trim(); }).filter(Boolean)[0];
+  if (!line) return null;
+  if (line.length > 34) line = line.slice(0, 33) + '…';
+  return line.toLowerCase() === t.name.toLowerCase() ? null : line;
+}
+// Mesure les tables. Colonnes montrées selon le mode (comme l'éditeur) : 'all' toutes, 'related' celles des relations
+// tracées (plus la clé de la table centrale ; à défaut les clés puis les premières colonnes), 'keys' les clés primaires
+// seulement. Puis légende, largeur, hauteur.
+function measure(nodes, edges, center, mode, caption){
   nodes.forEach(function(n){
     var t = byId[n.id], used = {};
     edges.forEach(function(e){
@@ -352,86 +371,207 @@ function measure(nodes, edges, center){
         if (e.referencingTable === n.id) used[p[1]] = 1;
       });
     });
-    n.rows = t.columns.filter(function(c){ return used[c.name] || (c.pk && n.id === center); });
-    var longest = Math.max(t.name.length, Math.max.apply(null, [0].concat(n.rows.map(function(c){ return c.name.length + (c.type || '').length + 3; }))));
-    n.w = Math.max(150, Math.ceil(longest * 7) + 24);
-    n.h = HEAD + Math.max(1, n.rows.length) * ROW + 6;
+    if (mode === 'all') n.rows = t.columns;
+    else if (mode === 'keys') n.rows = t.columns.filter(function(c){ return c.pk; });
+    else {
+      n.rows = t.columns.filter(function(c){ return used[c.name] || (c.pk && n.id === center); });
+      if (!n.rows.length) n.rows = t.columns.filter(function(c){ return c.pk; }).concat(t.columns.filter(function(c){ return !c.pk; })).slice(0, 4);
+    }
+    n.cap = caption ? captionOf(t) : null;
+    n.head = n.cap ? HEAD + CAPH : HEAD;
+    var widest = Math.max(t.name.length * 8.5 + 28, n.rows.length ? Math.max.apply(null, n.rows.map(function(c){ return (c.name.length + (c.type || '').length) * 7 + 64; })) : 0);
+    n.w = Math.min(380, Math.max(210, Math.ceil(widest)));
+    n.h = n.head + Math.max(1, n.rows.length) * ROW + 6;
   });
 }
-// nodes : [{id, x, y}] déjà mesurés ; les tables sans place passent en grille sous les autres.
-function drawErd(nodes, edges, color, center){
-  var by = {}; nodes.forEach(function(n){ by[n.id] = n; });
-  var placed = nodes.filter(function(n){ return n.x != null && n.y != null; });
-  var bottom = placed.length ? Math.max.apply(null, placed.map(function(n){ return n.y + n.h; })) + 40 : 0;
-  var loose = nodes.filter(function(n){ return n.x == null || n.y == null; });
-  var cols = Math.max(1, Math.ceil(Math.sqrt(loose.length))), x = 0, y = bottom, rowH = 0;
-  loose.forEach(function(n, i){
-    if (i && i % cols === 0) { x = 0; y += rowH + 40; rowH = 0; }
-    n.x = x; n.y = y; x += n.w + 60; rowH = Math.max(rowH, n.h);
-  });
-  var minX = Math.min.apply(null, nodes.map(function(n){ return n.x; })) - 30, minY = Math.min.apply(null, nodes.map(function(n){ return n.y; })) - 30;
-  var maxX = Math.max.apply(null, nodes.map(function(n){ return n.x + n.w; })) + 30, maxY = Math.max.apply(null, nodes.map(function(n){ return n.y + n.h; })) + 30;
-  var svg = sv('svg', {class: 'erd', viewBox: minX + ' ' + minY + ' ' + (maxX - minX) + ' ' + (maxY - minY), width: maxX - minX, height: maxY - minY});
-  function rowY(n, name){
-    for (var i = 0; i < n.rows.length; i++) if (n.rows[i].name === name) return n.y + HEAD + i * ROW + ROW / 2;
-    return n.y + HEAD / 2;
-  }
-  var seen = {};
-  edges.forEach(function(e){
-    var a = by[e.referencingTable], b = by[e.referencedTable];
-    if (!a || !b || a === b) return;
-    var key = e.id || (e.referencingTable + '>' + e.referencingColumn + '>' + e.referencedTable + '>' + e.referencedColumn);
-    if (seen[key]) return;
-    seen[key] = 1;
-    // Une seule ligne par relation : une relation multi-colonnes part de toutes ses colonnes (un trait court par
-    // colonne, réunis par une barre) et arrive de même.
-    var ps = pairsOf(e), yas = ps.map(function(p){ return rowY(a, p[1]); }), ybs = ps.map(function(p){ return rowY(b, p[0]); });
-    var multi = ps.length > 1, sa, sb, ex = multi ? 10 : 0;
-    function avg(v){ return v.reduce(function(s, x){ return s + x; }, 0) / v.length; }
-    var ya = avg(yas), yb = avg(ybs), x1, x2, mid, d, la, lb;
-    if (a.x + a.w + 20 <= b.x) { sa = 1; sb = -1; x1 = a.x + a.w; x2 = b.x; }
-    else if (b.x + b.w + 20 <= a.x) { sa = -1; sb = 1; x1 = a.x; x2 = b.x + b.w; }
-    else { sa = 1; sb = 1; x1 = a.x + a.w; x2 = b.x + b.w; }
-    var bx1 = x1 + sa * ex, bx2 = x2 + sb * ex;
-    mid = sa === sb ? Math.max(bx1, bx2) + 24 : (bx1 + bx2) / 2;
-    d = 'M' + bx1 + ' ' + ya + 'H' + mid + 'V' + yb + 'H' + bx2;
-    la = sa > 0 ? bx1 + 4 : bx1 - 9;
-    lb = sb > 0 ? bx2 + 4 : bx2 - 9;
-    if (multi) {
-      yas.forEach(function(y){ d += 'M' + x1 + ' ' + y + 'H' + bx1; });
-      ybs.forEach(function(y){ d += 'M' + x2 + ' ' + y + 'H' + bx2; });
-      d += 'M' + bx1 + ' ' + Math.min.apply(null, yas) + 'V' + Math.max.apply(null, yas);
-      d += 'M' + bx2 + ' ' + Math.min.apply(null, ybs) + 'V' + Math.max.apply(null, ybs);
-    }
-    svg.appendChild(sv('path', {'class': 'edge', d: d}));
-    svg.appendChild(sv('text', {'class': 'card', x: la, y: ya - 3}, 'N'));
-    svg.appendChild(sv('text', {'class': 'card', x: lb, y: yb - 3}, '1'));
-  });
-  nodes.forEach(function(n){
-    var t = byId[n.id], g = sv('g', {'class': n.id === center ? 'center' : ''});
-    var a = sv('a', {href: '#/table/' + n.id});
-    a.appendChild(sv('title', {}, t.name));
-    a.appendChild(sv('rect', {'class': 'box', x: n.x, y: n.y, width: n.w, height: n.h, rx: 3}));
-    a.appendChild(sv('rect', {'class': 'hd', x: n.x, y: n.y, width: n.w, height: HEAD, rx: 3, style: color ? 'fill:' + color : ''}));
-    a.appendChild(sv('text', {'class': 'hdt', x: n.x + 8, y: n.y + 17}, t.name));
-    n.rows.forEach(function(c, i){
-      a.appendChild(sv('text', {'class': c.pk ? 'pkc' : '', x: n.x + 8, y: n.y + HEAD + i * ROW + 13}, c.name + (c.type ? ' : ' + c.type : '')));
+// Placement automatique de l'application : une table référencée à gauche de celles qui la référencent, les tables
+// sans relation en grille dessous.
+function autoLayout(nodes, edges){
+  var by = {}, linked = {}, layer = {};
+  nodes.forEach(function(n){ by[n.id] = n; layer[n.id] = 0; });
+  var real = edges.filter(function(e){ return by[e.referencingTable] && by[e.referencedTable] && e.referencingTable !== e.referencedTable; });
+  real.forEach(function(e){ linked[e.referencingTable] = 1; linked[e.referencedTable] = 1; });
+  for (var pass = 0; pass < nodes.length; pass++) {
+    var changed = false;
+    real.forEach(function(e){
+      var wanted = Math.min(layer[e.referencedTable] + 1, nodes.length);
+      if (layer[e.referencingTable] < wanted) { layer[e.referencingTable] = wanted; changed = true; }
     });
-    g.appendChild(a);
-    svg.appendChild(g);
+    if (!changed) break;
+  }
+  var x = MARGIN, bottom = MARGIN, layers = {};
+  nodes.filter(function(n){ return linked[n.id]; }).forEach(function(n){ (layers[layer[n.id]] = layers[layer[n.id]] || []).push(n); });
+  Object.keys(layers).map(Number).sort(function(a, b){ return a - b; }).forEach(function(k){
+    var y = MARGIN;
+    layers[k].forEach(function(n){ n.x = x; n.y = y; y += n.h + 36; });
+    x += Math.max.apply(null, layers[k].map(function(n){ return n.w; })) + 90;
+    bottom = Math.max(bottom, y);
   });
+  var loose = nodes.filter(function(n){ return !linked[n.id]; });
+  var perRow = Math.max(1, Math.ceil(Math.sqrt(loose.length))), cx = MARGIN, cy = bottom, rowH = 0;
+  loose.forEach(function(n, i){
+    if (i && i % perRow === 0) { cx = MARGIN; cy += rowH + 36; rowH = 0; }
+    n.x = cx; n.y = cy; cx += n.w + 45; rowH = Math.max(rowH, n.h);
+  });
+}
+// nodes : [{id, x, y, rows, w, h, head}] mesurés et placés.
+// remeasure(mode) remesure les tables (places conservées) et renvoie les nœuds : le sélecteur de colonnes redessine le diagramme.
+function drawErd(nodes, edges, color, center, mode, remeasure){
+  var by = {}; nodes.forEach(function(n){ by[n.id] = n; });
+  var svg = sv('svg', {'class': 'erd', width: '100%', height: '100%'});
+  var gEdges = sv('g'), gNodes = sv('g'), hover = null;
+  svg.appendChild(gEdges); svg.appendChild(gNodes);
+  function rowY(n, name){
+    for (var i = 0; i < n.rows.length; i++) if (n.rows[i].name === name) return n.y + n.head + i * ROW + ROW / 2;
+    return n.y + n.head / 2;
+  }
+  function renderEdges(){
+    while (gEdges.firstChild) gEdges.removeChild(gEdges.firstChild);
+    var seen = {};
+    edges.forEach(function(e){
+      var a = by[e.referencingTable], b = by[e.referencedTable];
+      if (!a || !b || a === b) return;
+      var key = e.id || (e.referencingTable + '>' + e.referencingColumn + '>' + e.referencedTable + '>' + e.referencedColumn);
+      if (seen[key]) return;
+      seen[key] = 1;
+      // Une seule ligne par relation : une relation multi-colonnes part de toutes ses colonnes (un trait court par
+      // colonne, réunis par une barre) et arrive de même.
+      var ps = pairsOf(e), yas = ps.map(function(p){ return rowY(a, p[1]); }), ybs = ps.map(function(p){ return rowY(b, p[0]); });
+      var multi = ps.length > 1, sa, sb, ex = multi ? 10 : 0;
+      function avg(v){ return v.reduce(function(s, x){ return s + x; }, 0) / v.length; }
+      var ya = avg(yas), yb = avg(ybs), x1, x2, mid, d, la, lb;
+      if (a.x + a.w + 20 <= b.x) { sa = 1; sb = -1; x1 = a.x + a.w; x2 = b.x; }
+      else if (b.x + b.w + 20 <= a.x) { sa = -1; sb = 1; x1 = a.x; x2 = b.x + b.w; }
+      else { sa = 1; sb = 1; x1 = a.x + a.w; x2 = b.x + b.w; }
+      var bx1 = x1 + sa * ex, bx2 = x2 + sb * ex;
+      mid = sa === sb ? Math.max(bx1, bx2) + 24 : (bx1 + bx2) / 2;
+      d = 'M' + bx1 + ' ' + ya + 'H' + mid + 'V' + yb + 'H' + bx2;
+      la = sa > 0 ? bx1 + 4 : bx1 - 9;
+      lb = sb > 0 ? bx2 + 4 : bx2 - 9;
+      if (multi) {
+        yas.forEach(function(y){ d += 'M' + x1 + ' ' + y + 'H' + bx1; });
+        ybs.forEach(function(y){ d += 'M' + x2 + ' ' + y + 'H' + bx2; });
+        d += 'M' + bx1 + ' ' + Math.min.apply(null, yas) + 'V' + Math.max.apply(null, yas);
+        d += 'M' + bx2 + ' ' + Math.min.apply(null, ybs) + 'V' + Math.max.apply(null, ybs);
+      }
+      var g = sv('g', {'class': 'edgeg' + (hover && (hover === a.id || hover === b.id) ? ' hl' : '')});
+      g.appendChild(sv('path', {'class': 'edge', d: d}));
+      g.appendChild(sv('text', {'class': 'card', x: la, y: ya - 3}, 'N'));
+      g.appendChild(sv('text', {'class': 'card', x: lb, y: yb - 3}, '1'));
+      gEdges.appendChild(g);
+    });
+  }
+  var gOf = {};
+  nodes.forEach(function(n){
+    var t = byId[n.id], g = sv('g', {'class': 'node' + (n.id === center ? ' center' : ''), 'data-id': n.id});
+    g.appendChild(sv('title', {}, t.name));
+    g.appendChild(sv('rect', {'class': 'box', x: 0, y: 0, width: n.w, height: n.h, rx: 3}));
+    g.appendChild(sv('rect', {'class': 'hd', x: 0, y: 0, width: n.w, height: n.head, rx: 3, style: color ? 'fill:' + color : ''}));
+    g.appendChild(sv('text', {'class': 'hdt', x: 8, y: n.cap ? 19 : 20}, t.name));
+    if (n.cap) g.appendChild(sv('text', {'class': 'cap', x: 8, y: 37}, n.cap));
+    n.rows.forEach(function(c, i){
+      g.appendChild(sv('text', {'class': c.pk ? 'pkc' : '', x: 8, y: n.head + i * ROW + 14}, c.name + (c.type ? ' : ' + c.type : '')));
+    });
+    gOf[n.id] = g;
+    gNodes.appendChild(g);
+  });
+  function place(){ nodes.forEach(function(n){ gOf[n.id].setAttribute('transform', 'translate(' + n.x + ' ' + n.y + ')'); }); renderEdges(); }
+  place();
+
+  // Cadre : la boîte qui contient les tables, marge comprise.
+  function bounds(){
+    var x0 = Math.min.apply(null, nodes.map(function(n){ return n.x; })) - 30, y0 = Math.min.apply(null, nodes.map(function(n){ return n.y; })) - 30;
+    var x1 = Math.max.apply(null, nodes.map(function(n){ return n.x + n.w; })) + 30, y1 = Math.max.apply(null, nodes.map(function(n){ return n.y + n.h; })) + 30;
+    return {x: x0, y: y0, w: x1 - x0, h: y1 - y0};
+  }
+  var view = bounds();
+  function setView(){ svg.setAttribute('viewBox', view.x + ' ' + view.y + ' ' + view.w + ' ' + view.h); }
+  function fit(){ view = bounds(); setView(); }
+  setView();
+  function toSvg(ev){
+    var p = svg.createSVGPoint(); p.x = ev.clientX; p.y = ev.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  function zoom(f, at){
+    var p = at || {x: view.x + view.w / 2, y: view.y + view.h / 2};
+    var w = Math.min(Math.max(view.w / f, 60), 200000), k = w / view.w;
+    view = {x: p.x - (p.x - view.x) * k, y: p.y - (p.y - view.y) * k, w: w, h: view.h * k};
+    setView();
+  }
+  svg.addEventListener('wheel', function(ev){
+    ev.preventDefault();
+    zoom(Math.pow(1.0015, -ev.deltaY), toSvg(ev));
+  }, {passive: false});
+  var drag = null;
+  svg.addEventListener('pointerdown', function(ev){
+    if (ev.button !== 0) return;
+    var g = ev.target.closest ? ev.target.closest('.node') : null, n = g ? by[g.getAttribute('data-id')] : null;
+    drag = {node: n, sx: ev.clientX, sy: ev.clientY, last: toSvg(ev), moved: false};
+    svg.setPointerCapture(ev.pointerId);
+  });
+  svg.addEventListener('pointermove', function(ev){
+    if (!drag) {
+      var g = ev.target.closest ? ev.target.closest('.node') : null, id = g ? g.getAttribute('data-id') : null;
+      if (id !== hover) { hover = id; renderEdges(); }
+      return;
+    }
+    if (!drag.moved && Math.abs(ev.clientX - drag.sx) + Math.abs(ev.clientY - drag.sy) < 4) return;
+    drag.moved = true;
+    var p = toSvg(ev), dx = p.x - drag.last.x, dy = p.y - drag.last.y;
+    if (drag.node) {
+      drag.node.x += dx; drag.node.y += dy;
+      gOf[drag.node.id].setAttribute('transform', 'translate(' + drag.node.x + ' ' + drag.node.y + ')');
+      renderEdges();
+      drag.last = p;
+    } else {
+      view.x -= dx; view.y -= dy; setView();
+      drag.last = toSvg(ev);
+    }
+  });
+  function end(ev){
+    if (!drag) return;
+    var d = drag; drag = null;
+    if (!d.moved && d.node) location.hash = '#/table/' + d.node.id;
+  }
+  svg.addEventListener('pointerup', end);
+  svg.addEventListener('pointercancel', function(){ drag = null; });
+  svg.addEventListener('pointerleave', function(){ if (!drag && hover) { hover = null; renderEdges(); } });
+
+  var tools = el('div', {'class': 'erd-tools no-print'});
+  [['+', 'Zoom avant', function(){ zoom(1.25); }], ['−', 'Zoom arrière', function(){ zoom(0.8); }], ['Ajuster', 'Tout afficher', fit]].forEach(function(b){
+    var btn = el('button', {type: 'button', title: b[1], 'aria-label': b[1], text: b[0]});
+    btn.addEventListener('click', b[2]);
+    tools.appendChild(btn);
+  });
+  tools.appendChild(el('span', {'class': 'erd-hint', text: 'Molette : zoom · glisser le fond : déplacer · glisser une table : la déplacer · clic : ouvrir'}));
+  var pick = el('select', {'aria-label': 'Colonnes affichées', title: 'Colonnes affichées'});
+  [['all', 'Toutes les colonnes'], ['related', 'Colonnes des relations'], ['keys', 'Clés primaires seulement']].forEach(function(o){
+    var opt = el('option', {value: o[0], text: o[1]}); if (o[0] === mode) opt.selected = true; pick.appendChild(opt);
+  });
+  pick.addEventListener('change', function(){
+    var fresh = drawErd(remeasure(pick.value), edges, color, center, pick.value, remeasure);
+    box.parentNode.replaceChild(fresh, box);
+  });
+  tools.appendChild(pick);
   var wrap = el('div', {'class': 'erd-wrap'});
+  wrap.style.height = Math.round(Math.min(Math.max(view.h + 4, 260), Math.max(320, window.innerHeight * 0.72))) + 'px';
   wrap.appendChild(svg);
-  return wrap;
+  var box = el('div', {'class': 'erd-box'});
+  box.appendChild(tools);
+  box.appendChild(wrap);
+  return box;
 }
 function domainErd(d){
   var members = {}, hidden = {};
   d.tables.forEach(function(id){ if (byId[id]) members[id] = 1; });
   (d.hidden || []).forEach(function(id){ hidden[id] = 1; });
   var edges = rels.filter(function(r){ return members[r.referencedTable] && members[r.referencingTable] && !hidden[r.id]; });
-  var nodes = Object.keys(members).map(function(id){ var p = d.layout && d.layout[id]; return {id: id, x: p ? p[0] : null, y: p ? p[1] : null}; });
-  measure(nodes, edges, null);
-  return drawErd(nodes, edges, d.color || null, null);
+  var nodes = Object.keys(members).map(function(id){ return {id: id}; });
+  measure(nodes, edges, null, 'related', true);
+  autoLayout(nodes, edges);
+  // Les tables déplacées dans l'application reprennent exactement la place enregistrée.
+  nodes.forEach(function(n){ var p = d.layout && d.layout[n.id]; if (p) { n.x = p[0]; n.y = p[1]; } });
+  return drawErd(nodes, edges, d.color || null, null, 'related', function(mode){ measure(nodes, edges, null, mode, true); return nodes; });
 }
 // La table, ses parents (qu'elle référence) à gauche et ses enfants (qui la référencent) à droite.
 function neighboursErd(t){
@@ -446,15 +586,18 @@ function neighboursErd(t){
   all.forEach(function(id){ keep[id] = 1; });
   edges = edges.filter(function(r){ return keep[r.referencedTable] && keep[r.referencingTable]; });
   var nodes = all.map(function(id){ return {id: id}; }), n = {};
-  measure(nodes, edges, t.id);
+  measure(nodes, edges, t.id, 'related', false);
   nodes.forEach(function(x){ n[x.id] = x; });
   function stack(ids, x){ var y = 0; ids.forEach(function(id){ n[id].x = x; n[id].y = y; y += n[id].h + 24; }); return y; }
-  var leftW = Math.max.apply(null, [0].concat(pIds.map(function(id){ return n[id].w; })));
-  var cx = pIds.length ? leftW + 90 : 0, rx = cx + n[t.id].w + 90;
-  var hp = stack(pIds, 0), hc = stack(cIds, rx);
-  n[t.id].x = cx;
-  n[t.id].y = Math.max(0, Math.max(hp, hc, n[t.id].h) / 2 - n[t.id].h / 2);
-  return drawErd(nodes, edges, null, t.id);
+  function arrange(){
+    var leftW = Math.max.apply(null, [0].concat(pIds.map(function(id){ return n[id].w; })));
+    var cx = pIds.length ? leftW + 90 : 0, rx = cx + n[t.id].w + 90;
+    var hp = stack(pIds, 0), hc = stack(cIds, rx);
+    n[t.id].x = cx;
+    n[t.id].y = Math.max(0, Math.max(hp, hc, n[t.id].h) / 2 - n[t.id].h / 2);
+  }
+  arrange();
+  return drawErd(nodes, edges, null, t.id, 'related', function(mode){ measure(nodes, edges, t.id, mode, false); arrange(); return nodes; });
 }
 
 // --- Arbre ---

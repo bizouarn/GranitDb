@@ -17,6 +17,15 @@ services:
       Catalog__ConnectionString: ${CATALOG_CONNECTION_STRING:-}
       # Autorise l'API à se connecter à un serveur SQL Server choisi depuis l'interface (voir le README : à n'ouvrir qu'à des personnes de confiance).
       Catalog__AllowSqlServerSources: ${ALLOW_SQLSERVER_SOURCES:-true}
+      # Authentification (voir « Authentification et rôles » du README) : désactivée par défaut. Pour l'activer, AUTH_ENABLED=true,
+      # une OAuth App GitHub (adresse de retour http://localhost:5105/auth/callback/github) et le login du premier administrateur.
+      Auth__Enabled: ${AUTH_ENABLED:-false}
+      Auth__GitHub__ClientId: ${GITHUB_CLIENT_ID:-}
+      Auth__GitHub__ClientSecret: ${GITHUB_CLIENT_SECRET:-}
+      Auth__Roles__Admins__0: ${AUTH_FIRST_ADMIN:-}
+      # Origine de l'interface, autorisée à appeler l'API avec les cookies de session.
+      Cors__AllowedOrigins__0: ${CORS_ORIGIN:-http://localhost:8081}
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
     # Permet d'atteindre un SQL Server du poste hôte avec « host.docker.internal » (déjà vrai sous Docker Desktop, utile sous Linux).
     extra_hosts:
       - "host.docker.internal:host-gateway"

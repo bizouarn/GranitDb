@@ -1,6 +1,7 @@
 @using GranitDb.Client.api
 @using GranitDb.Client.Workspace
 @inject Notifier Notifier
+@inject AuthState Auth
 
 @* Texte modifiable en place : un clic ouvre le champ ; il s'enregistre seul en le quittant (ou avec Entrée), Échap annule, et « Annuler » rétablit l'ancien texte. *@
 @if (_editing)
@@ -15,6 +16,20 @@
             <MudText Typo="Typo.caption" Color="Color.Error" Class="inline-error">@_error</MudText>
         }
     </div>
+}
+else if (!Auth.CanEdit)
+{
+    @* Lecteur : le texte seulement, sans crayon ni champ. *@
+    <span class="inline-view inline-readonly">
+        @if (string.IsNullOrWhiteSpace(Value))
+        {
+            <span class="inline-placeholder">Pas de description</span>
+        }
+        else
+        {
+            <span class="inline-text">@Value</span>
+        }
+    </span>
 }
 else
 {

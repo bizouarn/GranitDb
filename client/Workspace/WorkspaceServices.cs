@@ -10,6 +10,7 @@ public static class WorkspaceServices
         services.AddScoped<WorkspaceState>();
         services.AddScoped<Notifier>();
         services.AddScoped<CatalogCache>();
+        services.AddScoped<AuthState>();
         return services;
     }
 }
