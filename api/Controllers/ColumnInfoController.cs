@@ -49,6 +49,6 @@ public class ColumnInfoController(ICatalogRepository repository)
     public async Task<IActionResult> SetSensitivity(string id, [FromBody] SensitivityInput input, CancellationToken ct)
     {
         var updated = await Repository.ModifyAsync<ColumnInfo>(id, c => c.IsSensitive = input.IsSensitive, ct, Actor);
-        return updated == null ? NotFound() : Ok(updated);
+        return this.OkOrNotFound(updated);
     }
 }

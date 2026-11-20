@@ -1,4 +1,5 @@
 @page "/databases/{Id}/relations"
+@inherits BusyComponentBase
 @using GranitDb.Client.Components
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
@@ -95,8 +96,8 @@
     private string? _databaseName;
     private List<RelationSuggestionView> _items = [];
     private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
-    private string? _error, _summary;
-    private bool _loading = true, _busy;
+    private string? _summary;
+    private bool _loading = true;
 
     private bool CanDetect => _capabilities.AllowProfiling && Auth.IsAdmin;
 
@@ -130,26 +131,6 @@
         "possible" => Color.Warning,
         _ => Color.Default
     };
-
-    private async Task RunAsync(Func<Task> action)
-    {
-        _busy = true;
-        try
-        {
-            await action();
-            _error = null;
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "L'API ne répond pas.";
-        }
-
-        _busy = false;
-    }
 
     private Task DetectAsync() => RunAsync(async () =>
     {

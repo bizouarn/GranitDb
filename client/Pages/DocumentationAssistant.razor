@@ -1,4 +1,5 @@
 @page "/databases/{Id}/documentation"
+@inherits BusyComponentBase
 @implements IDisposable
 @using GranitDb.Client.Components
 @using GranitDb.Client.api
@@ -128,8 +129,7 @@
     private readonly Dictionary<string, string> _edited = new();
     private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
     private SuggestionJobView? _job;
-    private string? _error;
-    private bool _loading = true, _busy;
+    private bool _loading = true;
     private CancellationTokenSource? _poll;
 
     private bool Running => _job?.State == "running";
@@ -170,26 +170,6 @@
         }
 
         _loading = false;
-    }
-
-    private async Task RunAsync(Func<Task> action)
-    {
-        _busy = true;
-        try
-        {
-            await action();
-            _error = null;
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "L'API ne répond pas.";
-        }
-
-        _busy = false;
     }
 
     /// <summary>Tant que la documentation tourne, l'écran relit l'avancement et la file toutes les 2 secondes.</summary>

@@ -1,3 +1,4 @@
+using GranitDB.API.Controllers.Base;
 using GranitDB.API.Models;
 using GranitDB.API.Security;
 using GranitDB.API.Services;
@@ -56,7 +57,7 @@ public class SqliteImportController(DatabaseImportService import) : ControllerBa
         if (file == null || file.Length == 0) return BadRequest("Aucun fichier n'a été envoyé.");
         await using var stream = file.OpenReadStream();
         var preview = await import.PreviewReplaceSqliteAsync(id, stream, ct);
-        return preview == null ? NotFound() : Ok(preview);
+        return this.OkOrNotFound(preview);
     }
 
     /// <summary>Importe la base d'exemple livrée avec l'API (une boutique en ligne) pour découvrir sans rien préparer.</summary>

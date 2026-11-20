@@ -81,7 +81,7 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public async Task<IActionResult> Profile(string id, CancellationToken ct)
     {
         var run = await profiling.ProfileDatabaseAsync(id, ct);
-        return run == null ? NotFound() : Ok(run);
+        return this.OkOrNotFound(run);
     }
 
     /// <summary>
@@ -92,7 +92,7 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public async Task<IActionResult> RelationSuggestions(string id, [FromQuery] string? status, CancellationToken ct)
     {
         var list = await detection.ListAsync(id, status, ct);
-        return list == null ? NotFound() : Ok(list);
+        return this.OkOrNotFound(list);
     }
 
     /// <summary>
@@ -104,7 +104,7 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public async Task<IActionResult> DetectRelations(string id, CancellationToken ct)
     {
         var run = await detection.DetectAsync(id, ct);
-        return run == null ? NotFound() : Ok(run);
+        return this.OkOrNotFound(run);
     }
 
     /// <summary>Accepte une suggestion : crée la relation manuelle correspondante (marquée <c>detected</c>).</summary>
@@ -112,7 +112,7 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public async Task<IActionResult> AcceptRelationSuggestion(string id, string suggestionId, CancellationToken ct)
     {
         var relation = await detection.AcceptAsync(id, suggestionId, ct);
-        return relation == null ? NotFound() : Ok(relation);
+        return this.OkOrNotFound(relation);
     }
 
     /// <summary>Refuse une suggestion : les détections suivantes ne la proposent plus.</summary>
@@ -120,7 +120,7 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public async Task<IActionResult> RejectRelationSuggestion(string id, string suggestionId, CancellationToken ct)
     {
         var rejected = await detection.RejectAsync(id, suggestionId, ct);
-        return rejected == null ? NotFound() : Ok(rejected);
+        return this.OkOrNotFound(rejected);
     }
 
     /// <summary>Accepte d'un coup les suggestions en attente dont le score atteint <c>minScore</c> (75 par défaut : « probable »).</summary>
@@ -128,7 +128,7 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public async Task<IActionResult> AcceptRelationSuggestions(string id, [FromQuery] int minScore = 75, CancellationToken ct = default)
     {
         var batch = await detection.AcceptAboveAsync(id, Math.Clamp(minScore, 0, 100), ct);
-        return batch == null ? NotFound() : Ok(batch);
+        return this.OkOrNotFound(batch);
     }
 
     /// <summary>
@@ -207,6 +207,6 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     public async Task<IActionResult> PreviewSync(string id, CancellationToken ct)
     {
         var preview = await import.PreviewResyncAsync(id, ct);
-        return preview == null ? NotFound() : Ok(preview);
+        return this.OkOrNotFound(preview);
     }
 }

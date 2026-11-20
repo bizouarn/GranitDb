@@ -93,7 +93,7 @@ public class TableInfoController(ICatalogRepository repository, ColumnProfilingS
     public async Task<IActionResult> GetProfile(string id, CancellationToken ct)
     {
         var profile = await profiling.GetAsync(id, ct);
-        return profile == null ? NotFound() : Ok(profile);
+        return this.OkOrNotFound(profile);
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ public class TableInfoController(ICatalogRepository repository, ColumnProfilingS
     public async Task<IActionResult> Profile(string id, CancellationToken ct)
     {
         var profile = await profiling.ProfileTableAsync(id, ct);
-        return profile == null ? NotFound() : Ok(profile);
+        return this.OkOrNotFound(profile);
     }
 
     /// <summary>

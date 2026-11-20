@@ -1,3 +1,4 @@
+@inherits BusyComponentBase
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
@@ -22,9 +23,9 @@
 }
 
 @code {
-    private bool _enabled, _busy;
+    private bool _enabled;
     private AiStatusView? _status;
-    private string? _result, _error;
+    private string? _result;
 
     private string StatusText => _status == null ? "Vérification…"
         : !_status.Reachable ? $"Modèle {_status.Model} : {_status.Message}"
@@ -44,24 +45,13 @@
         }
     }
 
-    private async Task TestAsync()
+    private Task TestAsync()
     {
-        _busy = true;
         _result = _error = null;
-        try
+        return RunAsync(async () =>
         {
             var test = await Api.TestAiAsync();
             _result = $"Réponse en {test.ElapsedMs / 1000.0:0.0} s ({test.PromptTokens} + {test.CompletionTokens} jetons), JSON {(test.ValidJson ? "valide" : "invalide")}.";
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "L'API ne répond pas.";
-        }
-
-        _busy = false;
+        });
     }
 }

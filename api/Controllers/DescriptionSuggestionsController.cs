@@ -1,3 +1,4 @@
+using GranitDB.API.Controllers.Base;
 using GranitDB.API.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,7 +20,7 @@ public class DescriptionSuggestionsController(DescriptionAssistant assistant) : 
     public async Task<IActionResult> List(string databaseId, [FromQuery] string? status, CancellationToken ct)
     {
         var list = await assistant.ListAsync(databaseId, status, ct);
-        return list == null ? NotFound() : Ok(list);
+        return this.OkOrNotFound(list);
     }
 
     /// <summary>
@@ -30,7 +31,7 @@ public class DescriptionSuggestionsController(DescriptionAssistant assistant) : 
     public async Task<IActionResult> Generate(string databaseId, CancellationToken ct)
     {
         var job = await assistant.StartJobAsync(databaseId, ct);
-        return job == null ? NotFound() : Ok(job);
+        return this.OkOrNotFound(job);
     }
 
     /// <summary>Avancement de la dernière documentation en lot de la base (404 si aucune n'a été lancée depuis le démarrage).</summary>
@@ -38,7 +39,7 @@ public class DescriptionSuggestionsController(DescriptionAssistant assistant) : 
     public IActionResult Job(string databaseId)
     {
         var job = assistant.JobOf(databaseId);
-        return job == null ? NotFound() : Ok(job);
+        return this.OkOrNotFound(job);
     }
 
     /// <summary>Arrête la documentation en lot ; les propositions déjà faites restent en file.</summary>
@@ -54,7 +55,7 @@ public class DescriptionSuggestionsController(DescriptionAssistant assistant) : 
     public async Task<IActionResult> Suggest(string databaseId, [FromBody] SuggestInput input, CancellationToken ct)
     {
         var suggestion = await assistant.SuggestAsync(databaseId, input.TargetType, input.TargetId, ct);
-        return suggestion == null ? NotFound() : Ok(suggestion);
+        return this.OkOrNotFound(suggestion);
     }
 
     /// <summary>Propose, par des règles de nommage et sans modèle, les colonnes qui semblent sensibles ; renvoie le nombre de propositions.</summary>
@@ -70,7 +71,7 @@ public class DescriptionSuggestionsController(DescriptionAssistant assistant) : 
     public async Task<IActionResult> Accept(string databaseId, string id, [FromBody] AcceptSuggestionInput? input, CancellationToken ct)
     {
         var accepted = await assistant.AcceptAsync(databaseId, id, input?.Text, Actor, ct);
-        return accepted == null ? NotFound() : Ok(accepted);
+        return this.OkOrNotFound(accepted);
     }
 
     /// <summary>Refuse une proposition : la documentation en lot ne la repropose plus.</summary>
@@ -86,6 +87,6 @@ public class DescriptionSuggestionsController(DescriptionAssistant assistant) : 
     public async Task<IActionResult> AcceptConfident(string databaseId, CancellationToken ct)
     {
         var batch = await assistant.AcceptConfidentAsync(databaseId, Actor, ct);
-        return batch == null ? NotFound() : Ok(batch);
+        return this.OkOrNotFound(batch);
     }
 }
