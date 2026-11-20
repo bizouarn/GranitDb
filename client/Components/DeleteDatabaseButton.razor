@@ -22,10 +22,7 @@ else
         </MudText>
         <MudTextField @bind-Value="_typed" Immediate="true" Label="@($"Retapez {Database.Name} pour confirmer")" Dense="true"
                       Class="mt-2 delete-confirm-name" Disabled="_busy" />
-        @if (_error != null)
-        {
-            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-2">@_error</MudAlert>
-        }
+        <ErrorAlert Message="@_error" Dense="true" Class="mt-2" />
         <MudStack Row="true" Spacing="1" Class="mt-2">
             <MudButton Variant="Variant.Filled" Color="Color.Error" Size="Size.Small" OnClick="DeleteAsync"
                        Disabled="@(_busy || !Matches)" Class="delete-confirm-button">Supprimer définitivement</MudButton>

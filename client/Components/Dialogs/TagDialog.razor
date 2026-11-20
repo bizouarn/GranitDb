@@ -51,18 +51,12 @@
                 <MudAlert Severity="Severity.Info" Dense="true" Class="tag-dialog-preview" role="status">
                     @(Existing == null ? "Créer l'étiquette" : "Poser l'étiquette")@(_selected.Count > 0 ? $" et la poser sur {_selected.Count} table{(_selected.Count > 1 ? "s" : "")}" : "").
                 </MudAlert>
-                @if (_error != null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="tag-dialog-error">@_error</MudAlert>
-                }
+                <ErrorAlert Message="@_error" Dense="true" Class="tag-dialog-error" />
             </MudStack>
         </div>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy" Class="tag-dialog-cancel">Annuler</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="tag-dialog-save">
-            @(Existing == null ? "Créer l'étiquette" : "Poser")
-        </MudButton>
+        <SaveActions CancelClass="tag-dialog-cancel" SaveClass="tag-dialog-save" Busy="_busy" CanSave="CanSave" OnCancel="Cancel" OnSave="SaveAsync">@(Existing == null ? "Créer l'étiquette" : "Poser")</SaveActions>
     </DialogActions>
 </MudDialog>
 
@@ -117,7 +111,6 @@
         foreach (var table in Visible) _selected.Add(table.Id);
     }
 
-    private void Cancel() => MudDialog.Cancel();
 
     private Task SaveAsync() => SubmitAsync(async () =>
     {

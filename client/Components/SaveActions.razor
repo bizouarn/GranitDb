@@ -1,0 +1,19 @@
+@* Les boutons d'un dialogue d'enregistrement : « Annuler » et le bouton principal (son libellé est le contenu). *@
+<MudButton OnClick="OnCancel" Disabled="Busy" Class="@CancelClass">Annuler</MudButton>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OnSave" Disabled="@(Busy || !CanSave)" Class="@SaveClass">@ChildContent</MudButton>
+
+@code {
+    [Parameter] public string? CancelClass { get; set; }
+
+    [Parameter] public string? SaveClass { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public bool CanSave { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    [Parameter] public EventCallback OnSave { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

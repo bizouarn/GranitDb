@@ -6,9 +6,9 @@
     <MudPaper Class="login-card pa-6" Elevation="2">
         <div class="login-brand"><img src="menhir.svg" alt="" class="brand-icon" />Granit DB</div>
         <MudText Typo="Typo.h5" Class="mt-2 mb-1" id="login-title">Connexion</MudText>
-        <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+        <Muted Class="mb-4">
             Ce catalogue demande un compte. Choisissez votre fournisseur de connexion.
-        </MudText>
+        </Muted>
 
         @if (Auth.LoginError == "refused")
         {

@@ -35,7 +35,7 @@
             <MudChip T="string" Size="Size.Small">@_database.Type</MudChip>
             @if (!string.IsNullOrWhiteSpace(_database.SourceLabel) && Auth.IsAdmin)
             {
-                <MudText Typo="Typo.caption" Class="source-label" Style="color: var(--mud-palette-text-secondary)">@_database.SourceLabel</MudText>
+                <Muted Typo="Typo.caption" Class="source-label">@_database.SourceLabel</Muted>
             }
             <MudSpacer />
             @if (_tables.Length > 0)
@@ -145,9 +145,9 @@
                     <MudProgressLinear Value="overall.Percent" Color="@PercentColor(overall.Percent)" Class="flex-grow-1" Rounded="true" />
                     <MudText Typo="Typo.subtitle2" Class="completeness-percent">@overall.Percent %</MudText>
                 </MudStack>
-                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                <Muted Typo="Typo.caption">
                     @overall.TablesDescribed / @overall.Tables table(s) et @overall.ColumnsDescribed / @overall.Columns colonne(s) décrites.
-                </MudText>
+                </Muted>
                 @if (overall.SensitiveUndescribed > 0)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2 sensitive-warning">
@@ -230,7 +230,7 @@
 
         @if (_tables.Length == 0)
         {
-            <MudText Style="color: var(--mud-palette-text-secondary)">Aucune table dans cette base.</MudText>
+            <Muted Typo="Typo.body1">Aucune table dans cette base.</Muted>
         }
         else if (Single && !Visible.Any())
         {
@@ -253,7 +253,7 @@
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="table-manual" title="Saisie à la main : la synchronisation la conserve">saisie à la main</MudChip>
                                 }
-                                <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@table.Columns.Count colonnes</MudText>
+                                <Muted Typo="Typo.caption">@table.Columns.Count colonnes</Muted>
                                 @if (CompletenessOf(table.Id) is { } done)
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="@PercentColor(done.Percent)" Class="table-percent">@done.Percent %</MudChip>
@@ -300,9 +300,9 @@
                                 <div class="profile-bar mb-2">
                                     @if (_profiles.TryGetValue(table.Id, out var tableProfile) && tableProfile.ProfiledAt != null)
                                     {
-                                        <MudText Typo="Typo.caption" Class="profile-summary" Style="color: var(--mud-palette-text-secondary)">
+                                        <Muted Typo="Typo.caption" Class="profile-summary">
                                             Profil : @tableProfile.RowCount?.ToString("N0", FrenchNumbers) ligne(s), calculé le @tableProfile.ProfiledAt.Value.ToLocalTime().ToString("g")
-                                        </MudText>
+                                        </Muted>
                                     }
                                     @if (CanProfile)
                                     {
@@ -441,7 +441,7 @@
                             </MudList>
                             @if (table.Relations.Count == 0)
                             {
-                                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucune relation : ajoutez-en une pour dire quelle colonne pointe vers quelle table.</MudText>
+                                <Muted>Aucune relation : ajoutez-en une pour dire quelle colonne pointe vers quelle table.</Muted>
                             }
 
                             <MudButton Size="Size.Small" Class="mt-1 relation-add" StartIcon="@Icons.Material.Filled.Add"

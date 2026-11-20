@@ -15,7 +15,7 @@
 
     @if (string.IsNullOrWhiteSpace(Q) || Q.Trim().Length < 2)
     {
-        <MudText Style="color: var(--mud-palette-text-secondary)">Saisissez au moins 2 caractères dans la barre de recherche, puis validez avec Entrée.</MudText>
+        <Muted Typo="Typo.body1">Saisissez au moins 2 caractères dans la barre de recherche, puis validez avec Entrée.</Muted>
         <div class="search-examples" aria-label="Exemples de recherche">
             <span>Essayez :</span>
             @foreach (var example in Examples)
@@ -34,7 +34,7 @@
     }
     else if (_hits.Length == 0)
     {
-        <MudText Style="color: var(--mud-palette-text-secondary)">Aucun résultat pour « @Q ». Essayez un mot plus court, ou une partie du nom d'une table ou d'une colonne.</MudText>
+        <Muted Typo="Typo.body1">Aucun résultat pour « @Q ». Essayez un mot plus court, ou une partie du nom d'une table ou d'une colonne.</Muted>
     }
     else
     {
@@ -49,7 +49,7 @@
                 }
             </div>
         }
-        <MudText Class="mb-3" Style="color: var(--mud-palette-text-secondary)">@Shown.Length résultat(s) pour « @Q »</MudText>
+        <Muted Typo="Typo.body1" Class="mb-3">@Shown.Length résultat(s) pour « @Q »</Muted>
         @foreach (var group in Groups)
         {
             <MudText Typo="Typo.h6" Class="mt-4">@group.Label (@group.Hits.Count)</MudText>
@@ -58,7 +58,7 @@
                 {
                     <MudListItem T="string" Href="@hit.Href">
                         <MudText>@hit.Name</MudText>
-                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@Context(hit) · <span class="match-reason">@hit.MatchReason(Q)</span></MudText>
+                        <Muted Typo="Typo.caption">@Context(hit) · <span class="match-reason">@hit.MatchReason(Q)</span></Muted>
                         @if (!string.IsNullOrWhiteSpace(hit.Description))
                         {
                             <MudText Typo="Typo.body2">@hit.Description</MudText>

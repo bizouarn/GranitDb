@@ -9,9 +9,9 @@
     <DialogContent>
         <form id="domain-dialog-form" class="domain-dialog" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
             <MudStack Spacing="3">
-                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                <Muted>
                     Un domaine regroupe des tables qui parlent du même sujet ; son diagramme ne montre que ces tables.
-                </MudText>
+                </Muted>
                 <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End">
                     <label class="native-select" style="flex: 1"><span class="native-select-label">Nom du domaine</span>
                         <input class="domain-dialog-name" type="text" maxlength="100" required @bind="_name" @bind:event="oninput" /></label>
@@ -106,18 +106,12 @@
                     </label>
                 }
 
-                @if (_error != null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="domain-dialog-error">@_error</MudAlert>
-                }
+                <ErrorAlert Message="@_error" Dense="true" Class="domain-dialog-error" />
             </MudStack>
         </form>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy" Class="domain-dialog-cancel">Annuler</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="domain-dialog-save">
-            @(Existing == null ? "Créer le domaine" : "Enregistrer")
-        </MudButton>
+        <SaveActions CancelClass="domain-dialog-cancel" SaveClass="domain-dialog-save" Busy="_busy" CanSave="CanSave" OnCancel="Cancel" OnSave="SaveAsync">@(Existing == null ? "Créer le domaine" : "Enregistrer")</SaveActions>
     </DialogActions>
 </MudDialog>
 
@@ -226,7 +220,6 @@
 
     protected override bool CanSave => !string.IsNullOrWhiteSpace(_name) && !NameTaken;
 
-    private void Cancel() => MudDialog.Cancel();
 
     private Task SaveAsync() => SubmitAsync(async () =>
     {

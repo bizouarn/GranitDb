@@ -15,6 +15,8 @@ public abstract class SaveDialogBase : ComponentBase
     /// <summary>Dernière erreur du serveur, affichée dans le dialogue.</summary>
     protected string? _error;
 
+    protected void Cancel() => MudDialog.Cancel();
+
     /// <summary>Un envoi est en cours.</summary>
     protected bool _busy;
 

@@ -1,0 +1,10 @@
+@* Un texte secondaire (explication, aide, légende) : la couleur douce du thème, au lieu d'un style recopié partout. *@
+<MudText Typo="Typo" Class="@Class" Style="color: var(--mud-palette-text-secondary)">@ChildContent</MudText>
+
+@code {
+    [Parameter] public Typo Typo { get; set; } = Typo.body2;
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

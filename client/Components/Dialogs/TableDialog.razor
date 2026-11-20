@@ -9,9 +9,9 @@
     <DialogContent>
         <div class="table-dialog">
             <MudStack Spacing="3">
-                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                <Muted>
                     Pour une table qui n'existe pas dans la source. La synchronisation la conserve ; si la source reçoit un jour une table du même nom, c'est la source qui l'emporte.
-                </MudText>
+                </Muted>
                 <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
                     <label class="native-select" style="flex: 1"><span class="native-select-label">Nom de la table</span>
                         <input class="table-dialog-name" type="text" maxlength="255" @bind="_name" @bind:event="oninput" /></label>
@@ -44,16 +44,12 @@
                 <EditableGrid TRow="ColumnRow" Rows="_rows" Columns="_columns" IsBlank="ColumnRow.IsBlank" Label="Colonnes de la table" OnChanged="Changed" />
 
                 <MudAlert Severity="Severity.Info" Dense="true" Class="table-dialog-preview" role="status">@Preview</MudAlert>
-                @if (_error != null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="table-dialog-error">@_error</MudAlert>
-                }
+                <ErrorAlert Message="@_error" Dense="true" Class="table-dialog-error" />
             </MudStack>
         </div>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy" Class="table-dialog-cancel">Annuler</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="table-dialog-save">Créer la table</MudButton>
+        <SaveActions CancelClass="table-dialog-cancel" SaveClass="table-dialog-save" Busy="_busy" CanSave="CanSave" OnCancel="Cancel" OnSave="SaveAsync">Créer la table</SaveActions>
     </DialogActions>
 </MudDialog>
 
@@ -108,7 +104,6 @@
 
     private void Changed() => StateHasChanged();
 
-    private void Cancel() => MudDialog.Cancel();
 
     private Task SaveAsync() => SubmitAsync(async () =>
     {

@@ -14,16 +14,12 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     <PageCrumbs DatabaseId="@Id" DatabaseName="@_databaseName" Current="Relations suggérées" />
-    <MudText Typo="Typo.h4" Class="mb-1">Relations suggérées</MudText>
-    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+    <PageHeader Title="Relations suggérées">
         Colonnes dont le nom et les valeurs laissent penser qu'elles référencent une autre table, sans clé étrangère déclarée. La détection
         compte, à la source, les valeurs qui n'existent pas dans la table visée : aucune valeur n'est lue ni gardée. Rien n'est créé sans votre accord.
-    </MudText>
+    </PageHeader>
 
-    @if (_error != null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
-    }
+    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
 
     <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
         @if (CanDetect)
@@ -49,9 +45,9 @@
     }
     else if (_items.Count == 0)
     {
-        <MudText Typo="Typo.body2" Class="suggestions-empty" Style="color: var(--mud-palette-text-secondary)">
+        <Muted Class="suggestions-empty">
             @(CanDetect ? "Aucune suggestion en attente. Lancez la détection pour en chercher." : "Aucune suggestion en attente.")
-        </MudText>
+        </Muted>
     }
     else
     {

@@ -1,0 +1,9 @@
+@* Le titre d'une page et, en dessous, son explication (le contenu). *@
+<MudText Typo="Typo.h4" Class="mb-1">@Title</MudText>
+<Muted Class="mb-4">@ChildContent</Muted>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

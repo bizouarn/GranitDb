@@ -9,16 +9,13 @@
 {
     <MudPaper Class="pa-3 mb-4 ai-panel" Outlined="true">
         <MudText Typo="Typo.subtitle1">Assistant d'IA</MudText>
-        <MudText Typo="Typo.body2" Class="ai-status" Style="color: var(--mud-palette-text-secondary)">@StatusText</MudText>
+        <Muted Class="ai-status">@StatusText</Muted>
         <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="ai-test mt-2" OnClick="TestAsync" Disabled="_busy">Tester le modèle</MudButton>
         @if (_result != null)
         {
             <MudText Typo="Typo.caption" Class="ai-result">@_result</MudText>
         }
-        @if (_error != null)
-        {
-            <MudAlert Severity="Severity.Error" Class="ai-error mt-2" Dense="true">@_error</MudAlert>
-        }
+        <ErrorAlert Message="@_error" Dense="true" Class="ai-error mt-2" />
     </MudPaper>
 }
 

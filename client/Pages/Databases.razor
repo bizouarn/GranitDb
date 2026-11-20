@@ -24,9 +24,9 @@
         <MudStack AlignItems="AlignItems.Center" Spacing="1">
             <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Large" />
             <MudText Typo="Typo.h6">Glissez un fichier SQLite ici, ou cliquez pour le choisir</MudText>
-            <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+            <Muted>
                 Aucun serveur de base de données n'est nécessaire : le schéma est lu directement dans le fichier.
-            </MudText>
+            </Muted>
             @if (_busy)
             {
                 <MudProgressLinear Indeterminate="true" Class="mt-2" Style="width: 240px" />
@@ -50,17 +50,14 @@
         }
         else
         {
-            <MudText Typo="Typo.caption" Class="sqlserver-disabled" Style="color: var(--mud-palette-text-secondary)">
+            <Muted Typo="Typo.caption" Class="sqlserver-disabled">
                 Pour documenter une base SQL Server, PostgreSQL ou MySQL, activez Catalog:AllowSqlServerSources sur le serveur de l'API.
-            </MudText>
+            </Muted>
         }
     </MudStack>
     }
 
-    @if (_error != null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-4" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
-    }
+    <ErrorAlert Message="@_error" Class="mb-4" OnClose="@(() => _error = null)" />
 
     @if (_loading)
     {
@@ -72,13 +69,13 @@
     }
     else if (_databases.Length == 0)
     {
-        <MudText Style="color: var(--mud-palette-text-secondary)">Aucune base pour le moment. Envoyez un fichier SQLite pour commencer.</MudText>
+        <Muted Typo="Typo.body1">Aucune base pour le moment. Envoyez un fichier SQLite pour commencer.</Muted>
         <ol class="welcome-steps" aria-label="Pour commencer">
             <li><strong>1. Importez</strong>Déposez un fichier SQLite (ou essayez l'exemple) : tables, colonnes, clés et relations sont lues sans serveur.</li>
             <li><strong>2. Explorez et documentez</strong>Parcourez l'arbre à gauche, cliquez une table ou une colonne et décrivez-la sur place.</li>
             <li><strong>3. Partagez</strong>Ouvrez le diagramme d'un domaine et exportez-le en SVG, PNG ou Mermaid.</li>
         </ol>
-        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">Astuce : Ctrl+K ouvre la palette de commandes, ? affiche tous les raccourcis.</MudText>
+        <Muted Typo="Typo.caption">Astuce : Ctrl+K ouvre la palette de commandes, ? affiche tous les raccourcis.</Muted>
     }
     else
     {

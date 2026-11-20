@@ -25,10 +25,10 @@
             {
                 case Step.Source:
                     <MudStack Spacing="2" Class="wizard-source">
-                        <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                        <Muted>
                             GranitDb lit uniquement le <strong>schéma</strong> (tables, colonnes, clés, index), jamais les données.
                             Pour un fichier SQLite, fermez cette fenêtre et déposez-le sur la page des bases.
-                        </MudText>
+                        </Muted>
                         <EngineSelect Value="@_form.Engine" ValueChanged="SetEngine" />
                         <MudText Typo="Typo.body2">@RightHint</MudText>
                     </MudStack>
@@ -37,10 +37,10 @@
                 case Step.Connection:
                     <form id="import-wizard-form" @onsubmit="NextAsync" @onsubmit:preventDefault="true">
                         <MudStack Spacing="2" Class="wizard-connection">
-                            <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                            <Muted>
                                 La connexion est enregistrée chiffrée sur le serveur de l'API et n'est jamais renvoyée.
                                 Si l'API tourne dans Docker, <code>localhost</code> désigne le conteneur : saisissez <code>host.docker.internal</code>.
-                            </MudText>
+                            </Muted>
                             <ServerConnectionFields Form="_form" AutoFocus="true" OnChanged="@(() => { })" />
                         </MudStack>
                     </form>
@@ -78,18 +78,15 @@
                 default:
                     <MudStack Spacing="2" Class="wizard-summary">
                         <MudText Class="wizard-summary-text">@Summary</MudText>
-                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                        <Muted Typo="Typo.caption">
                             @(IsEdit ? "La base sera relue tout de suite avec cette connexion ; les descriptions déjà saisies sont conservées."
                                      : "Tables, colonnes, clés et index seront lus et documentables immédiatement. Aucune donnée n'est copiée.")
-                        </MudText>
+                        </Muted>
                     </MudStack>
                     break;
             }
 
-            @if (_error != null)
-            {
-                <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3 connection-error">@_error</MudAlert>
-            }
+            <ErrorAlert Message="@_error" Dense="true" Class="mt-3 connection-error" />
         </div>
     </DialogContent>
     <DialogActions>

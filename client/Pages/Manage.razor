@@ -14,18 +14,14 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     <PageCrumbs Current="Étiquettes et domaines" />
-    <MudText Typo="Typo.h4" Class="mb-1">Étiquettes et domaines</MudText>
-    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+    <PageHeader Title="Étiquettes et domaines">
         Renommez, colorez ou supprimez les étiquettes (communes à toutes les bases) et les domaines de chaque base.
         Cliquez un nom pour le modifier ; il s'enregistre en le quittant.
-    </MudText>
+    </PageHeader>
 
     <AiPanel />
 
-    @if (_error != null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
-    }
+    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
 
     @if (_loading)
     {
@@ -41,7 +37,7 @@
             </MudStack>
             @if (_tags.Length == 0)
             {
-                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucune étiquette : posez-en une depuis une base, une table ou une colonne.</MudText>
+                <Muted>Aucune étiquette : posez-en une depuis une base, une table ou une colonne.</Muted>
             }
             @foreach (var tag in _tags)
             {
@@ -73,7 +69,7 @@
                 </MudStack>
                 @if (domains.Length == 0)
                 {
-                    <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucun domaine : créez-en un pour regrouper les tables d'un même sujet.</MudText>
+                    <Muted>Aucun domaine : créez-en un pour regrouper les tables d'un même sujet.</Muted>
                 }
                 @foreach (var domain in domains)
                 {
@@ -83,7 +79,7 @@
                                value="@(domain.Color ?? "#757575")" @onchange="e => SetDomainColorAsync(current, e.Value?.ToString())" />
                         <InlineText Value="@domain.Name" Multiline="false" Silent="true" Placeholder="Nom" Label="Nom du domaine"
                                     OnSave="@RenameDomainHandler(current)" />
-                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@domain.Tables.Count table(s)</MudText>
+                        <Muted Typo="Typo.caption">@domain.Tables.Count table(s)</Muted>
                         <MudSpacer />
                         <MudButton Size="Size.Small" Href="@($"/databases/{db.Id}/diagram?domain={domain.Id}")">Diagramme</MudButton>
                         @if (domain.Color != null)
@@ -96,7 +92,7 @@
                 }
                 @if (domains.Length > 0)
                 {
-                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">Supprimer un domaine ne supprime pas ses tables.</MudText>
+                    <Muted Typo="Typo.caption">Supprimer un domaine ne supprime pas ses tables.</Muted>
                 }
             </MudPaper>
         }

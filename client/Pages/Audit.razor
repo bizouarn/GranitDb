@@ -11,15 +11,11 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     <PageCrumbs Current="Journal d'audit" />
-    <MudText Typo="Typo.h4" Class="mb-1">Journal d'audit</MudText>
-    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+    <PageHeader Title="Journal d'audit">
         Qui a modifié quoi et quand : chaque requête d'écriture et chaque export, du plus récent au plus ancien. Le contenu des requêtes n'est jamais gardé.
-    </MudText>
+    </PageHeader>
 
-    @if (_error != null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
-    }
+    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
 
     <ActiveFilterBar Description="@AppliedDescription" Result="@(_loading ? null : $"{_page.Total} entrée(s)")" OnClear="ResetAsync" />
 
@@ -51,7 +47,7 @@
     }
     else if (_page.Items.Length == 0)
     {
-        <MudText Typo="Typo.body2" Class="audit-empty" Style="color: var(--mud-palette-text-secondary)">Aucune entrée : ni modification ni export ne correspond. Effacez les filtres, ou modifiez une description pour voir apparaître la première ligne.</MudText>
+        <Muted Class="audit-empty">Aucune entrée : ni modification ni export ne correspond. Effacez les filtres, ou modifiez une description pour voir apparaître la première ligne.</Muted>
     }
     else
     {

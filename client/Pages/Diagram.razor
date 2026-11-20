@@ -54,17 +54,17 @@
                         <MudText Typo="Typo.subtitle1">Domaines (@_domains.Length)</MudText>
                         @if (!_domainsOpen)
                         {
-                            <MudText Typo="Typo.caption" Class="domains-current" Style="color: var(--mud-palette-text-secondary)">
+                            <Muted Typo="Typo.caption" Class="domains-current">
                                 @(CurrentDomain == null ? "Toutes les tables" : CurrentDomain.Name)
-                            </MudText>
+                            </Muted>
                         }
                     </MudStack>
                     @if (_domainsOpen)
                     {
                     <div id="domains-body">
-                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                    <Muted Typo="Typo.caption">
                         Un domaine regroupe des tables pour un diagramme lisible. Glissez une table sur un domaine pour l'y ranger.
-                    </MudText>
+                    </Muted>
                     <MudTextField @bind-Value="_domainSearch" Label="Rechercher un domaine" Immediate="true" Clearable="true" Dense="true"
                                   Class="mb-1 domain-search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" />
                     <div class="domain-list">
@@ -133,16 +133,16 @@
                     {
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="EditDomainAsync" Class="edit-domain" StartIcon="@Icons.Material.Filled.Tune"
                                    title="Ajouter des tables en lot (par préfixe ou par table liée) et voir combien de relations apparaissent">Modifier le domaine…</MudButton>
-                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                        <Muted Typo="Typo.caption">
                             Cochez pour ajouter une table au domaine. Les tables en pointillés sont d'autres domaines, liées à celui-ci.
-                        </MudText>
+                        </Muted>
                     }
                     @if (Panels.SidebarHosts)
                     {
                         @* La liste à cocher est dans la barre latérale (explorateur) : on ne la répète pas ici. *@
-                        <MudText Typo="Typo.caption" Class="picker-in-sidebar" Style="color: var(--mud-palette-text-secondary)">
+                        <Muted Typo="Typo.caption" Class="picker-in-sidebar">
                             La liste des tables à afficher est dans la barre latérale, sous le filtre de l'explorateur.
-                        </MudText>
+                        </Muted>
                         @if (CurrentDomain == null)
                         {
                             <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ShowNeighbors" Class="mt-1"
@@ -237,11 +237,11 @@
                                    OnSelectTable="SelectTableAsync" OnSelectColumn="SelectColumnAsync" OnClearSelection="ClearSelection"
                                    OnNodeMoved="NodeMovedAsync" OnDragLeave="DragLeave" />
                     </div>
-                    <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">
+                    <Muted Typo="Typo.caption">
                         Glissez une table pour la déplacer@(CurrentDomain == null ? "" : " (sa place est mémorisée pour ce domaine)") .
                         Cliquez une table ou une colonne pour voir ce qu'elle impacte, cliquez dans le vide pour désélectionner.
                         1 = clé référencée, N = colonne qui référence.
-                    </MudText>
+                    </Muted>
                     @if (_selectedTable != null)
                     {
                         <div class="er-legend" role="note" aria-label="Légende de la sélection">
@@ -261,9 +261,9 @@
                 {
                     <MudExpansionPanels Class="mt-3" id="domain-relations">
                         <MudExpansionPanel Text="@($"Relations du domaine ({DomainRelations.Count - CurrentDomain.HiddenRelations.Count} affichée(s) sur {DomainRelations.Count})")">
-                            <MudText Typo="Typo.caption" Class="domain-settings-help" Style="color: var(--mud-palette-text-secondary)">
+                            <Muted Typo="Typo.caption" Class="domain-settings-help">
                                 Une relation décochée n'est pas dessinée dans ce domaine (elle reste dans le catalogue). « Tables voisines » ajoute en pointillés les tables d'autres domaines reliées à celles-ci.
-                            </MudText>
+                            </Muted>
                             <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
                                 <MudTextField @bind-Value="_relationFilter" Label="Filtrer" Immediate="true" Clearable="true" Dense="true" />
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ShowAllRelationsAsync"

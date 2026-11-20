@@ -14,16 +14,12 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     <PageCrumbs Current="Webhooks" />
-    <MudText Typo="Typo.h4" Class="mb-1">Webhooks</MudText>
-    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+    <PageHeader Title="Webhooks">
         Une adresse appelée en POST (JSON, signé si un secret est défini) quand un événement survient : changement de schéma,
         base importée ou supprimée. Les adresses locales ou privées sont refusées par défaut.
-    </MudText>
+    </PageHeader>
 
-    @if (_error != null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
-    }
+    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
 
     @if (_loading)
     {
@@ -33,7 +29,7 @@
     {
         @if (_hooks.Length == 0)
         {
-            <MudText Typo="Typo.body2" Class="webhooks-empty" Style="color: var(--mud-palette-text-secondary)">Aucun webhook : ajoutez une adresse pour prévenir un outil (intégration, chat, tâche planifiée) quand le schéma change ou qu'une base est importée ou supprimée.</MudText>
+            <Muted Class="webhooks-empty">Aucun webhook : ajoutez une adresse pour prévenir un outil (intégration, chat, tâche planifiée) quand le schéma change ou qu'une base est importée ou supprimée.</Muted>
         }
 
         @foreach (var hook in _hooks)
@@ -59,9 +55,9 @@
                 </MudStack>
                 @if (!string.IsNullOrWhiteSpace(hook.Description) || hook.DatabaseId != null)
                 {
-                    <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                    <Muted>
                         @hook.Description@(hook.DatabaseId != null ? $" — base : {DatabaseName(hook.DatabaseId)}" : "")
-                    </MudText>
+                    </Muted>
                 }
                 @if (_testResult.TryGetValue(hook.Id, out var test))
                 {

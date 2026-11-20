@@ -15,17 +15,13 @@
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
     <PageCrumbs DatabaseId="@Id" DatabaseName="@_databaseName" Current="Assistant de documentation" />
-    <MudText Typo="Typo.h4" Class="mb-1">Assistant de documentation</MudText>
-    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+    <PageHeader Title="Assistant de documentation">
         Propose des descriptions pour les éléments qui n'en ont pas, avec un modèle d'IA léger et local qui ne reçoit que des noms, des types et
         des descriptions (jamais de valeur de ligne ni de colonne sensible). Rien n'est enregistré avant que vous acceptiez, et une description
         déjà saisie n'est jamais remplacée. Un modèle de petite taille se trompe sur les noms cryptiques : relisez chaque proposition.
-    </MudText>
+    </PageHeader>
 
-    @if (_error != null)
-    {
-        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
-    }
+    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
 
     <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
         @if (_capabilities.AllowAi && Auth.CanEdit)
@@ -78,7 +74,7 @@
     }
     else if (_items.Count == 0)
     {
-        <MudText Typo="Typo.body2" Class="suggestions-empty" Style="color: var(--mud-palette-text-secondary)">Aucune proposition en attente.</MudText>
+        <Muted Class="suggestions-empty">Aucune proposition en attente.</Muted>
     }
     else
     {

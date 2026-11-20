@@ -10,10 +10,10 @@
     <DialogContent>
         <form id="relation-dialog-form" class="relation-dialog" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
             <MudStack Spacing="3">
-                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                <Muted>
                     Dites quelles colonnes d'une table <b>pointent vers</b> quelles colonnes d'une autre table
                     (par exemple <i>orders.customer_id</i> pointe vers <i>customers.id</i>).
-                </MudText>
+                </Muted>
 
                 <div class="relation-dialog-side">
                     <MudText Typo="Typo.subtitle2">Table de départ (celle qui pointe)</MudText>
@@ -97,18 +97,12 @@
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="relation-dialog-problem">@problem</MudAlert>
                 }
 
-                @if (_error != null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="relation-dialog-error">@_error</MudAlert>
-                }
+                <ErrorAlert Message="@_error" Dense="true" Class="relation-dialog-error" />
             </MudStack>
         </form>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy" Class="relation-dialog-cancel">Annuler</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="relation-dialog-save">
-            @(Existing == null ? "Ajouter la relation" : "Enregistrer")
-        </MudButton>
+        <SaveActions CancelClass="relation-dialog-cancel" SaveClass="relation-dialog-save" Busy="_busy" CanSave="CanSave" OnCancel="Cancel" OnSave="SaveAsync">@(Existing == null ? "Ajouter la relation" : "Enregistrer")</SaveActions>
     </DialogActions>
 </MudDialog>
 
@@ -224,7 +218,6 @@
         }
     }
 
-    private void Cancel() => MudDialog.Cancel();
 
     private Task SaveAsync() => SubmitAsync(async () =>
     {

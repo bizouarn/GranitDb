@@ -33,10 +33,10 @@
     }
     else
     {
-        <MudText Class="mb-3" Style="color: var(--mud-palette-text-secondary)">
+        <Muted Typo="Typo.body1" Class="mb-3">
             GranitDb lit uniquement le <strong>schéma</strong> (tables, colonnes, clés, index), jamais les données. @RightHint
             La connexion est enregistrée chiffrée sur le serveur de l'API et n'est jamais renvoyée.
-        </MudText>
+        </Muted>
         <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3 docker-hint">
             Si l'API tourne dans Docker, <code>localhost</code> et les adresses IPv6 locales (<code>fe80::…%11</code>) désignent le conteneur,
             pas votre poste : pour un serveur de votre machine, saisissez <code>host.docker.internal</code> (avec le port TCP du serveur,
@@ -77,10 +77,7 @@
             </MudStack>
         </MudPaper>
 
-        @if (_error != null)
-        {
-            <MudAlert Severity="Severity.Error" Class="mt-3 connection-error">@_error</MudAlert>
-        }
+        <ErrorAlert Message="@_error" Class="mt-3 connection-error" />
 
         @if (_schemas.Test is { } test)
         {

@@ -8,10 +8,10 @@
     <DialogContent>
         <form id="webhook-dialog-form" class="webhook-dialog" @onsubmit="SaveAsync" @onsubmit:preventDefault="true">
             <MudStack Spacing="3">
-                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                <Muted>
                     GranitDb appelle cette adresse en POST (JSON) quand l'un des événements choisis survient. Avec un secret,
                     chaque envoi est signé (HMAC-SHA256) pour que le destinataire vérifie qu'il vient bien d'ici.
-                </MudText>
+                </Muted>
                 <label class="native-select"><span class="native-select-label">Adresse (URL)</span>
                     <input class="webhook-form-url" type="url" required placeholder="https://…" @bind="_form.Url" @bind:event="oninput" /></label>
                 @if (!UrlLooksValid)
@@ -40,16 +40,12 @@
                     @onchange="e => _form.IsActive = e.Value is true" /> Actif (décochez pour mettre en pause sans supprimer)</label>
                 <label class="native-select"><span class="native-select-label">Description (facultatif)</span>
                     <input class="webhook-form-description" type="text" maxlength="500" @bind="_form.Description" @bind:event="oninput" /></label>
-                @if (_error != null)
-                {
-                    <MudAlert Severity="Severity.Error" Dense="true" Class="webhook-dialog-error">@_error</MudAlert>
-                }
+                <ErrorAlert Message="@_error" Dense="true" Class="webhook-dialog-error" />
             </MudStack>
         </form>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel" Disabled="_busy" Class="webhook-cancel">Annuler</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="webhook-save">Enregistrer</MudButton>
+        <SaveActions CancelClass="webhook-cancel" SaveClass="webhook-save" Busy="_busy" CanSave="CanSave" OnCancel="Cancel" OnSave="SaveAsync">Enregistrer</SaveActions>
     </DialogActions>
 </MudDialog>
 
@@ -92,7 +88,6 @@
         if (on) _form.Events.Add(name);
     }
 
-    private void Cancel() => MudDialog.Cancel();
 
     private Task SaveAsync() => SubmitAsync(async () =>
     {

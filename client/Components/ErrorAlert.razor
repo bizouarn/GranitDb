@@ -1,0 +1,22 @@
+@* Une erreur à côté de ce qui l'a causée ; rien n'est affiché quand il n'y a pas de message. Avec OnClose, l'alerte se ferme. *@
+@if (Message != null)
+{
+    @if (OnClose.HasDelegate)
+    {
+        <MudAlert Severity="Severity.Error" Dense="Dense" Class="@Class" ShowCloseIcon="true" CloseIconClicked="OnClose">@Message</MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Error" Dense="Dense" Class="@Class">@Message</MudAlert>
+    }
+}
+
+@code {
+    [Parameter] public string? Message { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public bool Dense { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+}
