@@ -283,7 +283,7 @@
                                     @if (_profiles.TryGetValue(table.Id, out var tableProfile) && tableProfile.ProfiledAt != null)
                                     {
                                         <MudText Typo="Typo.caption" Class="profile-summary" Style="color: var(--mud-palette-text-secondary)">
-                                            Profil : @tableProfile.RowCount?.ToString("N0") ligne(s), calculé le @tableProfile.ProfiledAt.Value.ToLocalTime().ToString("g")
+                                            Profil : @tableProfile.RowCount?.ToString("N0", FrenchNumbers) ligne(s), calculé le @tableProfile.ProfiledAt.Value.ToLocalTime().ToString("g")
                                         </MudText>
                                     }
                                     @if (CanProfile)
@@ -318,7 +318,7 @@
                                             <td class="column-profile">
                                                 @if (ProfileOf(table.Id, column.Id) is { } p)
                                                 {
-                                                    <span title="@($"{p.RowCount:N0} ligne(s) au moment du profilage")">@ProfileText(p)</span>
+                                                    <span title="@RowsTitle(p)">@ProfileText(p)</span>
                                                     @if (ProfileKindLabel(p.Kind) is { Length: > 0 } label)
                                                     {
                                                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="profile-kind">@label</MudChip>
@@ -720,11 +720,20 @@
         }
     }
 
+    /// <summary>Nombres à la française quelle que soit la culture de la machine (milliers : espace fine insécable).</summary>
+    private static readonly System.Globalization.NumberFormatInfo FrenchNumbers = new()
+    {
+        NumberGroupSeparator = " ",
+        NumberDecimalSeparator = ","
+    };
+
+    private static string RowsTitle(ColumnProfileView p) => p.RowCount.ToString("N0", FrenchNumbers) + " ligne(s) au moment du profilage";
+
     /// <summary>« 60 % de nuls · 2 valeurs » : ce que le profil dit d'une colonne, en une ligne.</summary>
     private static string ProfileText(ColumnProfileView p)
     {
-        var nulls = p.NullRatio == 0 ? "aucun nul" : $"{p.NullRatio * 100:0.#} % de nuls";
-        var distinct = p.DistinctCount == null ? "" : p.DistinctCount == 1 ? " · 1 valeur" : $" · {p.DistinctCount:N0} valeurs";
+        var nulls = p.NullRatio == 0 ? "aucun nul" : $"{(p.NullRatio * 100).ToString("0.#", FrenchNumbers)} % de nuls";
+        var distinct = p.DistinctCount == null ? "" : p.DistinctCount == 1 ? " · 1 valeur" : $" · {p.DistinctCount.Value.ToString("N0", FrenchNumbers)} valeurs";
         return nulls + distinct;
     }
 
