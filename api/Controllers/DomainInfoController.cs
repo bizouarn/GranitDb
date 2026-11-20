@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace GranitDB.API.Controllers;
 
 /// <summary>Une table d'un domaine et sa place dans le diagramme du domaine (null tant qu'elle n'a pas été déplacée).</summary>
-public record DomainTableView(string TableId, double? X, double? Y);
+public record DomainTableView(string TableId, double? X, double? Y, string? Color = null);
 
 /// <summary>Un domaine avec les tables qui lui appartiennent.</summary>
 public class DomainView
@@ -54,6 +54,12 @@ public class PlacementInput
     [Range(-100000, 100000)] public double? X { get; set; }
 
     [Range(-100000, 100000)] public double? Y { get; set; }
+}
+
+/// <summary>La couleur d'une table dans un domaine : <c>#rrggbb</c>, ou vide pour revenir à la couleur par défaut.</summary>
+public class TableColorInput
+{
+    [StringLength(16)] public string? Color { get; set; }
 }
 
 public class LayoutItem
@@ -198,6 +204,23 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
         });
     }
 
+    /// <summary>Change la couleur de la table dans ce domaine (<c>#rrggbb</c>) ; une couleur vide rend la couleur par défaut.</summary>
+    [HttpPut("{id}/tables/{tableId}/color")]
+    public async Task<IActionResult> SetTableColor(string id, string tableId, [FromBody] TableColorInput input, CancellationToken ct)
+    {
+        var color = string.IsNullOrWhiteSpace(input.Color) ? null : input.Color.Trim();
+        if (color != null && !System.Text.RegularExpressions.Regex.IsMatch(color, "^#[0-9a-fA-F]{6}$"))
+            throw new GranitExceptions("La couleur doit s'écrire #rrggbb.");
+        return await InDomainAsync(id, ct, async (repo, domain) =>
+        {
+            var link = (await repo.FindAsync<DomainTableInfo>(nameof(DomainTableInfo.TableId), tableId, ct)).FirstOrDefault(l => l.DomainId == id);
+            if (link == null) return NotFound();
+            link.Color = color;
+            await repo.UpdateAsync(link.Id, link, ct);
+            return Ok(await ViewAsync(repo, domain, ct));
+        });
+    }
+
     /// <summary>Retire la table du domaine (la table elle-même n'est pas touchée).</summary>
     [HttpDelete("{id}/tables/{tableId}")]
     public async Task<IActionResult> RemoveTable(string id, string tableId, CancellationToken ct)
@@ -280,7 +303,7 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
             HasDocumentationOrigin = domain.DocumentationHidden != null,
             HiddenRelations = hidden.Select(h => h.RelationId).OrderBy(r => r, StringComparer.Ordinal).ToList(),
             Tables = links.OrderBy(l => l.TableId, StringComparer.Ordinal)
-                .Select(l => new DomainTableView(l.TableId, l.X, l.Y)).ToList()
+                .Select(l => new DomainTableView(l.TableId, l.X, l.Y, l.Color)).ToList()
         };
     }
 }

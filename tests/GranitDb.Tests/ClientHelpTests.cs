@@ -111,3 +111,53 @@ public class ShortcutHintTests
         Assert.Equal("Alt + W", GranitDb.Client.Workspace.Shortcuts.Spaced(GranitDb.Client.Workspace.Shortcuts.CloseTab));
     }
 }
+
+/// <summary>Sélecteur de couleur : une palette prédéfinie, un code libre et le retour à la couleur par défaut.</summary>
+public class ColorPickerTests : IAsyncLifetime
+{
+    private readonly BunitContext _ctx = new();
+
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync() => await _ctx.DisposeAsync();
+
+    [Fact]
+    public void The_palette_opens_on_demand_and_choosing_a_swatch_reports_its_colour_and_closes()
+    {
+        string? chosen = "unset";
+        var picker = _ctx.Render<ColorPicker>(p => p.Add(x => x.Label, "Couleur du domaine").Add(x => x.Value, "#1976d2")
+            .Add(x => x.ValueChanged, Microsoft.AspNetCore.Components.EventCallback.Factory.Create<string?>(this, c => chosen = c)));
+        Assert.Empty(picker.FindAll(".color-swatch"));
+        Assert.Contains("Bleu", picker.Find(".color-picker-toggle").GetAttribute("aria-label"));
+
+        picker.Find(".color-picker-toggle").Click();
+
+        Assert.Equal(GranitDb.Client.Workspace.ColorPalette.Colors.Count, picker.FindAll(".color-swatch").Count);
+        Assert.Equal("true", picker.Find(".color-swatch[data-color='#1976d2']").GetAttribute("aria-checked"));
+        picker.Find(".color-swatch[data-color='#c62828']").Click();
+        Assert.Equal("#c62828", chosen);
+        Assert.Empty(picker.FindAll(".color-swatch")); // la palette se referme
+    }
+
+    [Fact]
+    public void Another_colour_can_be_typed_and_the_default_restored_only_when_allowed()
+    {
+        string? chosen = "unset";
+        var picker = _ctx.Render<ColorPicker>(p => p.Add(x => x.Label, "Couleur de la table").Add(x => x.Value, "#ff00ff").Add(x => x.AllowNone, true)
+            .Add(x => x.NoneLabel, "Bleu par défaut")
+            .Add(x => x.ValueChanged, Microsoft.AspNetCore.Components.EventCallback.Factory.Create<string?>(this, c => chosen = c)));
+        picker.Find(".color-picker-toggle").Click();
+
+        picker.Find("input.color-input").Change("#123456");
+        Assert.Equal("#123456", chosen);
+
+        picker.Find(".color-picker-toggle").Click();
+        Assert.Equal("Bleu par défaut", picker.Find(".color-none").TextContent.Trim());
+        picker.Find(".color-none").Click();
+        Assert.Null(chosen);
+
+        var strict = _ctx.Render<ColorPicker>(p => p.Add(x => x.Label, "Couleur"));
+        strict.Find(".color-picker-toggle").Click();
+        Assert.Empty(strict.FindAll(".color-none"));
+    }
+}

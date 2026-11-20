@@ -245,6 +245,7 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
         var page = OpenManage();
         var row = page.Find("[data-tag='RGPD']");
 
+        row.QuerySelector(".color-picker-toggle")!.Click();
         row.QuerySelector("input.color-input")!.Change("#00ff00");
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/TagInfo/g1")));
         var colour = BodyOf(HttpMethod.Put, "/api/v1/TagInfo/g1");
@@ -308,6 +309,24 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
     }
 
     [BunitFact]
+    public void The_domain_dialog_colours_a_table_of_the_domain()
+    {
+        Override = r => r.Method == HttpMethod.Put && r.RequestUri!.AbsolutePath.EndsWith("/color")
+            ? FakeApi.Json("""{"id":"g1","databaseId":"d1","name":"Ventes","tables":[]}""")
+            : null;
+        var page = OpenManage();
+
+        page.Find("[data-domain='Ventes'] button.edit-tables").Click();
+        Dialogs!.WaitForAssertion(() => Assert.NotEmpty(Dialogs!.FindAll("[data-member='orders']")));
+        Dialogs!.Find("[data-member='orders'] .color-picker-toggle").Click();
+        Dialogs!.Find("[data-member='orders'] .color-swatch[data-color='#c62828']").Click();
+        Dialogs!.Find("button.domain-dialog-save").Click();
+
+        page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/DomainInfo/g1/tables/t2/color")));
+        Assert.Equal("#c62828", BodyOf(HttpMethod.Put, "/api/v1/DomainInfo/g1/tables/t2/color").GetProperty("color").GetString());
+    }
+
+    [BunitFact]
     public void A_new_domain_is_created_from_a_dialog_with_its_tables_and_refuses_a_taken_name()
     {
         Override = r => r.Method == HttpMethod.Post && r.RequestUri!.AbsolutePath == "/api/v1/DomainInfo"
@@ -340,6 +359,7 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
             ? new HttpResponseMessage(HttpStatusCode.Conflict) { Content = new StringContent("""{"title":"Ce nom existe déjà."}""", System.Text.Encoding.UTF8, "application/json") }
             : previous(r);
 
+        page.Find("[data-tag='legacy'] .color-picker-toggle").Click();
         page.Find("[data-tag='legacy'] input.color-input").Change("#123456");
 
         page.WaitForAssertion(() => Assert.Contains("Ce nom existe déjà.", page.Markup));

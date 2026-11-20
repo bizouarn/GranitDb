@@ -1,0 +1,61 @@
+@using GranitDb.Client.Workspace
+@* Choisir une couleur : une pastille qui ouvre une palette prédéfinie, plus « Autre couleur… » pour un code libre et, si permis, un retour à la couleur par défaut. *@
+<div class="@($"color-picker {(Inline ? "inline" : "")} {Class}")">
+    <button type="button" class="color-picker-toggle" aria-haspopup="true" aria-expanded="@(_open ? "true" : "false")" disabled="@Disabled"
+            aria-label="@($"{Label} : {ColorPalette.NameOf(Value)}")" title="@($"{Label} : {ColorPalette.NameOf(Value)}")" @onclick="() => _open = !_open">
+        <span class="color-dot" style="@($"background:{Value ?? NoneColor}")"></span>
+    </button>
+    @if (_open && !Disabled)
+    {
+        <div class="color-palette" role="radiogroup" aria-label="@Label">
+            @foreach (var swatch in ColorPalette.Colors)
+            {
+                var hex = swatch.Hex;
+                var selected = string.Equals(Value, hex, StringComparison.OrdinalIgnoreCase);
+                <button type="button" class="@($"color-swatch{(selected ? " selected" : "")}")" role="radio" aria-checked="@(selected ? "true" : "false")"
+                        style="@($"background:{hex}")" title="@swatch.Name" aria-label="@swatch.Name" data-color="@hex"
+                        @onclick="() => ChooseAsync(hex)"></button>
+            }
+            <label class="color-custom">Autre couleur…
+                <input type="color" class="color-input" aria-label="@($"{Label} : autre couleur")" value="@(Value ?? NoneColor)"
+                       @onchange="e => ChooseAsync(e.Value?.ToString())" />
+            </label>
+            @if (AllowNone)
+            {
+                <button type="button" class="color-none" @onclick="() => ChooseAsync(null)">@NoneLabel</button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _open;
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>Ce qui est choisi (« Couleur du domaine »), lu par les lecteurs d'écran.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "Couleur";
+
+    /// <summary>Propose de revenir à la couleur par défaut.</summary>
+    [Parameter] public bool AllowNone { get; set; }
+
+    [Parameter] public string NoneLabel { get; set; } = "Sans couleur";
+
+    /// <summary>La couleur montrée tant que rien n'est choisi.</summary>
+    [Parameter] public string NoneColor { get; set; } = "#757575";
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>La palette s'ouvre dans la ligne qui contient la pastille (zone à défilement : une palette flottante serait rognée).</summary>
+    [Parameter] public bool Inline { get; set; }
+
+    private async Task ChooseAsync(string? color)
+    {
+        _open = false;
+        await ValueChanged.InvokeAsync(color);
+    }
+}

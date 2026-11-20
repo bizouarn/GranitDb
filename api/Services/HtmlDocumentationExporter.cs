@@ -68,6 +68,9 @@ public static class HtmlDocumentationExporter
                 // Place des tables dans le plan du domaine, telle qu'enregistrée dans l'application.
                 layout = links.Where(l => l.DomainId == d.Id && l.X != null && l.Y != null)
                     .ToDictionary(l => l.TableId, l => new[] { l.X!.Value, l.Y!.Value }),
+                // Couleur choisie pour une table dans ce domaine ; sans choix, l'en-tête reste bleu comme dans l'application.
+                colors = links.Where(l => l.DomainId == d.Id && !string.IsNullOrEmpty(l.Color))
+                    .ToDictionary(l => l.TableId, l => l.Color!),
                 hidden = hiddenMarks.Where(h => h.DomainId == d.Id).Select(h => h.RelationId).ToArray()
             }),
             tables = tables.OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).Select(t => new
@@ -176,7 +179,7 @@ table.grid tr:hover td{background:#f8fafb}
 .erd-tools select{font:inherit;padding:2px 6px;border:1px solid #b9c7d2;border-radius:3px;background:#fff}
 .erd-hint{color:var(--muted);font-size:12px;margin-left:6px}
 .erd text{font-size:12px;fill:#222}
-.erd .hd{fill:var(--primary800)}.erd .hdt{fill:#fff;font-weight:700}.erd .cap{fill:#dfe9f1;font-size:11px}
+.erd .hd{fill:#1976d2}.erd .hdt{fill:#fff;font-weight:700}.erd .cap{fill:#dfe9f1;font-size:11px}
 .erd .box{fill:#fff;stroke:#8fa6b8}.erd .pkc{font-weight:700}
 .erd .edge{fill:none;stroke:#757575;stroke-width:1.2}
 .erd .card{font-size:10px;fill:#555}
@@ -426,7 +429,7 @@ function autoLayout(nodes, edges){
 }
 // nodes : [{id, x, y, rows, w, h, head}] mesurés et placés.
 // remeasure(mode) remesure les tables (places conservées) et renvoie les nœuds : le sélecteur de colonnes redessine le diagramme.
-function drawErd(nodes, edges, color, center, mode, remeasure){
+function drawErd(nodes, edges, colors, center, mode, remeasure){
   var by = {}; nodes.forEach(function(n){ by[n.id] = n; });
   var svg = sv('svg', {'class': 'erd', width: '100%', height: '100%'});
   var gEdges = sv('g'), gNodes = sv('g'), hover = null;
@@ -476,6 +479,7 @@ function drawErd(nodes, edges, color, center, mode, remeasure){
     var t = byId[n.id], g = sv('g', {'class': 'node' + (n.id === center ? ' center' : ''), 'data-id': n.id});
     g.appendChild(sv('title', {}, t.name));
     g.appendChild(sv('rect', {'class': 'box', x: 0, y: 0, width: n.w, height: n.h, rx: 3}));
+    var color = colors && colors[n.id] ? colors[n.id] : null; // sans couleur choisie, l'en-tête reste bleu (classe .hd)
     g.appendChild(sv('rect', {'class': 'hd', x: 0, y: 0, width: n.w, height: n.head, rx: 3, style: color ? 'fill:' + color : ''}));
     var ink = color ? inkOn(color) : null;
     g.appendChild(sv('text', {'class': 'hdt', x: 8, y: n.cap ? 19 : 20, style: ink ? 'fill:' + ink.name : ''}, t.name));
@@ -560,7 +564,7 @@ function drawErd(nodes, edges, color, center, mode, remeasure){
     var opt = el('option', {value: o[0], text: o[1]}); if (o[0] === mode) opt.selected = true; pick.appendChild(opt);
   });
   pick.addEventListener('change', function(){
-    var fresh = drawErd(remeasure(pick.value), edges, color, center, pick.value, remeasure);
+    var fresh = drawErd(remeasure(pick.value), edges, colors, center, pick.value, remeasure);
     box.parentNode.replaceChild(fresh, box);
   });
   tools.appendChild(pick);
@@ -582,7 +586,7 @@ function domainErd(d){
   autoLayout(nodes, edges);
   // Les tables déplacées dans l'application reprennent exactement la place enregistrée.
   nodes.forEach(function(n){ var p = d.layout && d.layout[n.id]; if (p) { n.x = p[0]; n.y = p[1]; } });
-  return drawErd(nodes, edges, d.color || null, null, 'related', function(mode){ measure(nodes, edges, null, mode, true); return nodes; });
+  return drawErd(nodes, edges, d.colors || null, null, 'related', function(mode){ measure(nodes, edges, null, mode, true); return nodes; });
 }
 // La table, ses parents (qu'elle référence) à gauche et ses enfants (qui la référencent) à droite.
 function neighboursErd(t){

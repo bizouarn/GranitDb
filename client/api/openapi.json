@@ -1801,6 +1801,63 @@
         }
       }
     },
+    "/api/v1/DomainInfo/{id}/tables/{tableId}/color": {
+      "put": {
+        "tags": [
+          "DomainInfo"
+        ],
+        "operationId": "DomainInfo_SetTableColor",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "tableId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableColorInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableColorInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/TableColorInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/DomainInfo/{id}/layout": {
       "put": {
         "tags": [
@@ -4901,6 +4958,10 @@
             "type": "number",
             "format": "double",
             "nullable": true
+          },
+          "color": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -5817,6 +5878,18 @@
           "indexesRemoved": {
             "type": "integer",
             "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "TableColorInput": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "maxLength": 16,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false

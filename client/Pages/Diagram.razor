@@ -11,6 +11,7 @@
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
 @inject IDialogService Dialogs
+@inject AuthState Auth
 
 <PageTitle>Diagramme — @(_database?.Name ?? "Base")</PageTitle>
 
@@ -232,6 +233,14 @@
                             {
                                 <span class="er-legend-item"><i class="er-swatch er-swatch-sibling"></i>Autres colonnes de la même clé composite</span>
                             }
+                            @if (CurrentDomain is { } colouredDomain && Auth.CanEdit && _selectedColumn == null && colouredDomain.Tables.Any(t => t.TableId == _selectedTable))
+                            {
+                                <span class="er-legend-item table-colour">
+                                    Couleur de la table dans ce domaine
+                                    <ColorPicker Label="Couleur de la table" Value="@ColorOfSelected(colouredDomain)" AllowNone="true" NoneLabel="Bleu par défaut"
+                                                 NoneColor="#1976d2" ValueChanged="SetSelectedTableColorAsync" />
+                                </span>
+                            }
                             <MudButton Size="Size.Small" OnClick="ClearSelection" Class="er-legend-clear">Désélectionner</MudButton>
                         </div>
                     }
@@ -400,7 +409,8 @@
             var hidden = domain.HiddenRelations.ToHashSet();
             var frontier = domain.ShowNeighbors ? FrontierOf(members, hidden) : [];
             _diagram = ErDiagram.Build(_tables, members.Union(frontier).ToHashSet(), frontier, relatedColumnsOnly: !_allColumns,
-                hiddenRelations: hidden);
+                hiddenRelations: hidden,
+                tableColors: domain.Tables.Where(t => !string.IsNullOrEmpty(t.Color)).ToDictionary(t => t.TableId, t => t.Color!));
             var placed = 0;
             foreach (var place in domain.Tables.Where(t => t is { X: not null, Y: not null }))
                 if (_diagram.Node(place.TableId) is { } node && !previous.ContainsKey(node.Id))
@@ -826,6 +836,22 @@
     private void OpenTable((string TableId, string? ColumnId) target) => Navigation.NavigateTo(
         $"/databases/{Uri.EscapeDataString(Id)}/tables/{Uri.EscapeDataString(target.TableId)}" +
         (target.ColumnId == null ? "" : $"?column={Uri.EscapeDataString(target.ColumnId)}"));
+
+    /// <summary>La couleur choisie pour la table sélectionnée dans ce domaine ; null : la couleur par défaut (bleu).</summary>
+    private string? ColorOfSelected(DomainView domain) => domain.Tables.FirstOrDefault(t => t.TableId == _selectedTable)?.Color;
+
+    /// <summary>Colore l'en-tête de la table sélectionnée, dans ce domaine seulement (le choix est mémorisé avec le domaine et repris par l'export HTML).</summary>
+    private async Task SetSelectedTableColorAsync(string? color)
+    {
+        if (CurrentDomain is not { } domain || _selectedTable is not { } tableId) return;
+        await ApiErrors.TryAsync(async () =>
+        {
+            await Api.SetTableColorAsync(domain.Id, tableId, color);
+            if (domain.Tables.FirstOrDefault(t => t.TableId == tableId) is { } link) link.Color = color;
+            Rebuild();
+            Workspace.Saved(Notifier, Id, this, color == null ? "Couleur par défaut rétablie pour cette table." : $"Table colorée en {ColorPalette.NameOf(color).ToLowerInvariant()}.");
+        }, ShowError);
+    }
 
     private async Task SelectTableAsync(string tableId)
     {

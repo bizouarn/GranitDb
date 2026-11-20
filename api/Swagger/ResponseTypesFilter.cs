@@ -48,6 +48,7 @@ public sealed class ResponseTypesFilter : IOperationFilter
         ["DomainInfo_OfDatabase"] = (typeof(IReadOnlyList<DomainView>), "200"),
         ["DomainInfo_Settings"] = (typeof(DomainView), "200"),
         ["DomainInfo_AddTable"] = (typeof(DomainView), "200"),
+        ["DomainInfo_SetTableColor"] = (typeof(DomainView), "200"),
         ["DomainInfo_SaveLayout"] = (typeof(DomainView), "200"),
         ["History_Get"] = (typeof(IReadOnlyList<HistoryEntry>), "200"),
         ["Impact_OfColumn"] = (typeof(ImpactResult), "200"),

@@ -17,8 +17,7 @@
                     <label class="native-select" style="flex: 1"><span class="native-select-label">Nom du domaine</span>
                         <input class="domain-dialog-name" type="text" maxlength="100" required @bind="_name" @bind:event="oninput" /></label>
                     <label class="native-select"><span class="native-select-label">Couleur</span>
-                        <input class="domain-dialog-color color-input" type="color" aria-label="Couleur du domaine" value="@(_color ?? "#757575")"
-                               @onchange="e => _color = e.Value?.ToString()" /></label>
+                        <ColorPicker Class="domain-dialog-color" Label="Couleur du domaine" Value="@_color" ValueChanged="@(color => _color = color)" AllowNone="true" /></label>
                 </MudStack>
                 @if (NameTaken)
                 {
@@ -57,7 +56,9 @@
                             @foreach (var table in Members)
                             {
                                 var current = table;
-                                <div class="domain-dialog-row" data-member="@table.Name">
+                                <div class="domain-dialog-row domain-dialog-member" data-member="@table.Name">
+                                    <ColorPicker Inline="true" Class="domain-dialog-table-color" Label="@($"Couleur de {table.Name}")" Value="@ColorOf(current.Id)"
+                                                 ValueChanged="@(color => _tableColors[current.Id] = color)" AllowNone="true" NoneLabel="Bleu par défaut" NoneColor="#1976d2" />
                                     <span>@table.Name</span>
                                     <MudSpacer />
                                     @if (RelatedTo(current.Id).Count > 0)
@@ -138,6 +139,13 @@
     private string? _color;
     private readonly HashSet<string> _members = [];
 
+    /// <summary>Couleur de l'en-tête de chaque table dans ce domaine (absente : le bleu par défaut).</summary>
+    private readonly Dictionary<string, string?> _tableColors = [];
+
+    private string? ColorOf(string tableId) => _tableColors.GetValueOrDefault(tableId);
+
+    private static string? Normalise(string? color) => string.IsNullOrWhiteSpace(color) ? null : color.ToLowerInvariant();
+
     /// <summary>À la création : ne dessiner d'office que les clés étrangères détectées (les relations indirectes sont masquées).</summary>
     private bool _onlyForeignKeys = true;
 
@@ -147,7 +155,11 @@
         {
             _name = Existing.Name;
             _color = Existing.Color;
-            foreach (var link in Existing.Tables) _members.Add(link.TableId);
+            foreach (var link in Existing.Tables)
+            {
+                _members.Add(link.TableId);
+                if (!string.IsNullOrWhiteSpace(link.Color)) _tableColors[link.TableId] = link.Color;
+            }
         }
         else if (InitialTables != null)
         {
@@ -243,6 +255,11 @@
         var removed = before.Where(t => !_members.Contains(t)).ToList();
         foreach (var table in added) await Api.AddTableToDomainAsync(id, table);
         foreach (var table in removed) await Api.RemoveTableFromDomainAsync(id, table);
+        // Couleurs : seulement celles qui diffèrent de ce qui est enregistré (une table retirée n'a plus de couleur à régler).
+        var saved = Existing?.Tables.ToDictionary(t => t.TableId, t => Normalise(t.Color)) ?? [];
+        foreach (var table in _members)
+            if (Normalise(ColorOf(table)) != saved.GetValueOrDefault(table))
+                await Api.SetTableColorAsync(id, table, Normalise(ColorOf(table)));
         // Domaine neuf : ne tracer d'office que les clés étrangères détectées (les relations indirectes sont masquées).
         if (Existing == null && _onlyForeignKeys && IndirectCount > 0) await Api.HideIndirectRelationsAsync(id);
         return new DomainSaved(id, Phrases.DomainSaved(name, Existing == null, _members.Count, added.Count, removed.Count));

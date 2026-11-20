@@ -256,6 +256,39 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         Assert.DoesNotContain(_api.Requests, r => r.Method == HttpMethod.Put);
     }
 
+    // --- Couleur d'une table dans le domaine ---
+
+    [BunitFact]
+    public void A_table_of_the_viewed_domain_can_be_given_a_colour_that_changes_its_header()
+    {
+        var page = Open();
+        SelectDomain(page, "Ventes");
+        var orders = page.Find("g.er-node[data-table='orders']");
+        Assert.Null(orders.QuerySelector("rect.er-head")!.GetAttribute("style")); // bleu par défaut
+        orders.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        orders.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".table-colour .color-picker-toggle")));
+
+        page.Find(".table-colour .color-picker-toggle").Click();
+        page.Find(".table-colour .color-swatch[data-color='#2e7d32']").Click();
+
+        page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/DomainInfo/d1/tables/t2/color")));
+        Assert.Equal("#2e7d32", Sent(HttpMethod.Put, "/api/v1/DomainInfo/d1/tables/t2/color").Body.GetProperty("color").GetString());
+        page.WaitForAssertion(() => Assert.Contains("fill:#2e7d32", page.Find("g.er-node[data-table='orders'] rect.er-head").GetAttribute("style")));
+    }
+
+    [BunitFact]
+    public void The_colour_choice_is_offered_only_inside_a_domain_for_one_of_its_own_tables()
+    {
+        var page = Open();
+        var orders = page.Find("g.er-node[data-table='orders']");
+        orders.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        orders.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-legend")));
+
+        Assert.Empty(page.FindAll(".table-colour")); // vue libre : pas de domaine, donc pas de couleur par domaine
+    }
+
     // --- Appartenance par case à cocher ---
 
     [BunitFact]

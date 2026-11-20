@@ -687,6 +687,17 @@ public static class CatalogMigrations
             SqlServer:
             [
                 "IF COL_LENGTH('dbo.Tables', 'IsManual') IS NULL ALTER TABLE dbo.Tables ADD IsManual BIT NOT NULL CONSTRAINT DF_Tables_IsManual DEFAULT 0"
+            ]),
+
+        // Couleur d'une table dans un domaine (null : la couleur par défaut du diagramme, le bleu).
+        new(19, "Domaines : couleur d'une table",
+            Sqlite:
+            [
+                """ALTER TABLE "DomainTables" ADD COLUMN "Color" TEXT"""
+            ],
+            SqlServer:
+            [
+                "IF COL_LENGTH('dbo.DomainTables', 'Color') IS NULL ALTER TABLE dbo.DomainTables ADD Color NVARCHAR(16) NULL"
             ])
     ];
 

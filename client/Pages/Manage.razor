@@ -43,15 +43,11 @@
             {
                 var current = tag;
                 <div class="manage-row" data-tag="@tag.Name">
-                    <input type="color" class="color-input" aria-label="@($"Couleur de l'étiquette {tag.Name}")"
-                           value="@(tag.Color ?? "#757575")" @onchange="e => SetTagColorAsync(current, e.Value?.ToString())" />
+                    <ColorPicker Label="@($"Couleur de l'étiquette {tag.Name}")" Value="@tag.Color" AllowNone="true"
+                                 ValueChanged="@(color => SetTagColorAsync(current, color))" />
                     <InlineText Value="@tag.Name" Multiline="false" Silent="true" Placeholder="Nom" Label="Nom de l'étiquette"
                                 OnSave="@RenameTagHandler(current)" />
                     <MudSpacer />
-                    @if (tag.Color != null)
-                    {
-                        <MudButton Size="Size.Small" OnClick="() => SetTagColorAsync(current, null)">Sans couleur</MudButton>
-                    }
                     <MudButton Size="Size.Small" OnClick="() => ApplyTagAsync(current)" Class="apply-tag" title="Poser cette étiquette sur plusieurs tables d'une base">Poser sur des tables</MudButton>
                     <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => DeleteTagAsync(current)" Class="delete-tag">Supprimer</MudButton>
                 </div>
@@ -80,17 +76,13 @@
                 {
                     var current = domain;
                     <div class="manage-row" data-domain="@domain.Name">
-                        <input type="color" class="color-input" aria-label="@($"Couleur du domaine {domain.Name}")"
-                               value="@(domain.Color ?? "#757575")" @onchange="e => SetDomainColorAsync(current, e.Value?.ToString())" />
+                        <ColorPicker Label="@($"Couleur du domaine {domain.Name}")" Value="@domain.Color" AllowNone="true"
+                                     ValueChanged="@(color => SetDomainColorAsync(current, color))" />
                         <InlineText Value="@domain.Name" Multiline="false" Silent="true" Placeholder="Nom" Label="Nom du domaine"
                                     OnSave="@RenameDomainHandler(current)" />
                         <Muted Typo="Typo.caption">@domain.Tables.Count table(s)</Muted>
                         <MudSpacer />
                         <MudButton Size="Size.Small" Href="@($"/databases/{db.Id}/diagram?domain={domain.Id}")">Diagramme</MudButton>
-                        @if (domain.Color != null)
-                        {
-                            <MudButton Size="Size.Small" OnClick="() => SetDomainColorAsync(current, null)">Sans couleur</MudButton>
-                        }
                         <MudButton Size="Size.Small" OnClick="() => EditDomainAsync(current)" Class="edit-tables">Modifier le domaine</MudButton>
                         <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => DeleteDomainAsync(current)" Class="delete-domain">Supprimer</MudButton>
                     </div>

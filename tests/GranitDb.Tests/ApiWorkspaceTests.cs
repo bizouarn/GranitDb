@@ -189,6 +189,35 @@ public sealed class ApiWorkspaceTests : IDisposable
     }
 
     [Fact]
+    public async Task A_table_colour_chosen_in_a_domain_is_stored_validated_cleared_and_carried_by_the_html_export()
+    {
+        var db = await ImportAsync();
+        var domain = await CreateDomainAsync(db, "Ventes");
+        var tables = (await GetJsonAsync($"{V1}/TableInfo/database/{db}")).EnumerateArray().ToList();
+        var customers = tables.First(t => t.GetProperty("name").GetString() == "customers").GetProperty("id").GetString()!;
+        var orders = tables.First(t => t.GetProperty("name").GetString() == "orders").GetProperty("id").GetString()!;
+        await _client.PutAsJsonAsync($"{V1}/DomainInfo/{domain}/tables/{customers}", new { x = 10.0, y = 10.0 });
+
+        var set = await _client.PutAsJsonAsync($"{V1}/DomainInfo/{domain}/tables/{customers}/color", new { color = "#2E7D32" });
+
+        Assert.Equal(HttpStatusCode.OK, set.StatusCode);
+        var view = await set.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("#2E7D32", view.GetProperty("tables").EnumerateArray().Single().GetProperty("color").GetString());
+        var html = await _client.GetStringAsync($"{V1}/DatabaseInfo/{db}/export/html");
+        Assert.Contains("\"colors\":{\"" + customers + "\":\"#2E7D32\"}", html);
+        Assert.Contains(".erd .hd{fill:#1976d2}", html); // sans couleur choisie : le bleu de l'application, pas celui du domaine
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await _client.PutAsJsonAsync($"{V1}/DomainInfo/{domain}/tables/{customers}/color", new { color = "orange" })).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await _client.PutAsJsonAsync($"{V1}/DomainInfo/{domain}/tables/{orders}/color", new { color = "#112233" })).StatusCode); // pas dans le domaine
+
+        var cleared = await _client.PutAsJsonAsync($"{V1}/DomainInfo/{domain}/tables/{customers}/color", new { color = "" });
+        Assert.Equal(JsonValueKind.Null, (await cleared.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("tables").EnumerateArray().Single().GetProperty("color").ValueKind);
+        Assert.Contains("\"colors\":{}", await _client.GetStringAsync($"{V1}/DatabaseInfo/{db}/export/html"));
+    }
+
+    [Fact]
     public async Task The_html_export_carries_the_domain_plan_and_the_hidden_relations_for_its_diagrams()
     {
         var db = await ImportAsync();

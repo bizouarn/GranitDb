@@ -44,6 +44,9 @@ public class DomainTableInfo : InfoBase
     public double? X { get; set; }
 
     public double? Y { get; set; }
+
+    /// <summary>Couleur de la table dans ce domaine (<c>#rrggbb</c>) ; null : la couleur par défaut du diagramme (bleu).</summary>
+    public string? Color { get; set; }
 }
 
 /// <summary>Étiquette libre (ex : « RGPD », « legacy »), commune à toutes les bases.</summary>

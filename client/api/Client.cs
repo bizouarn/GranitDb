@@ -321,6 +321,10 @@ public class Client(HttpClient http)
         SendAsync(() => _api.Domains.SettingsAsync(domainId,
             new DomainSettingsInput { ShowNeighbors = showNeighbors, HiddenRelations = hiddenRelations?.ToList() }));
 
+    /// <summary>Colore l'en-tête d'une table dans un domaine (<c>#rrggbb</c>) ; <c>null</c> rend la couleur par défaut (bleu).</summary>
+    public Task SetTableColorAsync(string domainId, string tableId, string? color) =>
+        SendAsync(() => _api.Domains.SetTableColorAsync(domainId, tableId, new TableColorInput { Color = color }));
+
     /// <summary>Masque aussi les relations indirectes (hors clés étrangères détectées) du domaine.</summary>
     public Task HideIndirectRelationsAsync(string domainId) =>
         SendAsync(() => _api.Domains.SettingsAsync(domainId, new DomainSettingsInput { HideIndirectRelations = true }));

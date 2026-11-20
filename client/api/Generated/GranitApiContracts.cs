@@ -337,6 +337,11 @@ namespace GranitDb.Client.Models
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<DomainView> SetTableColorAsync(string id, string tableId, TableColorInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<DomainView> SaveLayoutAsync(string id, System.Collections.Generic.IEnumerable<LayoutItem>? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
@@ -1406,6 +1411,9 @@ namespace GranitDb.Client.Models
         [System.Text.Json.Serialization.JsonPropertyName("y")]
         public double? Y { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("color")]
+        public string? Color { get; set; } = default!;
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -2153,6 +2161,16 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("indexesRemoved")]
         public int IndexesRemoved { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class TableColorInput
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("color")]
+        [System.ComponentModel.DataAnnotations.StringLength(16)]
+        public string? Color { get; set; } = default!;
 
     }
 

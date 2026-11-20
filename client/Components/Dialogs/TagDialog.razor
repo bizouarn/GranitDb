@@ -13,8 +13,8 @@
                     <label class="native-select" style="flex: 1"><span class="native-select-label">Nom de l'étiquette</span>
                         <input class="tag-dialog-name" type="text" maxlength="50" disabled="@(Existing != null)" @bind="_name" @bind:event="oninput" /></label>
                     <label class="native-select"><span class="native-select-label">Couleur</span>
-                        <input class="tag-dialog-color color-input" type="color" aria-label="Couleur de l'étiquette" disabled="@(Existing != null)"
-                               value="@(_color ?? "#757575")" @onchange="e => _color = e.Value?.ToString()" /></label>
+                        <ColorPicker Class="tag-dialog-color" Label="Couleur de l'étiquette" Value="@_color" ValueChanged="@(color => _color = color)"
+                                     Disabled="@(Existing != null)" AllowNone="true" /></label>
                 </MudStack>
                 @if (NameTaken)
                 {

@@ -20,6 +20,12 @@ public class ErNode
     /// <summary>Première ligne de la description de la table, sous son nom (comme la documentation Dataedo).</summary>
     public string? Caption { get; init; }
 
+    /// <summary>Couleur de l'en-tête choisie pour cette table dans le domaine (<c>#rrggbb</c>) ; null : la couleur par défaut (bleu).</summary>
+    public string? Color { get; init; }
+
+    /// <summary>La couleur du texte de l'en-tête, lisible sur <see cref="Color" /> ; null quand l'en-tête garde sa couleur par défaut.</summary>
+    public string? Ink => Color == null ? null : ErDiagram.InkOn(Color);
+
     public double HeaderHeight => Caption == null ? ErDiagram.HeaderHeight : ErDiagram.HeaderHeight + ErDiagram.CaptionHeight;
 
     public IReadOnlyList<ErRow> Rows { get; init; } = [];
@@ -83,13 +89,31 @@ public class ErDiagram
         return _byId.GetValueOrDefault(id);
     }
 
+    /// <summary>Blanc ou presque noir, selon ce qui se lit le mieux sur le fond <paramref name="color" /> (<c>#rrggbb</c>).</summary>
+    public static string InkOn(string color)
+    {
+        if (color.Length != 7 || color[0] != '#' ||
+            !int.TryParse(color.AsSpan(1), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var rgb))
+            return "#ffffff";
+        double Channel(int v)
+        {
+            var c = v / 255.0;
+            return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        var luminance = 0.2126 * Channel(rgb >> 16 & 255) + 0.7152 * Channel(rgb >> 8 & 255) + 0.0722 * Channel(rgb & 255);
+        // Le texte blanc se lit mieux tant que le fond n'est pas franchement clair (seuil d'égalité des contrastes).
+        return luminance > 0.179 ? "#1b1b1b" : "#ffffff";
+    }
+
     /// <summary>
     ///     Construit le diagramme des tables dont l'identifiant est dans <paramref name="visible" /> (toutes si
     ///     <c>null</c>). Seules les relations entre deux tables retenues sont gardées. Les nœuds sont placés.
     ///     Les tables de <paramref name="frontier" /> (vue d'un domaine) ne montrent que les colonnes de leurs relations.
     /// </summary>
     public static ErDiagram Build(IEnumerable<TableInfo> tables, ISet<string>? visible = null,
-        ISet<string>? frontier = null, bool relatedColumnsOnly = false, ISet<string>? hiddenRelations = null)
+        ISet<string>? frontier = null, bool relatedColumnsOnly = false, ISet<string>? hiddenRelations = null,
+        IReadOnlyDictionary<string, string>? tableColors = null)
     {
         var chosen = tables.Where(t => visible == null || visible.Contains(t.Id)).OrderBy(t => t.Name, StringComparer.Ordinal)
             .ToList();
@@ -123,6 +147,7 @@ public class ErDiagram
             return new ErNode
             {
                 Id = t.Id, Name = t.Name, TableType = t.TableType, Rows = rows, IsFrontier = isFrontier, Caption = caption,
+                Color = isFrontier ? null : tableColors?.GetValueOrDefault(t.Id),
                 Width = WidthOf(t.Name, rows),
                 Height = header + Math.Max(1, rows.Count) * RowHeight + 6
             };
@@ -366,10 +391,10 @@ public class ErDiagram
         {
             svg.Append(inv, $"<g transform=\"translate({node.X:0.#} {node.Y:0.#})\">\n");
             svg.Append(inv, $"<rect width=\"{node.Width:0.#}\" height=\"{node.Height:0.#}\" rx=\"4\" fill=\"#ffffff\" stroke=\"#90a4ae\"/>\n");
-            svg.Append(inv, $"<rect width=\"{node.Width:0.#}\" height=\"{node.HeaderHeight}\" rx=\"4\" fill=\"{(node.TableType == "Table" ? "#1976d2" : "#7b1fa2")}\"/>\n");
-            svg.Append(inv, $"<text x=\"10\" y=\"{HeaderHeight / 2 + 4}\" fill=\"#ffffff\" font-weight=\"bold\">{Xml(node.Name)}</text>\n");
+            svg.Append(inv, $"<rect width=\"{node.Width:0.#}\" height=\"{node.HeaderHeight}\" rx=\"4\" fill=\"{node.Color ?? (node.TableType == "Table" ? "#1976d2" : "#7b1fa2")}\"/>\n");
+            svg.Append(inv, $"<text x=\"10\" y=\"{HeaderHeight / 2 + 4}\" fill=\"{node.Ink ?? "#ffffff"}\" font-weight=\"bold\">{Xml(node.Name)}</text>\n");
             if (node.Caption != null)
-                svg.Append(inv, $"<text x=\"10\" y=\"{HeaderHeight + CaptionHeight / 2 + 1}\" fill=\"#ffffff\" font-size=\"11\">{Xml(node.Caption)}</text>\n");
+                svg.Append(inv, $"<text x=\"10\" y=\"{HeaderHeight + CaptionHeight / 2 + 1}\" fill=\"{node.Ink ?? "#ffffff"}\" font-size=\"11\">{Xml(node.Caption)}</text>\n");
             for (var i = 0; i < node.Rows.Count; i++)
             {
                 var row = node.Rows[i];

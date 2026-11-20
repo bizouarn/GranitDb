@@ -39,11 +39,12 @@
                @onpointerup="() => EndDrag(node, null)" @onpointerup:stopPropagation="true"
                @ondblclick="() => OnOpenTable.InvokeAsync((node.Id, null))">
                 <rect class="er-box" width="@N(node.Width)" height="@N(node.Height)" rx="4" />
-                <rect class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")" width="@N(node.Width)" height="@N(node.HeaderHeight)" rx="4" />
-                @Txt("er-title", 10, ErDiagram.HeaderHeight / 2 + 4, node.Name)
+                <rect class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")" width="@N(node.Width)" height="@N(node.HeaderHeight)" rx="4"
+                      style="@(node.Color == null ? null : $"fill:{node.Color}")" />
+                @Txt("er-title", 10, ErDiagram.HeaderHeight / 2 + 4, node.Name, fill: node.Ink)
                 @if (node.Caption != null)
                 {
-                    @Txt("er-caption", 10, ErDiagram.HeaderHeight + ErDiagram.CaptionHeight / 2 + 1, node.Caption)
+                    @Txt("er-caption", 10, ErDiagram.HeaderHeight + ErDiagram.CaptionHeight / 2 + 1, node.Caption, fill: node.Ink)
                 }
                 @for (var i = 0; i < node.Rows.Count; i++)
                 {
@@ -109,7 +110,7 @@
     private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
     /// <summary>Texte SVG (Razor réserve la balise <c>text</c> : l'élément est construit à la main).</summary>
-    private static RenderFragment Txt(string cssClass, double x, double y, string content, string? anchor = null)
+    private static RenderFragment Txt(string cssClass, double x, double y, string content, string? anchor = null, string? fill = null)
     {
         return builder =>
         {
@@ -118,7 +119,8 @@
             builder.AddAttribute(2, "x", N(x));
             builder.AddAttribute(3, "y", N(y));
             if (anchor != null) builder.AddAttribute(4, "text-anchor", anchor);
-            builder.AddContent(5, content);
+            if (fill != null) builder.AddAttribute(5, "style", $"fill:{fill}");
+            builder.AddContent(6, content);
             builder.CloseElement();
         };
     }

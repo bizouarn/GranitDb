@@ -40,6 +40,28 @@ public class ErDiagramTests
     }
 
     [Fact]
+    public void A_table_coloured_in_the_domain_gets_that_header_with_a_readable_ink_and_the_others_stay_blue()
+    {
+        var diagram = ErDiagram.Build(Shop(), tableColors: new Dictionary<string, string> { ["t-c"] = "#f9a825", ["t-o"] = "#1b5e20" });
+
+        Assert.Equal("#f9a825", diagram.Node("t-c")!.Color);
+        Assert.Equal("#1b1b1b", diagram.Node("t-c")!.Ink); // fond clair : texte foncé
+        Assert.Equal("#ffffff", diagram.Node("t-o")!.Ink); // fond foncé : texte blanc
+        Assert.Null(diagram.Node("t-l")!.Color);
+        Assert.Null(diagram.Node("t-l")!.Ink);
+        var svg = diagram.ToSvg();
+        Assert.Contains("fill=\"#f9a825\"", svg);
+        Assert.Contains("fill=\"#1976d2\"", svg); // les tables sans couleur gardent le bleu
+    }
+
+    [Theory]
+    [InlineData("#ffffff", "#1b1b1b")]
+    [InlineData("#000000", "#ffffff")]
+    [InlineData("#1976d2", "#ffffff")]
+    [InlineData("pas une couleur", "#ffffff")]
+    public void The_ink_is_chosen_for_contrast(string background, string expected) => Assert.Equal(expected, ErDiagram.InkOn(background));
+
+    [Fact]
     public void A_referenced_table_is_placed_left_of_the_tables_that_reference_it()
     {
         var diagram = ErDiagram.Build(Shop());
