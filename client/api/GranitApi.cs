@@ -9,7 +9,9 @@ namespace GranitDb.Client.Generated;
 /// </summary>
 public sealed class GranitApi(HttpClient http)
 {
+    public AiClient Ai { get; } = new(http);
     public AuditClient Audit { get; } = new(http);
+    public DescriptionSuggestionsClient Suggestions { get; } = new(http);
     public AuthClient Auth { get; } = new(http);
     public CapabilitiesClient Capabilities { get; } = new(http);
     public ColumnInfoClient Columns { get; } = new(http);

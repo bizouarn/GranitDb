@@ -1,0 +1,88 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject Client Api
+
+@* « Suggérer » : demande au modèle la description d'un seul élément sans description, la montre à relire (texte modifiable) ; rien n'est écrit avant « Accepter ». *@
+@if (Enabled && string.IsNullOrWhiteSpace(Description))
+{
+    @if (_suggestion == null)
+    {
+        <MudButton Size="Size.Small" Variant="Variant.Text" Class="suggest-button" OnClick="SuggestAsync" Disabled="_busy"
+                   StartIcon="@Icons.Material.Filled.AutoAwesome"
+                   title="Propose une description avec le modèle d'IA ; vous la relisez avant de l'enregistrer">@(_busy ? "Réflexion…" : "Suggérer")</MudButton>
+    }
+    else
+    {
+        <div class="suggestion-box">
+            <MudTextField T="string" @bind-Value="_text" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Immediate="true"
+                          Label="@(_suggestion.Uncertain ? "Proposition (incertaine : à relire avec soin)" : "Proposition")" Class="suggestion-text" />
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="suggestion-accept" OnClick="AcceptAsync" Disabled="_busy">Accepter</MudButton>
+            <MudButton Size="Size.Small" Class="suggestion-reject" OnClick="RejectAsync" Disabled="_busy">Refuser</MudButton>
+        </div>
+    }
+    @if (_error != null)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Error" Class="suggestion-error">@_error</MudText>
+    }
+}
+
+@code {
+    [Parameter] public bool Enabled { get; set; }
+    [Parameter] public string DatabaseId { get; set; } = "";
+    [Parameter] public string TargetType { get; set; } = "";
+    [Parameter] public string? TargetId { get; set; }
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Appelé avec le texte écrit dans le catalogue : l'appelant met son modèle à jour.</summary>
+    [Parameter] public EventCallback<string> OnAccepted { get; set; }
+
+    private SuggestionView? _suggestion;
+    private string? _text, _error;
+    private bool _busy;
+
+    private async Task<bool> RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+            return true;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API ne répond pas.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+
+        return false;
+    }
+
+    private Task SuggestAsync() => RunAsync(async () =>
+    {
+        _suggestion = await Api.SuggestAsync(DatabaseId, TargetType, TargetId);
+        _text = _suggestion.Text;
+    });
+
+    private async Task AcceptAsync()
+    {
+        string? written = null;
+        if (await RunAsync(async () => written = (await Api.AcceptSuggestionAsync(DatabaseId, _suggestion!.Id, _text)).Text) && written != null)
+        {
+            _suggestion = null;
+            await OnAccepted.InvokeAsync(written);
+        }
+    }
+
+    private async Task RejectAsync()
+    {
+        if (await RunAsync(() => Api.RejectSuggestionAsync(DatabaseId, _suggestion!.Id))) _suggestion = null;
+    }
+}

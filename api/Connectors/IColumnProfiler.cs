@@ -12,6 +12,15 @@ public record ColumnProfileResult(string Column, long NullCount, long? DistinctC
 
 public record TableProfileResult(long RowCount, IReadOnlyList<ColumnProfileResult> Columns);
 
+/// <summary>Une colonne qui en référencerait une autre : table et colonne de chaque côté (noms tels que le connecteur les donne).</summary>
+public record InclusionCheck(string ChildTable, string ChildColumn, string ParentTable, string ParentColumn);
+
+/// <summary>
+///     Résultat d'un test d'inclusion, des comptes seulement : valeurs non nulles de la colonne qui référence, celles qui n'existent
+///     pas dans la colonne référencée (orphelines) et lignes de la table référencée.
+/// </summary>
+public record InclusionResult(long ChildNonNull, long Orphans, long ParentRows);
+
 /// <summary>
 ///     Profilage léger d'une table de la source : nombre de lignes, de valeurs nulles et de valeurs distinctes par colonne,
 ///     calculés par la base elle-même (<c>COUNT</c>, <c>COUNT(DISTINCT …)</c>) et en lecture seule. Aucune valeur ne quitte la
@@ -23,6 +32,12 @@ public interface IColumnProfiler
 
     Task<TableProfileResult> ProfileAsync(string source, string table, IReadOnlyList<ProfiledColumn> columns,
         int timeoutSeconds, CancellationToken ct = default);
+
+    /// <summary>
+    ///     Vérifie à la source (<c>NOT EXISTS</c>, lecture seule) combien de valeurs de la colonne enfant n'existent pas dans la
+    ///     colonne parent : seuls des comptes remontent, jamais une valeur. Sert à confirmer une relation non déclarée.
+    /// </summary>
+    Task<InclusionResult> CheckInclusionAsync(string source, InclusionCheck check, int timeoutSeconds, CancellationToken ct = default);
 }
 
 /// <summary>Construit les requêtes de comptage : le même schéma pour les deux moteurs, avec les identifiants cités par le moteur.</summary>
@@ -53,6 +68,23 @@ internal static class ProfileQuery
 
         return $"SELECT {string.Join(", ", parts)} FROM {table}";
     }
+
+    /// <summary>
+    ///     Trois comptes : valeurs non nulles de la colonne enfant, celles sans équivalent dans la colonne parent, lignes du parent.
+    ///     Trois sous-requêtes scalaires plutôt qu'un agrégat sur un <c>NOT EXISTS</c> (SQL Server le refuse).
+    /// </summary>
+    public static string BuildInclusion(string child, string childColumn, string parent, string parentColumn,
+        Func<string, string> quote, string countBig)
+    {
+        var c = quote(childColumn);
+        var p = quote(parentColumn);
+        return $"SELECT (SELECT {countBig}(*) FROM {child} WHERE {c} IS NOT NULL), " +
+               $"(SELECT {countBig}(*) FROM {child} c WHERE c.{c} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {parent} p WHERE p.{p} = c.{c})), " +
+               $"(SELECT {countBig}(*) FROM {parent})";
+    }
+
+    public static InclusionResult ReadInclusion(System.Data.Common.DbDataReader reader) =>
+        new(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2));
 }
 
 public class SqliteColumnProfiler : IColumnProfiler
@@ -60,6 +92,35 @@ public class SqliteColumnProfiler : IColumnProfiler
     public string Type => SqliteSchemaConnector.TypeName;
 
     private static string Quote(string name) => "\"" + name.Replace("\"", "\"\"") + "\"";
+
+    public async Task<InclusionResult> CheckInclusionAsync(string source, InclusionCheck check, int timeoutSeconds, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
+            throw new InvalidSourceException($"Fichier SQLite introuvable : {source}");
+        var connectionString = new SqliteConnectionStringBuilder
+            { DataSource = source, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
+        try
+        {
+            await using var db = new SqliteConnection(connectionString);
+            await db.OpenAsync(timeout.Token);
+            await using var cmd = db.CreateCommand();
+            cmd.CommandText = ProfileQuery.BuildInclusion(Quote(check.ChildTable), check.ChildColumn, Quote(check.ParentTable),
+                check.ParentColumn, Quote, "COUNT");
+            await using var reader = await cmd.ExecuteReaderAsync(timeout.Token);
+            await reader.ReadAsync(timeout.Token);
+            return ProfileQuery.ReadInclusion(reader);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new InvalidSourceException($"La vérification de {check.ChildTable}.{check.ChildColumn} a dépassé {timeoutSeconds} s.");
+        }
+        catch (SqliteException e)
+        {
+            throw new InvalidSourceException($"Vérification de {check.ChildTable}.{check.ChildColumn} impossible : {e.Message}", e);
+        }
+    }
 
     public async Task<TableProfileResult> ProfileAsync(string source, string table, IReadOnlyList<ProfiledColumn> columns,
         int timeoutSeconds, CancellationToken ct = default)
@@ -107,6 +168,27 @@ public class SqliteColumnProfiler : IColumnProfiler
 
 public class SqlServerColumnProfiler : IColumnProfiler
 {
+    public async Task<InclusionResult> CheckInclusionAsync(string source, InclusionCheck check, int timeoutSeconds, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(source)) throw new InvalidSourceException("Chaîne de connexion SQL Server manquante.");
+        try
+        {
+            await using var db = new SqlConnection(source);
+            await db.OpenAsync(ct);
+            await using var cmd = db.CreateCommand();
+            cmd.CommandTimeout = Math.Max(1, timeoutSeconds);
+            cmd.CommandText = ProfileQuery.BuildInclusion(TableReference(check.ChildTable), check.ChildColumn,
+                TableReference(check.ParentTable), check.ParentColumn, Quote, "COUNT_BIG");
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            return ProfileQuery.ReadInclusion(reader);
+        }
+        catch (SqlException e)
+        {
+            throw new InvalidSourceException($"Vérification de {check.ChildTable}.{check.ChildColumn} impossible : {Short(e.Message)}", e);
+        }
+    }
+
     public string Type => SqlServerSchemaConnector.TypeName;
 
     // COUNT(DISTINCT) n'existe pas pour ces types.

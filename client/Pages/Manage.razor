@@ -20,6 +20,8 @@
         Cliquez un nom pour le modifier ; il s'enregistre en le quittant.
     </MudText>
 
+    <AiPanel />
+
     @if (_error != null)
     {
         <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>

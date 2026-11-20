@@ -1,0 +1,267 @@
+@page "/databases/{Id}/documentation"
+@implements IDisposable
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+@inject AuthState Auth
+
+<PageTitle>Assistant de documentation</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <MudText Typo="Typo.h4" Class="mb-1">Assistant de documentation</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+        Propose des descriptions pour les éléments qui n'en ont pas, avec un modèle d'IA léger et local qui ne reçoit que des noms, des types et
+        des descriptions (jamais de valeur de ligne ni de colonne sensible). Rien n'est enregistré avant que vous acceptiez, et une description
+        déjà saisie n'est jamais remplacée. Un modèle de petite taille se trompe sur les noms cryptiques : relisez chaque proposition.
+    </MudText>
+
+    @if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
+    }
+
+    <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+        @if (_capabilities.AllowAi && Auth.CanEdit)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GenerateAsync" Disabled="_busy || Running" Class="generate-descriptions"
+                       StartIcon="@Icons.Material.Filled.AutoAwesome">Documenter les éléments sans description</MudButton>
+        }
+        @if (Auth.CanEdit)
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="DetectSensitiveAsync" Disabled="_busy" Class="detect-sensitive"
+                       title="Par le nom des colonnes (e-mail, IBAN, téléphone…), sans modèle">Détecter les colonnes sensibles</MudButton>
+            @if (_items.Any(s => s.Kind == "description" && !s.Uncertain))
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="AcceptConfidentAsync" Disabled="_busy" Class="accept-confident">
+                    Accepter les @_items.Count(s => s.Kind == "description" && !s.Uncertain) proposition(s) sûre(s)
+                </MudButton>
+            }
+        }
+    </MudStack>
+
+    @if (!_capabilities.AllowAi)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3 ai-off">L'assistant d'IA est désactivé sur ce serveur (Catalog:AllowAi) : seule la détection des colonnes sensibles est disponible.</MudAlert>
+    }
+
+    @if (_job != null)
+    {
+        <MudPaper Class="pa-3 mb-3 job-box" Outlined="true">
+            <MudText Typo="Typo.body2" Class="job-state">@JobText</MudText>
+            @if (Running)
+            {
+                <MudProgressLinear Value="@(_job.TablesTotal == 0 ? 0 : 100.0 * _job.TablesDone / _job.TablesTotal)" Class="my-2" />
+                <MudButton Size="Size.Small" Class="cancel-job" OnClick="CancelAsync">Arrêter</MudButton>
+            }
+            @if (_job.Errors.Count > 0)
+            {
+                <ul class="job-errors">
+                    @foreach (var error in _job.Errors.Take(5))
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            }
+        </MudPaper>
+    }
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_items.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="suggestions-empty" Style="color: var(--mud-palette-text-secondary)">Aucune proposition en attente.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true" Class="suggestions-table">
+            <thead><tr><th>Élément</th><th>Proposition</th>@if (Auth.CanEdit) {<th></th>}</tr></thead>
+            <tbody>
+            @foreach (var s in _items)
+            {
+                <tr data-suggestion="@s.Id">
+                    <td>
+                        <code>@s.TargetLabel</code>
+                        <div><MudText Typo="Typo.caption">@(s.Kind == "sensitive" ? "colonne sensible" : s.TargetType)</MudText></div>
+                    </td>
+                    <td>
+                        @if (s.Kind == "sensitive")
+                        {
+                            <span class="suggestion-reason">@s.Text</span>
+                        }
+                        else
+                        {
+                            <input class="suggestion-input" type="text" value="@TextOf(s)" @onchange="@(e => Edit(s, e.Value))" aria-label="@($"Proposition pour {s.TargetLabel}")" />
+                        }
+                        @if (s.Uncertain)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="uncertain">incertaine</MudChip>
+                        }
+                        <MudText Typo="Typo.caption" Class="d-block">proposé par @s.Model</MudText>
+                    </td>
+                    @if (Auth.CanEdit)
+                    {
+                        <td class="suggestion-actions">
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="accept-suggestion" Disabled="_busy" OnClick="@(() => AcceptAsync(s))">Accepter</MudButton>
+                            <MudButton Size="Size.Small" Class="reject-suggestion" Disabled="_busy" OnClick="@(() => RejectAsync(s))">Refuser</MudButton>
+                        </td>
+                    }
+                </tr>
+            }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private List<BreadcrumbItem> _crumbs = [new("Bases", href: "/")];
+    private List<SuggestionView> _items = [];
+    private readonly Dictionary<string, string> _edited = new();
+    private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
+    private SuggestionJobView? _job;
+    private string? _error;
+    private bool _loading = true, _busy;
+    private CancellationTokenSource? _poll;
+
+    private bool Running => _job?.State == "running";
+
+    private string JobText => _job == null ? "" : _job.State switch
+    {
+        "running" => $"Documentation en cours : {_job.TablesDone} / {_job.TablesTotal} table(s), {_job.Suggested} proposition(s).",
+        "done" => $"Terminée : {_job.Suggested} proposition(s){(_job.Failed > 0 ? $", {_job.Failed} échec(s)" : "")}.",
+        "cancelled" => $"Arrêtée : {_job.Suggested} proposition(s) gardée(s) ; relancez pour reprendre là où elle s'est arrêtée.",
+        _ => $"Interrompue : {_job.Suggested} proposition(s)."
+    };
+
+    private string TextOf(SuggestionView s) => _edited.TryGetValue(s.Id, out var text) ? text : s.Text;
+
+    private void Edit(SuggestionView s, object? value) => _edited[s.Id] = value?.ToString() ?? "";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Workspace.Describe(Navigation.Uri, "Assistant de documentation");
+        _loading = true;
+        try
+        {
+            _capabilities = await Api.GetCapabilitiesAsync();
+            var database = await Api.GetDatabaseAsync(Id);
+            _crumbs =
+            [
+                new("Bases", href: "/"),
+                new(database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
+                new("Assistant de documentation", href: null, disabled: true)
+            ];
+            _job = await Api.GetSuggestionJobAsync(Id);
+            _items = await Api.GetSuggestionsAsync(Id);
+            _error = null;
+            if (Running) StartPolling();
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Les propositions n'ont pas pu être lues : l'API ne répond pas.";
+        }
+
+        _loading = false;
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            _error = null;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API ne répond pas.";
+        }
+
+        _busy = false;
+    }
+
+    /// <summary>Tant que la documentation tourne, l'écran relit l'avancement et la file toutes les 2 secondes.</summary>
+    private void StartPolling()
+    {
+        _poll?.Cancel();
+        var source = _poll = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!source.IsCancellationRequested)
+                {
+                    await Task.Delay(2000, source.Token);
+                    var job = await Api.GetSuggestionJobAsync(Id);
+                    var items = await Api.GetSuggestionsAsync(Id);
+                    await InvokeAsync(() =>
+                    {
+                        _job = job;
+                        _items = items;
+                        StateHasChanged();
+                    });
+                    if (job?.State != "running") return;
+                }
+            }
+            catch (Exception e) when (e is OperationCanceledException or ApiException or HttpRequestException or ObjectDisposedException)
+            {
+            }
+        });
+    }
+
+    private Task GenerateAsync() => RunAsync(async () =>
+    {
+        _job = await Api.GenerateSuggestionsAsync(Id);
+        StartPolling();
+    });
+
+    private Task CancelAsync() => RunAsync(async () => _job = await Api.CancelSuggestionJobAsync(Id));
+
+    private Task DetectSensitiveAsync() => RunAsync(async () =>
+    {
+        var found = await Api.DetectSensitiveAsync(Id);
+        _items = await Api.GetSuggestionsAsync(Id);
+        Notifier.Show(found.Accepted == 0 ? "Aucune nouvelle colonne sensible détectée." : $"{found.Accepted} colonne(s) à vérifier.");
+    });
+
+    private Task AcceptAsync(SuggestionView s) => RunAsync(async () =>
+    {
+        await Api.AcceptSuggestionAsync(Id, s.Id, s.Kind == "sensitive" ? null : TextOf(s));
+        _items.Remove(s);
+        Notifier.Show(s.Kind == "sensitive" ? $"{s.TargetLabel} marquée sensible." : $"Description de {s.TargetLabel} enregistrée.");
+        Workspace.NotifyCatalogChanged(Id, this);
+    });
+
+    private Task RejectAsync(SuggestionView s) => RunAsync(async () =>
+    {
+        await Api.RejectSuggestionAsync(Id, s.Id);
+        _items.Remove(s);
+    });
+
+    private Task AcceptConfidentAsync() => RunAsync(async () =>
+    {
+        var batch = await Api.AcceptConfidentSuggestionsAsync(Id);
+        _items = await Api.GetSuggestionsAsync(Id);
+        Notifier.Show($"{batch.Accepted} description(s) enregistrée(s){(batch.Skipped > 0 ? $", {batch.Skipped} ignorée(s)" : "")}.",
+            batch.Skipped > 0 ? Severity.Warning : Severity.Success);
+        Workspace.NotifyCatalogChanged(Id, this);
+    });
+
+    public void Dispose() => _poll?.Cancel();
+}

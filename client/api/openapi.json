@@ -5,6 +5,46 @@
     "version": "1.0"
   },
   "paths": {
+    "/api/v1/Ai/status": {
+      "get": {
+        "tags": [
+          "Ai"
+        ],
+        "operationId": "Ai_Status",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiStatusView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/Ai/test": {
+      "post": {
+        "tags": [
+          "Ai"
+        ],
+        "operationId": "Ai_Test",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiTestView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/Audit": {
       "get": {
         "tags": [
@@ -670,6 +710,191 @@
         }
       }
     },
+    "/api/v1/DatabaseInfo/{id}/relation-suggestions": {
+      "get": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_RelationSuggestions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RelationSuggestionView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DatabaseInfo/{id}/relation-suggestions/detect": {
+      "post": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_DetectRelations",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DetectionRunView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DatabaseInfo/{id}/relation-suggestions/{suggestionId}/accept": {
+      "post": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_AcceptRelationSuggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "suggestionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DatabaseInfo/{id}/relation-suggestions/{suggestionId}/reject": {
+      "post": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_RejectRelationSuggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "suggestionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelationSuggestionView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DatabaseInfo/{id}/relation-suggestions/accept": {
+      "post": {
+        "tags": [
+          "DatabaseInfo"
+        ],
+        "operationId": "DatabaseInfo_AcceptRelationSuggestions",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minScore",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 75
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptBatchView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/DatabaseInfo/{id}/schedule": {
       "put": {
         "tags": [
@@ -913,6 +1138,340 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DatabaseView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}": {
+      "get": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_List",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SuggestionView"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/generate": {
+      "post": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_Generate",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionJobView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/job": {
+      "get": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_Job",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionJobView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/job/cancel": {
+      "post": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_CancelJob",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionJobView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/suggest": {
+      "post": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_Suggest",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/detect-sensitive": {
+      "post": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_DetectSensitive",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptBatchView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/{id}/accept": {
+      "post": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_Accept",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptSuggestionInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptSuggestionInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptSuggestionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/{id}/reject": {
+      "post": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_Reject",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptBatchView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/DescriptionSuggestions/database/{databaseId}/accept-confident": {
+      "post": {
+        "tags": [
+          "DescriptionSuggestions"
+        ],
+        "operationId": "DescriptionSuggestions_AcceptConfident",
+        "parameters": [
+          {
+            "name": "databaseId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptBatchView"
                 }
               }
             }
@@ -3330,6 +3889,84 @@
   },
   "components": {
     "schemas": {
+      "AcceptBatchView": {
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AcceptSuggestionInput": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "maxLength": 2000,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiStatusView": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "model": {
+            "type": "string"
+          },
+          "endpoint": {
+            "type": "string"
+          },
+          "reachable": {
+            "type": "boolean"
+          },
+          "modelAvailable": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "AiTestView": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string"
+          },
+          "reply": {
+            "type": "string"
+          },
+          "validJson": {
+            "type": "boolean"
+          },
+          "elapsedMs": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "promptTokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "completionTokens": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "additionalProperties": false
+      },
       "AttachTagInput": {
         "required": [
           "entityId",
@@ -3417,6 +4054,13 @@
           },
           "allowProfiling": {
             "type": "boolean"
+          },
+          "allowAi": {
+            "type": "boolean"
+          },
+          "aiModel": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -3750,6 +4394,38 @@
           "lastSyncError": {
             "type": "string",
             "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DetectionRunView": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "checked": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "suggested": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "skipped": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "additionalProperties": false
@@ -4475,6 +5151,64 @@
         },
         "additionalProperties": false
       },
+      "RelationSuggestionView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "databaseId": {
+            "type": "string"
+          },
+          "childTable": {
+            "type": "string"
+          },
+          "childColumn": {
+            "type": "string"
+          },
+          "childColumnId": {
+            "type": "string"
+          },
+          "parentTable": {
+            "type": "string"
+          },
+          "parentColumn": {
+            "type": "string"
+          },
+          "parentColumnId": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "level": {
+            "type": "string"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "nonNullCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "orphanCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
+          },
+          "detectedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
       "ScheduleInput": {
         "type": "object",
         "properties": {
@@ -4698,6 +5432,106 @@
           },
           "allowAnonymousRead": {
             "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SuggestInput": {
+        "required": [
+          "targetType"
+        ],
+        "type": "object",
+        "properties": {
+          "targetType": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SuggestionJobView": {
+        "type": "object",
+        "properties": {
+          "databaseId": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "tablesTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "tablesDone": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "suggested": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "finishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SuggestionView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "databaseId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "targetLabel": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "uncertain": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           }
         },
         "additionalProperties": false
@@ -5132,6 +5966,9 @@
   },
   "tags": [
     {
+      "name": "Ai"
+    },
+    {
       "name": "Audit"
     },
     {
@@ -5148,6 +5985,9 @@
     },
     {
       "name": "DatabaseInfo"
+    },
+    {
+      "name": "DescriptionSuggestions"
     },
     {
       "name": "DocumentationImport"

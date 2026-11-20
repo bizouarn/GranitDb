@@ -24,7 +24,7 @@ public class ScheduleInput
 [Route("[controller]")]
 [ApiController]
 public class DatabaseInfoController(ICatalogRepository repository, DatabaseImportService import, IOptions<AuthOptions> auth,
-    ColumnProfilingService profiling, IOptions<CatalogOptions> catalogOptions)
+    ColumnProfilingService profiling, IOptions<CatalogOptions> catalogOptions, RelationDetectionService detection)
     : BaseDbInfoController<DatabaseInfo, DatabaseInput>(repository)
 {
     /// <summary>Appelant sans compte (possible seulement pour les bases publiques, avec l'authentification activée).</summary>
@@ -82,6 +82,53 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     {
         var run = await profiling.ProfileDatabaseAsync(id, ct);
         return run == null ? NotFound() : Ok(run);
+    }
+
+    /// <summary>
+    ///     Relations que le schéma ne déclare pas, proposées par la détection (<c>status</c> : pending par défaut, rejected ou
+    ///     accepted), les mieux notées d'abord. Des comptes et des raisons, jamais une valeur de la source.
+    /// </summary>
+    [HttpGet("{id}/relation-suggestions")]
+    public async Task<IActionResult> RelationSuggestions(string id, [FromQuery] string? status, CancellationToken ct)
+    {
+        var list = await detection.ListAsync(id, status, ct);
+        return list == null ? NotFound() : Ok(list);
+    }
+
+    /// <summary>
+    ///     Détecte les relations non déclarées (noms, types, clés puis vérification par le profilage) et remplace les suggestions en
+    ///     attente. Demande <c>Catalog:AllowProfiling</c> et le rôle administrateur : la vérification lit des comptes à la source.
+    /// </summary>
+    [HttpPost("{id}/relation-suggestions/detect")]
+    [MinimumRole(Role.Admin)]
+    public async Task<IActionResult> DetectRelations(string id, CancellationToken ct)
+    {
+        var run = await detection.DetectAsync(id, ct);
+        return run == null ? NotFound() : Ok(run);
+    }
+
+    /// <summary>Accepte une suggestion : crée la relation manuelle correspondante (marquée <c>detected</c>).</summary>
+    [HttpPost("{id}/relation-suggestions/{suggestionId}/accept")]
+    public async Task<IActionResult> AcceptRelationSuggestion(string id, string suggestionId, CancellationToken ct)
+    {
+        var relation = await detection.AcceptAsync(id, suggestionId, ct);
+        return relation == null ? NotFound() : Ok(relation);
+    }
+
+    /// <summary>Refuse une suggestion : les détections suivantes ne la proposent plus.</summary>
+    [HttpPost("{id}/relation-suggestions/{suggestionId}/reject")]
+    public async Task<IActionResult> RejectRelationSuggestion(string id, string suggestionId, CancellationToken ct)
+    {
+        var rejected = await detection.RejectAsync(id, suggestionId, ct);
+        return rejected == null ? NotFound() : Ok(rejected);
+    }
+
+    /// <summary>Accepte d'un coup les suggestions en attente dont le score atteint <c>minScore</c> (75 par défaut : « probable »).</summary>
+    [HttpPost("{id}/relation-suggestions/accept")]
+    public async Task<IActionResult> AcceptRelationSuggestions(string id, [FromQuery] int minScore = 75, CancellationToken ct = default)
+    {
+        var batch = await detection.AcceptAboveAsync(id, Math.Clamp(minScore, 0, 100), ct);
+        return batch == null ? NotFound() : Ok(batch);
     }
 
     /// <summary>

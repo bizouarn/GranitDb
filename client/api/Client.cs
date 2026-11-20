@@ -82,6 +82,58 @@ public class Client(HttpClient http)
     /// <summary>Profile les tables d'une base (par lots) et dit combien l'ont été.</summary>
     public Task<ProfileRunView> ProfileDatabaseAsync(string databaseId) => CallAsync(() => _api.Databases.ProfileAsync(databaseId));
 
+    // --- Assistant d'IA ---
+
+    public Task<AiStatusView> GetAiStatusAsync() => CallAsync(() => _api.Ai.StatusAsync());
+
+    /// <summary>Un appel minimal au modèle ; lève <see cref="ApiException" /> avec la raison (désactivé, injoignable, format…).</summary>
+    public Task<AiTestView> TestAiAsync() => CallAsync(() => _api.Ai.TestAsync());
+
+    // --- Assistant de documentation ---
+
+    public Task<List<SuggestionView>> GetSuggestionsAsync(string databaseId, string? status = null) =>
+        CallAsync(() => _api.Suggestions.ListAsync(databaseId, status));
+
+    /// <summary>Lance la documentation en lot (arrière-plan) ; lève <see cref="ApiException" /> si l'IA est désactivée ou déjà en cours.</summary>
+    public Task<SuggestionJobView> GenerateSuggestionsAsync(string databaseId) => CallAsync(() => _api.Suggestions.GenerateAsync(databaseId));
+
+    /// <summary>Avancement du dernier lot ; <c>null</c> si aucun n'a été lancé.</summary>
+    public Task<SuggestionJobView?> GetSuggestionJobAsync(string databaseId) =>
+        OptionalAsync<SuggestionJobView?>(() => _api.Suggestions.JobAsync(databaseId), null);
+
+    public Task<SuggestionJobView> CancelSuggestionJobAsync(string databaseId) => CallAsync(() => _api.Suggestions.CancelJobAsync(databaseId));
+
+    /// <summary>Propose la description d'un seul élément (table, column, relation ou database).</summary>
+    public Task<SuggestionView> SuggestAsync(string databaseId, string targetType, string? targetId) =>
+        CallAsync(() => _api.Suggestions.SuggestAsync(databaseId, new SuggestInput { TargetType = targetType, TargetId = targetId }));
+
+    public Task<AcceptBatchView> DetectSensitiveAsync(string databaseId) => CallAsync(() => _api.Suggestions.DetectSensitiveAsync(databaseId));
+
+    public Task<SuggestionView> AcceptSuggestionAsync(string databaseId, string id, string? text) =>
+        CallAsync(() => _api.Suggestions.AcceptAsync(databaseId, id, new AcceptSuggestionInput { Text = text }));
+
+    public Task RejectSuggestionAsync(string databaseId, string id) => CallAsync(() => _api.Suggestions.RejectAsync(databaseId, id));
+
+    public Task<AcceptBatchView> AcceptConfidentSuggestionsAsync(string databaseId) => CallAsync(() => _api.Suggestions.AcceptConfidentAsync(databaseId));
+
+    // --- Relations suggérées (détection) ---
+
+    /// <summary>Les suggestions d'une base (en attente par défaut, les mieux notées d'abord).</summary>
+    public Task<List<RelationSuggestionView>> GetRelationSuggestionsAsync(string databaseId, string? status = null) =>
+        CallAsync(() => _api.Databases.RelationSuggestionsAsync(databaseId, status));
+
+    /// <summary>Lance la détection (vérification par comptes à la source) ; lève <see cref="ApiException" /> avec la raison si elle est refusée.</summary>
+    public Task<DetectionRunView> DetectRelationsAsync(string databaseId) => CallAsync(() => _api.Databases.DetectRelationsAsync(databaseId));
+
+    public Task<RelationInfo> AcceptRelationSuggestionAsync(string databaseId, string suggestionId) =>
+        CallAsync(() => _api.Databases.AcceptRelationSuggestionAsync(databaseId, suggestionId));
+
+    public Task<RelationSuggestionView> RejectRelationSuggestionAsync(string databaseId, string suggestionId) =>
+        CallAsync(() => _api.Databases.RejectRelationSuggestionAsync(databaseId, suggestionId));
+
+    public Task<AcceptBatchView> AcceptRelationSuggestionsAsync(string databaseId, int minScore) =>
+        CallAsync(() => _api.Databases.AcceptRelationSuggestionsAsync(databaseId, minScore));
+
     /// <summary>Aperçu du remplacement du fichier d'une base SQLite : rien n'est modifié.</summary>
     public Task<SyncPreview> PreviewReplaceSqliteAsync(string id, byte[] file, string fileName) =>
         CallAsync(() => _api.SqliteImport.PreviewReplaceAsync(id, new FileParameter(new MemoryStream(file), fileName, "application/octet-stream")));

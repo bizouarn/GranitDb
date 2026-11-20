@@ -445,6 +445,8 @@ public class CatalogRepository : ICatalogRepository
                 """DELETE FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "DatabaseId" = @id)""",
                 """DELETE FROM "Indexes" WHERE "DatabaseId" = @id""",
                 """DELETE FROM "ColumnProfiles" WHERE "TableId" IN (SELECT "Id" FROM "Tables" WHERE "DatabaseId" = @id)""",
+                """DELETE FROM "RelationSuggestions" WHERE "DatabaseId" = @id""",
+                """DELETE FROM "DescriptionSuggestions" WHERE "DatabaseId" = @id""",
                 """DELETE FROM "Columns" WHERE "DatabaseId" = @id""",
                 """DELETE FROM "Tables" WHERE "DatabaseId" = @id"""
             ];
@@ -461,6 +463,8 @@ public class CatalogRepository : ICatalogRepository
                 """DELETE FROM "Relations" WHERE "FirstId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id) OR "SecondId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id)""",
                 """DELETE FROM "Indexes" WHERE "TableId" = @id""",
                 """DELETE FROM "ColumnProfiles" WHERE "TableId" = @id""",
+                """DELETE FROM "RelationSuggestions" WHERE "ChildTableId" = @id OR "ParentTableId" = @id""",
+                """DELETE FROM "DescriptionSuggestions" WHERE ("TargetType" = 'table' AND "TargetId" = @id) OR ("TargetType" = 'column' AND "TargetId" IN (SELECT "Id" FROM "Columns" WHERE "TableId" = @id))""",
                 """DELETE FROM "Columns" WHERE "TableId" = @id"""
             ];
         else if (typeof(T) == typeof(ColumnInfo))
@@ -469,6 +473,8 @@ public class CatalogRepository : ICatalogRepository
                 """DELETE FROM "DomainHiddenRelations" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id)""",
                 """DELETE FROM "TagLinks" WHERE "EntityType" = 'column' AND "EntityId" = @id""",
                 """DELETE FROM "ColumnProfiles" WHERE "ColumnId" = @id""",
+                """DELETE FROM "RelationSuggestions" WHERE "ChildColumnId" = @id OR "ParentColumnId" = @id""",
+                """DELETE FROM "DescriptionSuggestions" WHERE "TargetType" = 'column' AND "TargetId" = @id""",
                 """DELETE FROM "RelationColumns" WHERE "RelationId" IN (SELECT "Id" FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id)""",
                 """DELETE FROM "RelationColumns" WHERE "FirstId" = @id OR "SecondId" = @id""",
                 """DELETE FROM "Relations" WHERE "FirstId" = @id OR "SecondId" = @id"""
@@ -483,7 +489,8 @@ public class CatalogRepository : ICatalogRepository
             cascade =
             [
                 """DELETE FROM "DomainHiddenRelations" WHERE "RelationId" = @id""",
-                """DELETE FROM "RelationColumns" WHERE "RelationId" = @id"""
+                """DELETE FROM "RelationColumns" WHERE "RelationId" = @id""",
+                """DELETE FROM "DescriptionSuggestions" WHERE "TargetType" = 'relation' AND "TargetId" = @id"""
             ];
         else if (typeof(T) == typeof(TagInfo))
             cascade = ["""DELETE FROM "TagLinks" WHERE "TagId" = @id"""];

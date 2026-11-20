@@ -40,6 +40,18 @@ public class CatalogOptions
     public int ProfilingMaxTables { get; set; } = 100;
 
     /// <summary>
+    ///     Candidats vérifiés à la source au plus par détection de relations (chacun coûte un <c>NOT EXISTS</c>) ; les mieux nommés
+    ///     passent d'abord, les autres sont comptés comme ignorés. Même interrupteur que le profilage (<c>AllowProfiling</c>).
+    /// </summary>
+    public int RelationDetectionMaxChecks { get; set; } = 500;
+
+    /// <summary>
+    ///     Autorise l'assistant d'IA (section <c>Ai</c> : modèle local léger par défaut). Désactivé par défaut : il envoie à un modèle
+    ///     des noms, types et descriptions du catalogue (jamais de valeur de ligne).
+    /// </summary>
+    public bool AllowAi { get; set; }
+
+    /// <summary>
     ///     Autorise la synchronisation planifiée : un administrateur règle un intervalle par base, l'API relit alors la source à
     ///     échéance. Sans intervalle réglé, rien ne tourne.
     /// </summary>

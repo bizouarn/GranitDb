@@ -1,0 +1,12 @@
+# Ollama sur GPU NVIDIA (facultatif), à ajouter au fichier principal :
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile ai up --build -d
+# Demande les pilotes NVIDIA et, sous Windows, Docker Desktop avec WSL2. Sans GPU, n'utilisez pas ce fichier (le conteneur refuserait de démarrer).
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

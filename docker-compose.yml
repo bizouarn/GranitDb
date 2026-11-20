@@ -19,6 +19,11 @@ services:
       Catalog__AllowSqlServerSources: ${ALLOW_SQLSERVER_SOURCES:-true}
       # Profilage des colonnes (comptes de lignes, nuls et valeurs distinctes calculés par la source, administrateurs) : ALLOW_PROFILING=true pour l'activer.
       Catalog__AllowProfiling: ${ALLOW_PROFILING:-false}
+      # Assistant d'IA (modèle léger local, profil « ai ») : ALLOW_AI=true pour l'activer. AllowRemote : le service ollama est sur le réseau Docker, en clair.
+      Catalog__AllowAi: ${ALLOW_AI:-false}
+      Ai__Endpoint: ${AI_ENDPOINT:-http://ollama:11434/v1}
+      Ai__Model: ${AI_MODEL:-qwen3:4b-instruct}
+      Ai__AllowRemote: ${AI_ALLOW_REMOTE:-true}
       # Authentification (voir « Authentification et rôles » du README) : désactivée par défaut. Pour l'activer, AUTH_ENABLED=true,
       # une OAuth App GitHub (adresse de retour http://localhost:5105/auth/callback/github) et le login du premier administrateur.
       Auth__Enabled: ${AUTH_ENABLED:-false}
@@ -54,6 +59,39 @@ services:
     volumes:
       - sqlserver-data:/var/opt/mssql
 
+  # Assistant d'IA local (facultatif) : docker compose --profile ai up --build -d, avec ALLOW_AI=true (voir « Assistant d'IA » du README).
+  # Un modèle léger (Qwen3 4B quantifié par défaut, ≈ 2,5 Go) tourne sur CPU ; il n'est pas dans l'image de l'API et se télécharge au premier démarrage.
+  ollama:
+    profiles: ["ai"]
+    image: ollama/ollama:latest
+    volumes:
+      - ollama-models:/root/.ollama
+    # GPU NVIDIA (facultatif) : décommentez.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  ollama-pull:
+    profiles: ["ai"]
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${AI_MODEL:-qwen3:4b-instruct}"]
+    restart: "no"
+
 volumes:
   granitdb-data:
   sqlserver-data:
+  ollama-models:

@@ -22,6 +22,25 @@ public class PostgreSqlColumnProfiler : IColumnProfiler
         return dot > 0 ? $"{Quote(name[..dot])}.{Quote(name[(dot + 1)..])}" : $"{Quote("public")}.{Quote(name)}";
     }
 
+    public async Task<InclusionResult> CheckInclusionAsync(string source, InclusionCheck check, int timeoutSeconds, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(source)) throw new InvalidSourceException("Chaîne de connexion PostgreSQL manquante.");
+        try
+        {
+            await using var db = new NpgsqlConnection(source);
+            await db.OpenAsync(ct);
+            await using var cmd = new NpgsqlCommand(ProfileQuery.BuildInclusion(TableReference(check.ChildTable), check.ChildColumn,
+                TableReference(check.ParentTable), check.ParentColumn, Quote, "COUNT"), db) { CommandTimeout = Math.Max(1, timeoutSeconds) };
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            return ProfileQuery.ReadInclusion(reader);
+        }
+        catch (NpgsqlException e)
+        {
+            throw new InvalidSourceException($"Vérification de {check.ChildTable}.{check.ChildColumn} impossible : {Short(e is PostgresException pg ? pg.MessageText : e.Message)}", e);
+        }
+    }
+
     public async Task<TableProfileResult> ProfileAsync(string source, string table, IReadOnlyList<ProfiledColumn> columns,
         int timeoutSeconds, CancellationToken ct = default)
     {
@@ -73,6 +92,25 @@ public class MySqlColumnProfiler : IColumnProfiler
     public string Type => MySqlSchemaConnector.TypeName;
 
     private static string Quote(string name) => "`" + name.Replace("`", "``") + "`";
+
+    public async Task<InclusionResult> CheckInclusionAsync(string source, InclusionCheck check, int timeoutSeconds, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(source)) throw new InvalidSourceException("Chaîne de connexion MySQL manquante.");
+        try
+        {
+            await using var db = new MySqlConnection(source);
+            await db.OpenAsync(ct);
+            await using var cmd = new MySqlCommand(ProfileQuery.BuildInclusion(Quote(check.ChildTable), check.ChildColumn,
+                Quote(check.ParentTable), check.ParentColumn, Quote, "COUNT"), db) { CommandTimeout = Math.Max(1, timeoutSeconds) };
+            await using var reader = await cmd.ExecuteReaderAsync(ct);
+            await reader.ReadAsync(ct);
+            return ProfileQuery.ReadInclusion(reader);
+        }
+        catch (MySqlException e)
+        {
+            throw new InvalidSourceException($"Vérification de {check.ChildTable}.{check.ChildColumn} impossible : {(e.Message.Length <= 300 ? e.Message : e.Message[..300] + "…")}", e);
+        }
+    }
 
     public async Task<TableProfileResult> ProfileAsync(string source, string table, IReadOnlyList<ProfiledColumn> columns,
         int timeoutSeconds, CancellationToken ct = default)

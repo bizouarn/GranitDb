@@ -1,0 +1,67 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject AuthState Auth
+
+@if (_enabled && Auth.IsAdmin)
+{
+    <MudPaper Class="pa-3 mb-4 ai-panel" Outlined="true">
+        <MudText Typo="Typo.subtitle1">Assistant d'IA</MudText>
+        <MudText Typo="Typo.body2" Class="ai-status" Style="color: var(--mud-palette-text-secondary)">@StatusText</MudText>
+        <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="ai-test mt-2" OnClick="TestAsync" Disabled="_busy">Tester le modèle</MudButton>
+        @if (_result != null)
+        {
+            <MudText Typo="Typo.caption" Class="ai-result">@_result</MudText>
+        }
+        @if (_error != null)
+        {
+            <MudAlert Severity="Severity.Error" Class="ai-error mt-2" Dense="true">@_error</MudAlert>
+        }
+    </MudPaper>
+}
+
+@code {
+    private bool _enabled, _busy;
+    private AiStatusView? _status;
+    private string? _result, _error;
+
+    private string StatusText => _status == null ? "Vérification…"
+        : !_status.Reachable ? $"Modèle {_status.Model} : {_status.Message}"
+        : _status.ModelAvailable ? $"Modèle {_status.Model} prêt sur {_status.Endpoint}."
+        : $"Serveur joignable ({_status.Endpoint}) : {_status.Message}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _enabled = (await Api.GetCapabilitiesAsync()).AllowAi;
+            if (_enabled && Auth.IsAdmin) _status = await Api.GetAiStatusAsync();
+        }
+        catch (Exception e) when (e is ApiException or HttpRequestException)
+        {
+            _enabled = false; // le panneau est un confort : sans réponse, il ne s'affiche pas
+        }
+    }
+
+    private async Task TestAsync()
+    {
+        _busy = true;
+        _result = _error = null;
+        try
+        {
+            var test = await Api.TestAiAsync();
+            _result = $"Réponse en {test.ElapsedMs / 1000.0:0.0} s ({test.PromptTokens} + {test.CompletionTokens} jetons), JSON {(test.ValidJson ? "valide" : "invalide")}.";
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API ne répond pas.";
+        }
+
+        _busy = false;
+    }
+}

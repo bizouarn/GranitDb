@@ -22,6 +22,10 @@ builder.Services.AddSingleton<IColumnProfiler, MySqlColumnProfiler>();
 builder.Services.AddSingleton<IColumnProfiler, SqliteColumnProfiler>();
 builder.Services.AddSingleton<IColumnProfiler, SqlServerColumnProfiler>();
 builder.Services.AddSingleton<ColumnProfilingService>();
+builder.Services.AddSingleton<RelationDetectionService>();
+builder.Services.Configure<AiOptions>(builder.Configuration.GetSection(AiOptions.Section));
+builder.Services.AddSingleton<IAiProvider, OpenAiCompatibleProvider>();
+builder.Services.AddSingleton<DescriptionAssistant>();
 // Les connexions des sources sont chiffrées dans le catalogue ; les clés vivent dans un dossier à part.
 var catalogSection = builder.Configuration.GetSection(CatalogOptions.Section).Get<CatalogOptions>() ?? new CatalogOptions();
 var dataProtection = builder.Services.AddDataProtection().SetApplicationName("GranitDb")

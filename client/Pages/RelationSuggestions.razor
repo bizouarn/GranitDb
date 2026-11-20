@@ -1,0 +1,191 @@
+@page "/databases/{Id}/relations"
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@using GranitDb.Client.Workspace
+@inject Client Api
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject Notifier Notifier
+@inject AuthState Auth
+
+<PageTitle>Relations suggérées</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <MudText Typo="Typo.h4" Class="mb-1">Relations suggérées</MudText>
+    <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
+        Colonnes dont le nom et les valeurs laissent penser qu'elles référencent une autre table, sans clé étrangère déclarée. La détection
+        compte, à la source, les valeurs qui n'existent pas dans la table visée : aucune valeur n'est lue ni gardée. Rien n'est créé sans votre accord.
+    </MudText>
+
+    @if (_error != null)
+    {
+        <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
+    }
+
+    <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+        @if (CanDetect)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="DetectAsync" Disabled="_busy" Class="detect-relations"
+                       StartIcon="@Icons.Material.Filled.AutoFixHigh">Détecter les relations</MudButton>
+        }
+        @if (Auth.CanEdit && _items.Any(s => s.Score >= 75))
+        {
+            <MudButton Variant="Variant.Outlined" OnClick="AcceptProbableAsync" Disabled="_busy" Class="accept-probable">
+                Accepter les @_items.Count(s => s.Score >= 75) probable(s)
+            </MudButton>
+        }
+        @if (_summary != null)
+        {
+            <MudText Typo="Typo.caption" Class="detect-summary">@_summary</MudText>
+        }
+    </MudStack>
+
+    @if (_loading)
+    {
+        <MudProgressCircular Indeterminate="true" />
+    }
+    else if (_items.Count == 0)
+    {
+        <MudText Typo="Typo.body2" Class="suggestions-empty" Style="color: var(--mud-palette-text-secondary)">
+            @(CanDetect ? "Aucune suggestion en attente. Lancez la détection pour en chercher." : "Aucune suggestion en attente.")
+        </MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Hover="true" Class="suggestions-table">
+            <thead>
+            <tr><th>Colonne</th><th></th><th>Table visée</th><th>Score</th><th>Pourquoi</th>@if (Auth.CanEdit) {<th></th>}</tr>
+            </thead>
+            <tbody>
+            @foreach (var s in _items)
+            {
+                <tr data-suggestion="@s.Id">
+                    <td><code>@s.ChildTable.@s.ChildColumn</code></td>
+                    <td>→</td>
+                    <td><code>@s.ParentTable.@s.ParentColumn</code></td>
+                    <td><MudChip T="string" Size="Size.Small" Color="@ColorOf(s.Level)" Class="@($"level-{s.Level}")">@s.Level (@s.Score)</MudChip></td>
+                    <td>
+                        <ul class="suggestion-reasons">
+                            @foreach (var reason in s.Reasons)
+                            {
+                                <li>@reason</li>
+                            }
+                        </ul>
+                    </td>
+                    @if (Auth.CanEdit)
+                    {
+                        <td class="suggestion-actions">
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="accept-suggestion"
+                                       Disabled="_busy" OnClick="@(() => AcceptAsync(s))">Accepter</MudButton>
+                            <MudButton Size="Size.Small" Class="reject-suggestion" Disabled="_busy" OnClick="@(() => RejectAsync(s))">Refuser</MudButton>
+                        </td>
+                    }
+                </tr>
+            }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudContainer>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private List<BreadcrumbItem> _crumbs = [new("Bases", href: "/")];
+    private List<RelationSuggestionView> _items = [];
+    private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
+    private string? _error, _summary;
+    private bool _loading = true, _busy;
+
+    private bool CanDetect => _capabilities.AllowProfiling && Auth.IsAdmin;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Workspace.Describe(Navigation.Uri, "Relations suggérées");
+        _loading = true;
+        try
+        {
+            _capabilities = await Api.GetCapabilitiesAsync();
+            var database = await Api.GetDatabaseAsync(Id);
+            _crumbs =
+            [
+                new("Bases", href: "/"),
+                new(database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
+                new("Relations suggérées", href: null, disabled: true)
+            ];
+            _items = await Api.GetRelationSuggestionsAsync(Id);
+            _error = null;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Les suggestions n'ont pas pu être lues : l'API ne répond pas.";
+        }
+
+        _loading = false;
+    }
+
+    private static Color ColorOf(string level) => level switch
+    {
+        "probable" => Color.Success,
+        "possible" => Color.Warning,
+        _ => Color.Default
+    };
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            _error = null;
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "L'API ne répond pas.";
+        }
+
+        _busy = false;
+    }
+
+    private Task DetectAsync() => RunAsync(async () =>
+    {
+        var run = await Api.DetectRelationsAsync(Id);
+        _items = await Api.GetRelationSuggestionsAsync(Id);
+        var failed = run.Failed > 0 ? $", {run.Failed} vérification(s) en échec" : "";
+        var skipped = run.Skipped > 0 ? $", {run.Skipped} candidat(s) non vérifié(s) (limite atteinte)" : "";
+        _summary = $"{run.Candidates} candidat(s) par le nom, {run.Suggested} suggestion(s) retenue(s){failed}{skipped}.";
+        if (run.Errors.Count > 0) _error = string.Join(" ", run.Errors.Take(3));
+    });
+
+    private Task AcceptAsync(RelationSuggestionView s) => RunAsync(async () =>
+    {
+        await Api.AcceptRelationSuggestionAsync(Id, s.Id);
+        _items.Remove(s);
+        Notifier.Show($"Relation {s.ChildTable}.{s.ChildColumn} → {s.ParentTable}.{s.ParentColumn} créée.");
+        Workspace.NotifyCatalogChanged(Id, this);
+    });
+
+    private Task RejectAsync(RelationSuggestionView s) => RunAsync(async () =>
+    {
+        await Api.RejectRelationSuggestionAsync(Id, s.Id);
+        _items.Remove(s);
+        Notifier.Show("Suggestion refusée : elle ne sera plus proposée.");
+    });
+
+    private Task AcceptProbableAsync() => RunAsync(async () =>
+    {
+        var batch = await Api.AcceptRelationSuggestionsAsync(Id, 75);
+        _items = await Api.GetRelationSuggestionsAsync(Id);
+        Notifier.Show($"{batch.Accepted} relation(s) créée(s){(batch.Skipped > 0 ? $", {batch.Skipped} ignorée(s)" : "")}.",
+            batch.Skipped > 0 ? Severity.Warning : Severity.Success);
+        Workspace.NotifyCatalogChanged(Id, this);
+    });
+}

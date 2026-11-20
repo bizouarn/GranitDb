@@ -27,6 +27,22 @@ namespace GranitDb.Client.Models
     using System = global::System;
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial interface IAiClient
+    {
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<AiStatusView> StatusAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<AiTestView> TestAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial interface IAuditClient
     {
 
@@ -153,6 +169,31 @@ namespace GranitDb.Client.Models
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.List<RelationSuggestionView>> RelationSuggestionsAsync(string id, string? status = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<DetectionRunView> DetectRelationsAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<RelationInfo> AcceptRelationSuggestionAsync(string id, string suggestionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<RelationSuggestionView> RejectRelationSuggestionAsync(string id, string suggestionId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<AcceptBatchView> AcceptRelationSuggestionsAsync(string id, int? minScore = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<DatabaseView> ScheduleAsync(string id, ScheduleInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
@@ -189,6 +230,57 @@ namespace GranitDb.Client.Models
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<DatabaseView> DocumentAsync(string id, DocumentationInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial interface IDescriptionSuggestionsClient
+    {
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<System.Collections.Generic.List<SuggestionView>> ListAsync(string databaseId, string? status = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SuggestionJobView> GenerateAsync(string databaseId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SuggestionJobView> JobAsync(string databaseId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SuggestionJobView> CancelJobAsync(string databaseId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SuggestionView> SuggestAsync(string databaseId, SuggestInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<AcceptBatchView> DetectSensitiveAsync(string databaseId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<SuggestionView> AcceptAsync(string databaseId, string id, AcceptSuggestionInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<AcceptBatchView> RejectAsync(string databaseId, string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<AcceptBatchView> AcceptConfidentAsync(string databaseId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
     }
 
@@ -575,6 +667,76 @@ namespace GranitDb.Client.Models
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class AcceptBatchView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("accepted")]
+        public int Accepted { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("skipped")]
+        public int Skipped { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class AcceptSuggestionInput
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("text")]
+        [System.ComponentModel.DataAnnotations.StringLength(2000)]
+        public string? Text { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class AiStatusView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("enabled")]
+        public bool Enabled { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("model")]
+        public string Model { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("endpoint")]
+        public string Endpoint { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("reachable")]
+        public bool Reachable { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("modelAvailable")]
+        public bool ModelAvailable { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("message")]
+        public string? Message { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class AiTestView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("model")]
+        public string Model { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("reply")]
+        public string Reply { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("validJson")]
+        public bool ValidJson { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("elapsedMs")]
+        public long ElapsedMs { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("promptTokens")]
+        public int PromptTokens { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("completionTokens")]
+        public int CompletionTokens { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class AttachTagInput
     {
 
@@ -651,6 +813,12 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("allowProfiling")]
         public bool AllowProfiling { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("allowAi")]
+        public bool AllowAi { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("aiModel")]
+        public string? AiModel { get; set; } = default!;
 
     }
 
@@ -916,6 +1084,30 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("lastSyncError")]
         public string? LastSyncError { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class DetectionRunView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("candidates")]
+        public int Candidates { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("checked")]
+        public int Checked { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("suggested")]
+        public int Suggested { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("failed")]
+        public int Failed { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("skipped")]
+        public int Skipped { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("errors")]
+        public System.Collections.Generic.List<string> Errors { get; set; } = default!;
 
     }
 
@@ -1478,6 +1670,57 @@ namespace GranitDb.Client.Models
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class RelationSuggestionView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("databaseId")]
+        public string DatabaseId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("childTable")]
+        public string ChildTable { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("childColumn")]
+        public string ChildColumn { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("childColumnId")]
+        public string ChildColumnId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("parentTable")]
+        public string ParentTable { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("parentColumn")]
+        public string ParentColumn { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("parentColumnId")]
+        public string ParentColumnId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("score")]
+        public int Score { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("level")]
+        public string Level { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("reasons")]
+        public System.Collections.Generic.List<string> Reasons { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("nonNullCount")]
+        public long NonNullCount { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("orphanCount")]
+        public long OrphanCount { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("detectedAt")]
+        public System.DateTimeOffset DetectedAt { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
     public partial class ScheduleInput
     {
 
@@ -1658,6 +1901,91 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("allowAnonymousRead")]
         public bool AllowAnonymousRead { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class SuggestInput
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("targetType")]
+        [System.ComponentModel.DataAnnotations.Required]
+        public string TargetType { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("targetId")]
+        public string? TargetId { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class SuggestionJobView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("databaseId")]
+        public string DatabaseId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("state")]
+        public string State { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("tablesTotal")]
+        public int TablesTotal { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("tablesDone")]
+        public int TablesDone { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("suggested")]
+        public int Suggested { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("failed")]
+        public int Failed { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("errors")]
+        public System.Collections.Generic.List<string> Errors { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("startedAt")]
+        public System.DateTimeOffset StartedAt { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("finishedAt")]
+        public System.DateTimeOffset? FinishedAt { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class SuggestionView
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("id")]
+        public string Id { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("databaseId")]
+        public string DatabaseId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("kind")]
+        public string Kind { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("targetType")]
+        public string TargetType { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("targetId")]
+        public string TargetId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("targetLabel")]
+        public string TargetLabel { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("text")]
+        public string Text { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("model")]
+        public string Model { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("uncertain")]
+        public bool Uncertain { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("status")]
+        public string Status { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("createdAt")]
+        public System.DateTimeOffset CreatedAt { get; set; } = default!;
 
     }
 

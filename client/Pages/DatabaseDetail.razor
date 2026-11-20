@@ -58,6 +58,18 @@
                            StartIcon="@Icons.Material.Filled.QueryStats" Class="profile-database"
                            title="Compte les lignes, les nuls et les valeurs distinctes de chaque colonne, à la source (aucune valeur n'est lue ni gardée)">Profiler les colonnes</MudButton>
             }
+            @if (!Single && Auth.CanEdit)
+            {
+                <MudButton Variant="Variant.Outlined" Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/documentation")"
+                           StartIcon="@Icons.Material.Filled.AutoAwesome" Class="documentation-assistant"
+                           title="Propositions de descriptions (modèle d'IA local) et de colonnes sensibles, à relire avant d'être enregistrées">Assistant de documentation</MudButton>
+            }
+            @if (!Single && (Auth.CanEdit || CanProfile))
+            {
+                <MudButton Variant="Variant.Outlined" Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/relations")"
+                           StartIcon="@Icons.Material.Filled.AccountTree" Class="relation-suggestions"
+                           title="Relations que le schéma ne déclare pas, détectées par le nom des colonnes et vérifiées par des comptes">Relations suggérées</MudButton>
+            }
             @if (_database.Type == "Sqlite" && !Single && Auth.CanEdit)
             {
                 <label class="replace-file">
@@ -253,6 +265,8 @@
                             <div class="mb-1">
                                 <InlineText Value="@table.Description" Placeholder="Décrire cette table" Label="Description"
                                             OnSave="@(text => SaveTableDescriptionAsync(table, text))" />
+                                <SuggestButton Enabled="CanSuggest" DatabaseId="@Id" TargetType="table" TargetId="@table.Id" Description="@table.Description"
+                                               OnAccepted="@(text => SuggestionAcceptedAsync(table, null, text))" />
                             </div>
                             <div class="mb-1">
                                 <InlineText Value="@table.MetaInfo" Placeholder="Ajouter des notes" Label="Notes"
@@ -315,6 +329,8 @@
                                         <td>
                                             <InlineText Value="@column.Description" Placeholder="Décrire" Label="@($"Description de {column.Name}")"
                                                         OnSave="@(text => SaveColumnDescriptionAsync(column, text))" />
+                                            <SuggestButton Enabled="CanSuggest && !column.IsSensitive" DatabaseId="@Id" TargetType="column" TargetId="@column.Id" Description="@column.Description"
+                                                           OnAccepted="@(text => SuggestionAcceptedAsync(table, column, text))" />
                                             @if (_notesOpen.Contains(column.Id) || !string.IsNullOrWhiteSpace(column.MetaInfo))
                                             {
                                                 <div class="column-notes">
@@ -628,6 +644,16 @@
         _profiles.TryGetValue(tableId, out var profile) ? profile.Columns.FirstOrDefault(c => c.ColumnId == columnId) : null;
 
     private bool CanProfile => _capabilities.AllowProfiling && Auth.IsAdmin;
+
+    private bool CanSuggest => _capabilities.AllowAi && Auth.CanEdit;
+
+    /// <summary>Une proposition acceptée a déjà été écrite par l'API : on met le modèle de la page à jour.</summary>
+    private async Task SuggestionAcceptedAsync(TableInfo table, ColumnInfo? column, string text)
+    {
+        if (column != null) column.Description = text;
+        else table.Description = text;
+        await AfterSaveAsync();
+    }
 
     private async Task ProfileTableAsync(TableInfo table)
     {

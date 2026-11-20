@@ -575,6 +575,95 @@ public static class CatalogMigrations
                 "IF COL_LENGTH('dbo.Databases', 'LastSyncAt') IS NULL ALTER TABLE dbo.Databases ADD LastSyncAt DATETIME2 NULL",
                 "IF COL_LENGTH('dbo.Databases', 'LastSyncOk') IS NULL ALTER TABLE dbo.Databases ADD LastSyncOk BIT NULL",
                 "IF COL_LENGTH('dbo.Databases', 'LastSyncError') IS NULL ALTER TABLE dbo.Databases ADD LastSyncError NVARCHAR(500) NULL"
+            ]),
+
+        new(15, "Relations suggérées par la détection",
+            Sqlite:
+            [
+                """
+                CREATE TABLE IF NOT EXISTS "RelationSuggestions" (
+                    "Id" TEXT PRIMARY KEY,
+                    "DatabaseId" TEXT NOT NULL,
+                    "ChildColumnId" TEXT NOT NULL,
+                    "ChildTableId" TEXT NOT NULL,
+                    "ParentColumnId" TEXT NOT NULL,
+                    "ParentTableId" TEXT NOT NULL,
+                    "Score" INTEGER NOT NULL,
+                    "Reasons" TEXT NOT NULL,
+                    "NonNullCount" INTEGER NOT NULL,
+                    "OrphanCount" INTEGER NOT NULL,
+                    "Status" TEXT NOT NULL,
+                    "DetectedAt" TEXT NOT NULL,
+                    "Description" TEXT,
+                    "MetaInfo" TEXT
+                )
+                """,
+                """CREATE INDEX IF NOT EXISTS "IX_RelationSuggestions_DatabaseId" ON "RelationSuggestions"("DatabaseId")"""
+            ],
+            SqlServer:
+            [
+                """
+                IF OBJECT_ID(N'dbo.RelationSuggestions', N'U') IS NULL
+                CREATE TABLE dbo.RelationSuggestions (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    DatabaseId VARCHAR(36) NOT NULL,
+                    ChildColumnId VARCHAR(36) NOT NULL,
+                    ChildTableId VARCHAR(36) NOT NULL,
+                    ParentColumnId VARCHAR(36) NOT NULL,
+                    ParentTableId VARCHAR(36) NOT NULL,
+                    Score INT NOT NULL,
+                    Reasons NVARCHAR(MAX) NOT NULL,
+                    NonNullCount BIGINT NOT NULL,
+                    OrphanCount BIGINT NOT NULL,
+                    Status NVARCHAR(20) NOT NULL,
+                    DetectedAt DATETIME2 NOT NULL,
+                    Description NVARCHAR(MAX) NULL,
+                    MetaInfo NVARCHAR(MAX) NULL)
+                """,
+                Index("IX_RelationSuggestions_DatabaseId", "RelationSuggestions", "DatabaseId")
+            ])
+,
+
+        new(16, "Propositions de l'assistant de documentation",
+            Sqlite:
+            [
+                """
+                CREATE TABLE IF NOT EXISTS "DescriptionSuggestions" (
+                    "Id" TEXT PRIMARY KEY,
+                    "DatabaseId" TEXT NOT NULL,
+                    "Kind" TEXT NOT NULL,
+                    "TargetType" TEXT NOT NULL,
+                    "TargetId" TEXT NOT NULL,
+                    "Text" TEXT NOT NULL,
+                    "Model" TEXT NOT NULL,
+                    "Uncertain" INTEGER NOT NULL,
+                    "Status" TEXT NOT NULL,
+                    "CreatedAt" TEXT NOT NULL,
+                    "Description" TEXT,
+                    "MetaInfo" TEXT
+                )
+                """,
+                """CREATE INDEX IF NOT EXISTS "IX_DescriptionSuggestions_DatabaseId" ON "DescriptionSuggestions"("DatabaseId")"""
+            ],
+            SqlServer:
+            [
+                """
+                IF OBJECT_ID(N'dbo.DescriptionSuggestions', N'U') IS NULL
+                CREATE TABLE dbo.DescriptionSuggestions (
+                    Id VARCHAR(36) NOT NULL PRIMARY KEY,
+                    DatabaseId VARCHAR(36) NOT NULL,
+                    Kind NVARCHAR(20) NOT NULL,
+                    TargetType NVARCHAR(20) NOT NULL,
+                    TargetId VARCHAR(36) NOT NULL,
+                    [Text] NVARCHAR(MAX) NOT NULL,
+                    Model NVARCHAR(200) NOT NULL,
+                    Uncertain BIT NOT NULL,
+                    Status NVARCHAR(20) NOT NULL,
+                    CreatedAt DATETIME2 NOT NULL,
+                    Description NVARCHAR(MAX) NULL,
+                    MetaInfo NVARCHAR(MAX) NULL)
+                """,
+                Index("IX_DescriptionSuggestions_DatabaseId", "DescriptionSuggestions", "DatabaseId")
             ])
     ];
 
