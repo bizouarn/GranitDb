@@ -552,3 +552,47 @@
 .db-actions .replace-file-button {
     white-space: nowrap;
 }
+
+/* --- Contrastes et positions repérés à la revue visuelle --- */
+
+/* Recherche globale : texte clair sur la barre bleue (le gris par défaut y tombait à 1,5:1), et de l'air au-dessus et en dessous. */
+.search-box {
+    align-self: center;
+    margin: 0;
+}
+
+.search-box .mud-input-control {
+    margin: 0;
+}
+
+.search-box .mud-input.mud-input-outlined {
+    height: 2rem;
+    color: #fff;
+}
+
+.search-box .mud-input-slot,
+.search-box .mud-input-slot::placeholder {
+    padding-top: .25rem;
+    padding-bottom: .25rem;
+    color: #fff;
+}
+
+.search-box .mud-input-slot::placeholder {
+    opacity: .85;
+}
+
+.search-box .mud-input-adornment-start .mud-icon-root,
+.search-box .mud-input-clear-button {
+    color: #fff;
+}
+
+.search-box .mud-input-outlined-border {
+    border-color: rgba(255, 255, 255, .55);
+}
+
+/* Pourcentage de complétude : jamais coupé en deux lignes. */
+.completeness-percent {
+    white-space: nowrap;
+    min-width: 3rem;
+    text-align: right;
+}
