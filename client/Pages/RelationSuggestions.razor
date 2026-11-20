@@ -1,4 +1,5 @@
 @page "/databases/{Id}/relations"
+@using GranitDb.Client.Components
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
@@ -11,7 +12,7 @@
 <PageTitle>Relations suggérées</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <PageCrumbs DatabaseId="@Id" DatabaseName="@_databaseName" Current="Relations suggérées" />
     <MudText Typo="Typo.h4" Class="mb-1">Relations suggérées</MudText>
     <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
         Colonnes dont le nom et les valeurs laissent penser qu'elles référencent une autre table, sans clé étrangère déclarée. La détection
@@ -91,7 +92,7 @@
 @code {
     [Parameter] public string Id { get; set; } = "";
 
-    private List<BreadcrumbItem> _crumbs = [new("Bases", href: "/")];
+    private string? _databaseName;
     private List<RelationSuggestionView> _items = [];
     private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
     private string? _error, _summary;
@@ -107,12 +108,7 @@
         {
             _capabilities = await Api.GetCapabilitiesAsync();
             var database = await Api.GetDatabaseAsync(Id);
-            _crumbs =
-            [
-                new("Bases", href: "/"),
-                new(database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
-                new("Relations suggérées", href: null, disabled: true)
-            ];
+            _databaseName = database?.Name;
             _items = await Api.GetRelationSuggestionsAsync(Id);
             _error = null;
         }

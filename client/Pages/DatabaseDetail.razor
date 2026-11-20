@@ -17,7 +17,8 @@
 <PageTitle>@(Title)</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudBreadcrumbs Items="Crumbs" />
+    <PageCrumbs DatabaseId="@Id" DatabaseName="@_database?.Name" TableId="@(Single ? TableRoute : null)" TableName="@SingleTable?.Name"
+                ColumnName="@SingleColumnName" />
 
     @if (_loading)
     {
@@ -46,7 +47,7 @@
             {
                 @if (!string.IsNullOrWhiteSpace(_database.SourceLabel))
                 {
-                    <MudButton Variant="Variant.Outlined" Href="@($"/import/sqlserver?id={Uri.EscapeDataString(_database.Id)}")"
+                    <MudButton Variant="Variant.Outlined" OnClick="EditConnectionAsync"
                                StartIcon="@Icons.Material.Filled.Link" Class="edit-connection">Modifier la connexion</MudButton>
                 }
                 <MudButton Variant="Variant.Outlined" OnClick="PreviewSyncAsync" Disabled="_syncing"
@@ -173,14 +174,12 @@
                 else
                 {
                     <MudText Typo="Typo.body2" Class="mb-1">
-                        @_preview.Changes.Count(c => c.Action == "added") ajout(s),
-                        @_preview.Changes.Count(c => c.Action == "changed") modification(s),
-                        @_preview.Changes.Count(c => c.Action == "removed") suppression(s).
+                        @Phrases.SyncSummary(_preview.Changes.Select(c => (c.Kind, c.Action)))
                     </MudText>
                     @if (_preview.LosesDocumentation > 0)
                     {
                         <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2 loses-documentation">
-                            @_preview.LosesDocumentation suppression(s) feront perdre une documentation saisie (description, notes, marquage sensible, étiquettes ou relation manuelle).
+                            @Phrases.LosingDocumentation(_preview.LosesDocumentation)
                         </MudAlert>
                     }
                     <MudSimpleTable Dense="true" Style="max-height: 40vh; overflow: auto;">
@@ -212,6 +211,7 @@
 
         @if (!Single)
         {
+        <ActiveFilterBar Description="@TableFilterDescription" Result="@($"{Visible.Count()} table(s) sur {_tables.Length}")" OnClear="ClearTableFilter" />
         <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-3">
             <MudTextField @bind-Value="_filter" Label="Filtrer les tables" Immediate="true" Clearable="true"
                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Class="flex-grow-1" />
@@ -400,7 +400,7 @@
                                 {
                                     <MudListItem T="string">
                                         <MudStack Row="true" AlignItems="AlignItems.Center" Class="relation-row" data-relation="@relation.Id">
-                                            <span>@RelationLabel(relation)@(" ")</span>
+                                            <span class="relation-label">@RelationLinks(relation)@(" ")</span>
                                             @if (_editingRelation == relation.Id)
                                             {
                                                 <NativeSelect AriaLabel="Type de la relation" Value="@relation.RelationType" ValueChanged="@(type => ChangeRelationTypeAsync(relation, type))"
@@ -420,7 +420,7 @@
                                             }
                                             @if (relation.MetaInfo != RelationAutoMarker)
                                             {
-                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" title="Relation saisie à la main : la synchronisation ne la supprime jamais (sauf si une de ses colonnes disparaît)">manuelle</MudChip>
+                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" title="@Glossary.Define("relation-manuelle")">manuelle</MudChip>
                                             }
                                             @if (relation.MetaInfo != RelationAutoMarker)
                                             {
@@ -488,6 +488,7 @@
     private DatabaseView? _database;
     private TableInfo[] _tables = [];
     private Dictionary<string, string> _columnLabels = new();
+    private Dictionary<string, string> _columnTables = new();
     private TagLinkView[] _tagLinks = [];
     private DomainView[] _domains = [];
     private CompletenessReport? _completeness;
@@ -536,18 +537,10 @@
 
     private string Title => Single ? SingleTable?.Name ?? "Table" : _database?.Name ?? "Base";
 
-    private List<BreadcrumbItem> Crumbs => Single
-        ?
-        [
-            new("Bases", href: "/"),
-            new(_database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
-            new(SingleTable?.Name ?? "Table", href: null, disabled: true)
-        ]
-        :
-        [
-            new("Bases", href: "/"),
-            new(_database?.Name ?? "Base", href: null, disabled: true)
-        ];
+    /// <summary>La colonne mise en évidence (?column=) dans l'onglet d'une table : dernier maillon du fil d'Ariane.</summary>
+    private string? SingleColumnName => Single && ColumnId != null
+        ? SingleTable?.Columns?.FirstOrDefault(c => c.Id == ColumnId)?.Name
+        : null;
 
     /// <summary>Page de tables réellement rendue (les tables dépliées par un lien en font toujours partie).</summary>
     private IEnumerable<TableInfo> Shown
@@ -559,6 +552,23 @@
             if (Single || _limit == int.MaxValue) return all;
             return all.Where((t, i) => i < _limit || _open.Contains(t.Id));
         }
+    }
+
+    private string? TableFilterDescription
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(_filter)) parts.Add($"nom contient « {_filter.Trim()} »");
+            if (_domainFilter != "") parts.Add($"domaine {_domains.FirstOrDefault(d => d.Id == _domainFilter)?.Name ?? "inconnu"}");
+            return parts.Count == 0 ? null : string.Join(", ", parts);
+        }
+    }
+
+    private void ClearTableFilter()
+    {
+        _filter = null;
+        _domainFilter = "";
     }
 
     private IEnumerable<TableInfo> Visible
@@ -770,6 +780,8 @@
         _tables = _database == null ? [] : (await Api.GetTablesAsync(Id)).OrderBy(t => t.Name).ToArray();
         _columnLabels = _tables.SelectMany(t => t.Columns.Select(c => (c.Id, Label: $"{t.Name}.{c.Name}")))
             .ToDictionary(x => x.Id, x => x.Label);
+        _columnTables = _tables.SelectMany(t => t.Columns.Select(c => (c.Id, TableId: t.Id)))
+            .ToDictionary(x => x.Id, x => x.TableId);
     }
 
     /// <summary>Complétude, étiquettes et domaines : des compléments, leur absence n'empêche pas d'afficher la base.</summary>
@@ -794,6 +806,44 @@
     {
         return _columnLabels.GetValueOrDefault(columnId, columnId);
     }
+
+    /// <summary>Une colonne qui ouvre sa table (et la met en évidence) : une relation mène à ses deux tables.</summary>
+    private RenderFragment ColumnLink(string columnId) => builder =>
+    {
+        if (!_columnTables.TryGetValue(columnId, out var tableId))
+        {
+            builder.AddContent(0, Label(columnId));
+            return;
+        }
+
+        builder.OpenElement(1, "a");
+        builder.AddAttribute(2, "class", "relation-link");
+        builder.AddAttribute(3, "href", $"/databases/{Uri.EscapeDataString(Id)}/tables/{Uri.EscapeDataString(tableId)}?column={Uri.EscapeDataString(columnId)}");
+        builder.AddContent(4, Label(columnId));
+        builder.CloseElement();
+    };
+
+    private RenderFragment Side(IEnumerable<string> columnIds, bool group) => builder =>
+    {
+        var ids = columnIds.ToList();
+        if (group) builder.AddContent(0, "(");
+        for (var i = 0; i < ids.Count; i++)
+        {
+            if (i > 0) builder.AddContent(1, ", ");
+            builder.AddContent(2, ColumnLink(ids[i]));
+        }
+
+        if (group) builder.AddContent(3, ")");
+    };
+
+    private RenderFragment RelationLinks(RelationInfo relation) => builder =>
+    {
+        var pairs = relation.Pairs().ToList();
+        var group = relation.ExtraColumns.Count > 0;
+        builder.AddContent(0, Side(pairs.Select(p => p.First), group));
+        builder.AddContent(1, " → ");
+        builder.AddContent(2, Side(pairs.Select(p => p.Second), group));
+    };
 
     /// <summary>« table.colonne → table.colonne » ; une relation multi-colonnes liste toutes ses paires : « (a, b) → (x, y) ».</summary>
     private string RelationLabel(RelationInfo relation)
@@ -950,6 +1000,12 @@
     // --- Tables saisies à la main et colonnes en grille ---
 
     /// <summary>Fenêtre « Nouvelle table » : une table qui n'existe pas dans la source, avec ses colonnes en grille.</summary>
+    private async Task EditConnectionAsync()
+    {
+        var parameters = new DialogParameters<ImportWizardDialog> { { x => x.Existing, _database } };
+        await Dialogs.ShowFormAsync("Modifier la connexion", parameters, MaxWidth.Medium); // la fenêtre prévient l'espace de travail : la page se relit
+    }
+
     private async Task NewTableAsync()
     {
         var parameters = new DialogParameters<TableDialog>

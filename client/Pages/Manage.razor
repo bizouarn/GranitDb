@@ -13,7 +13,7 @@
 <PageTitle>Étiquettes et domaines</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <PageCrumbs Current="Étiquettes et domaines" />
     <MudText Typo="Typo.h4" Class="mb-1">Étiquettes et domaines</MudText>
     <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
         Renommez, colorez ou supprimez les étiquettes (communes à toutes les bases) et les domaines de chaque base.
@@ -104,7 +104,6 @@
 </MudContainer>
 
 @code {
-    private readonly List<BreadcrumbItem> _crumbs = [new("Bases", href: "/"), new("Étiquettes et domaines", href: null, disabled: true)];
 
     private TagInfo[] _tags = [];
     private DatabaseView[] _databases = [];

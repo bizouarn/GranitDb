@@ -1,0 +1,35 @@
+@* Fil d'Ariane commun à toutes les pages : Bases › base › table › colonne › page. Le dernier élément est la page courante (sans lien) ; tous les autres mènent quelque part. *@
+<MudBreadcrumbs Items="Items" Class="page-crumbs pa-0 mb-2" />
+
+@code {
+    [Parameter] public string? DatabaseId { get; set; }
+
+    [Parameter] public string? DatabaseName { get; set; }
+
+    [Parameter] public string? TableId { get; set; }
+
+    [Parameter] public string? TableName { get; set; }
+
+    [Parameter] public string? ColumnName { get; set; }
+
+    /// <summary>La page courante quand elle n'est ni la base, ni la table, ni la colonne (« Diagramme », « Webhooks »…).</summary>
+    [Parameter] public string? Current { get; set; }
+
+    private List<BreadcrumbItem> Items
+    {
+        get
+        {
+            var trail = new List<(string Text, string? Href)> { ("Bases", "/") };
+            if (!string.IsNullOrEmpty(DatabaseId))
+                trail.Add((DatabaseName ?? "Base", $"/databases/{Uri.EscapeDataString(DatabaseId)}"));
+            if (!string.IsNullOrEmpty(DatabaseId) && !string.IsNullOrEmpty(TableId))
+                trail.Add((TableName ?? "Table", $"/databases/{Uri.EscapeDataString(DatabaseId)}/tables/{Uri.EscapeDataString(TableId)}"));
+            if (!string.IsNullOrEmpty(ColumnName)) trail.Add((ColumnName, null));
+            if (!string.IsNullOrEmpty(Current)) trail.Add((Current, null));
+
+            return trail.Select((step, i) => i == trail.Count - 1
+                ? new BreadcrumbItem(step.Text, href: null, disabled: true)
+                : new BreadcrumbItem(step.Text, href: step.Href)).ToList();
+        }
+    }
+}

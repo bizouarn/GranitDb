@@ -33,7 +33,28 @@
 		<a class="dismiss">🗙</a>
 	</div>
 	<script src="_framework/blazor.webassembly.js"></script>
-	<script>navigator.serviceWorker.register('service-worker.js');</script>
+	<script>
+		// Service worker : une nouvelle version prend la main d'elle-même ; la page propose alors de recharger (rien n'est rechargé sans l'accord de l'utilisateur).
+		if ("serviceWorker" in navigator) {
+			const hadController = !!navigator.serviceWorker.controller;
+			navigator.serviceWorker.register("service-worker.js");
+			navigator.serviceWorker.addEventListener("controllerchange", () => {
+				if (!hadController || document.getElementById("update-banner")) return;
+				const bar = document.createElement("div");
+				bar.id = "update-banner";
+				bar.setAttribute("role", "status");
+				bar.style.cssText = "position:fixed;left:50%;bottom:1rem;transform:translateX(-50%);z-index:2000;display:flex;gap:1rem;align-items:center;padding:.6rem 1rem;border-radius:6px;background:#1e293b;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.4);font:inherit";
+				bar.textContent = "Une nouvelle version de GranitDb est disponible.";
+				const button = document.createElement("button");
+				button.type = "button";
+				button.textContent = "Recharger";
+				button.style.cssText = "font:inherit;padding:.25rem .75rem;border:1px solid #fff;border-radius:4px;background:#fff;color:#1e293b;cursor:pointer";
+				button.onclick = () => location.reload();
+				bar.appendChild(button);
+				document.body.appendChild(bar);
+			});
+		}
+	</script>
 	<script src="_content/MudBlazor/MudBlazor.min.js"></script>
 	<script>
 		// Fait défiler jusqu'à l'élément d'identifiant donné (table ouverte depuis un résultat de recherche).
@@ -97,6 +118,7 @@
 				handler = e => {
 					const key = e.key.toLowerCase();
 					if ((e.ctrlKey || e.metaKey) && key === "k") { e.preventDefault(); ref.invokeMethodAsync("OnShortcut", "palette"); }
+					else if (e.key === "?" && !e.ctrlKey && !e.metaKey && !typing(e.target)) { e.preventDefault(); ref.invokeMethodAsync("OnShortcut", "shortcuts"); }
 					else if (e.altKey && key === "w") { e.preventDefault(); ref.invokeMethodAsync("OnShortcut", "closeTab"); }
 					else if ((e.ctrlKey || e.metaKey) && key === "b" && !typing(e.target)) { e.preventDefault(); ref.invokeMethodAsync("OnShortcut", "toggleExplorer"); }
 					else if (["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key) && e.target.closest && e.target.closest(".explorer [role=treeitem]")) { e.preventDefault(); }
@@ -104,6 +126,7 @@
 				document.addEventListener("keydown", handler);
 			};
 			window.granitdb.unregisterShortcuts = () => { if (handler) document.removeEventListener("keydown", handler); handler = null; };
+			window.granitdb.isTyping = () => typing(document.activeElement);
 			window.granitdb.focus = selector => { const el = document.querySelector(selector); if (el) el.focus(); };
 			// Grille de saisie : place le focus dans la cellule (ligne, colonne) de la grille.
 			window.granitdb.focusCell = (gridId, row, col) => { const el = document.querySelector('#' + gridId + ' [data-cell="' + row + ':' + col + '"]'); if (el) el.focus(); };

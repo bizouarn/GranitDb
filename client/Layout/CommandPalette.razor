@@ -2,9 +2,11 @@
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
+@using GranitDb.Client.Components.Dialogs
 @inject Client Api
 @inject WorkspaceState Workspace
 @inject AuthState Auth
+@inject IDialogService Dialogs
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 
@@ -147,6 +149,8 @@
                 () => Go($"/search?q={Uri.EscapeDataString(term)}")));
         if (Auth.CanEdit) Action("Importer une base SQLite", "accueil", () => Go("/"));
         Action("Aller à l'accueil", null, () => Go("/"));
+        Action("Ouvrir l'aide et le glossaire", "les mots de l'application", () => Go("/help"));
+        Action("Afficher les raccourcis clavier", "?", () => { Close(); return Dialogs.ShowFormAsync("Raccourcis clavier", new DialogParameters<ShortcutsDialog>()); });
         if (Auth.CanEdit) Action("Gérer les étiquettes et les domaines", "renommer, colorer, supprimer", () => Go("/manage"));
         if (Auth.IsAdmin)
         {

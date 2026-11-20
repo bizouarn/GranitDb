@@ -8,9 +8,10 @@
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 @* Détails de l'élément sélectionné dans l'explorateur : on le documente sans quitter ce qu'on était en train de lire. *@
-<aside class="detail" aria-label="Détails de la sélection">
+<aside class="detail" aria-label="Détails de la sélection" @onkeydown="OnDetailKeyDown">
     @if (Workspace.Selection == null)
     {
         <div class="detail-empty">
@@ -115,6 +116,22 @@
 </aside>
 
 @code {
+    /// <summary>Échap referme la sélection, sauf si le focus est dans un champ : Échap y annule d'abord la saisie.</summary>
+    private async Task OnDetailKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key != "Escape" || Workspace.Selection == null) return;
+        try
+        {
+            if (await JS.InvokeAsync<bool>("granitdb.isTyping")) return;
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Sans le script on ne sait pas si un champ a le focus : on désélectionne.
+        }
+
+        Workspace.Select(null);
+    }
+
     private const string KindTable = "table";
     private const string KindColumn = "column";
 

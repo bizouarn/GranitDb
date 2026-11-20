@@ -626,3 +626,66 @@
     .egrid td::before { content: attr(data-label); display: block; font-size: .75rem; color: var(--mud-palette-text-secondary); }
     .egrid td.egrid-actions::before { content: none; }
 }
+
+/* Assistant d'import : fil des étapes. */
+.wizard-steps { display: flex; flex-wrap: wrap; gap: .25rem 1rem; list-style: none; margin: 0 0 .5rem; padding: 0; font-size: .85rem; color: var(--mud-palette-text-secondary); }
+.wizard-step { display: flex; align-items: center; gap: .35rem; }
+.wizard-step-number { display: inline-flex; align-items: center; justify-content: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; border: 1px solid currentColor; font-size: .75rem; }
+.wizard-step.current { color: var(--mud-palette-text-primary); font-weight: 600; }
+.wizard-step.current .wizard-step-number { background: var(--mud-palette-primary); border-color: var(--mud-palette-primary); color: var(--mud-palette-primary-text); }
+.wizard-step.done .wizard-step-number { background: var(--mud-palette-success); border-color: var(--mud-palette-success); color: var(--mud-palette-success-text); }
+.wizard-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.wizard-schemas { border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; padding: .5rem .75rem; }
+
+/* Feuille des raccourcis clavier. */
+.shortcuts-sheet { display: grid; gap: 1rem; }
+.shortcuts-title { margin: 0 0 .25rem; font-size: .9rem; font-weight: 600; }
+.shortcuts-list { margin: 0; }
+.shortcut-row { display: flex; gap: 1rem; align-items: baseline; padding: .15rem 0; }
+.shortcut-row dt { min-width: 7rem; }
+.shortcut-row dd { margin: 0; color: var(--mud-palette-text-secondary); }
+kbd { font: inherit; font-size: .8rem; padding: .05rem .4rem; border: 1px solid var(--mud-palette-lines-inputs); border-radius: 4px; background: var(--mud-palette-background-gray); }
+
+/* Glossaire : termes expliqués au survol. */
+abbr.glossary-term { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+abbr.glossary-term:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+.glossary-entry { padding: .5rem 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
+.glossary-entry dt { font-weight: 600; }
+.glossary-entry dd { margin: .15rem 0 0; color: var(--mud-palette-text-secondary); }
+.help-link { margin-left: .5rem; font-size: .85em; }
+
+/* Recherche guidée : suggestions sous la barre, exemples, limitation à une base. */
+.search-wrap { position: relative; display: inline-block; }
+.search-suggest-backdrop { position: fixed; inset: 0; z-index: 1299; }
+.search-suggest { position: absolute; top: 100%; left: 0; right: 0; z-index: 1300; background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; box-shadow: var(--mud-elevation-8); min-width: 28rem; }
+.search-suggest-list { list-style: none; margin: 0; padding: .25rem 0; }
+.search-suggest-item, .search-suggest-all { display: flex; flex-wrap: wrap; gap: .1rem .6rem; align-items: baseline; padding: .35rem .75rem; cursor: pointer; }
+.search-suggest-item.active, .search-suggest-item:hover, .search-suggest-all:hover { background: var(--mud-palette-action-default-hover); }
+.suggest-kind { font-size: .7rem; text-transform: uppercase; color: var(--mud-palette-text-secondary); min-width: 4rem; }
+.suggest-name { font-weight: 500; }
+.suggest-where { font-size: .75rem; color: var(--mud-palette-text-secondary); margin-left: auto; }
+.search-suggest-all { border-top: 1px solid var(--mud-palette-lines-default); color: var(--mud-palette-primary); }
+.search-examples { margin-top: .5rem; display: flex; gap: .5rem; align-items: baseline; color: var(--mud-palette-text-secondary); }
+.search-example { color: var(--mud-palette-primary); }
+.search-scope { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+.search-scope-chip { font: inherit; font-size: .85rem; padding: .2rem .7rem; border: 1px solid var(--mud-palette-lines-inputs); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; }
+.search-scope-chip.active { background: var(--mud-palette-primary); border-color: var(--mud-palette-primary); color: var(--mud-palette-primary-text); }
+.search-scope-chip:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+.match-reason { font-style: italic; }
+
+/* Bandeau « Filtre actif ». */
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .75rem; padding: .35rem .75rem; margin: 0 0 .5rem; border-left: 3px solid var(--mud-palette-info); background: var(--mud-palette-background-gray); font-size: .85rem; }
+.filter-bar-clear { font: inherit; background: none; border: none; padding: 0; color: var(--mud-palette-primary); text-decoration: underline; cursor: pointer; margin-left: auto; }
+.filter-bar-clear:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+
+/* Navigation uniforme : liens croisés. */
+a.relation-link, a.impact-link, a.impact-open { color: var(--mud-palette-primary); }
+a.relation-link:focus-visible, a.impact-link:focus-visible, a.impact-open:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+a.impact-open { display: inline-block; margin-bottom: .5rem; font-size: .85rem; }
+
+/* Menu contextuel des onglets. */
+.tab-menu-backdrop { position: fixed; inset: 0; z-index: 1399; }
+.tab-menu { position: fixed; z-index: 1400; list-style: none; margin: 0; padding: .25rem 0; min-width: 14rem; background: var(--mud-palette-surface); color: var(--mud-palette-text-primary); border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; box-shadow: var(--mud-elevation-8); }
+.tab-menu-item { display: block; width: 100%; text-align: left; font: inherit; padding: .4rem .9rem; background: none; border: none; color: inherit; cursor: pointer; }
+.tab-menu-item:hover:not(:disabled), .tab-menu-item:focus-visible { background: var(--mud-palette-action-default-hover); outline: none; }
+.tab-menu-item:disabled { color: var(--mud-palette-text-disabled); cursor: default; }

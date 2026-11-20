@@ -2,6 +2,7 @@
 @using GranitDb.Client.Workspace
 @inject WorkspaceState Workspace
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 @* Une page ouverte = un onglet : épinglable, fermable (clic du milieu), réordonnable par glisser-déposer. *@
 <div class="tabstrip" role="tablist" aria-label="Pages ouvertes">
@@ -10,6 +11,7 @@
         var current = tab;
         var active = IsActive(tab);
         <div class="@($"tab{(active ? " tab-active" : "")}{(tab.Pinned ? " tab-pinned" : "")}")" data-tab="@tab.Title"
+             @oncontextmenu="e => OpenMenu(e, current)" @oncontextmenu:preventDefault="true"
              draggable="true" @ondragstart="() => _dragged = current.Href" @ondragend="() => _dragged = null"
              @ondragover="() => { }" @ondragover:preventDefault="true" @ondrop="() => DropOn(current.Href)">
             <button type="button" role="tab" class="tab-link" data-href="@tab.Href" aria-selected="@(active ? "true" : "false")" title="@tab.Title"
@@ -32,8 +34,69 @@
     }
 </div>
 
+@if (_menuFor != null)
+{
+    var toTheRight = Workspace.CountToTheRight(_menuFor);
+    <div class="tab-menu-backdrop" @onclick="CloseMenu" @oncontextmenu="CloseMenu" @oncontextmenu:preventDefault="true"></div>
+    <ul class="tab-menu" role="menu" aria-label="Actions sur l'onglet" style="@MenuStyle" @onkeydown="OnMenuKeyDown">
+        <li role="none"><button type="button" role="menuitem" class="tab-menu-item tab-menu-right" disabled="@(toTheRight == 0)" @onclick="CloseRight">Fermer les onglets à droite@(toTheRight > 0 ? $" ({toTheRight})" : "")</button></li>
+        <li role="none"><button type="button" role="menuitem" class="tab-menu-item tab-menu-others" @onclick="CloseOthers">Fermer les autres onglets</button></li>
+        <li role="none"><button type="button" role="menuitem" class="tab-menu-item tab-menu-all" @onclick="CloseAll">Fermer tous les onglets</button></li>
+    </ul>
+}
+
 @code {
     private string? _dragged;
+    private string? _menuFor;
+    private bool _focusMenu;
+    private double _menuX, _menuY;
+
+    private string MenuStyle => FormattableString.Invariant($"left:{_menuX:0}px;top:{_menuY:0}px");
+
+    /// <summary>Clic droit (ou touche Menu) sur un onglet : propose de fermer les onglets à droite, les autres ou tous (les épinglés restent).</summary>
+    private void OpenMenu(MouseEventArgs e, WorkspaceTab tab)
+    {
+        _menuFor = tab.Href;
+        _menuX = e.ClientX;
+        _menuY = e.ClientY;
+        _focusMenu = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusMenu || _menuFor == null) return;
+        _focusMenu = false;
+        try
+        {
+            await JS.InvokeVoidAsync("granitdb.focus", ".tab-menu .tab-menu-item:not(:disabled)");
+        }
+        catch (Exception e) when (e is JSException or InvalidOperationException or JSDisconnectedException)
+        {
+            // Le menu reste utilisable à la souris.
+        }
+    }
+
+    private void CloseMenu() => _menuFor = null;
+
+    private void OnMenuKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") CloseMenu();
+    }
+
+    private void CloseRight() => Apply(Workspace.CloseToTheRight);
+
+    private void CloseOthers() => Apply(Workspace.CloseOthers);
+
+    private void CloseAll() => Apply(_ => Workspace.CloseAll());
+
+    private void Apply(Func<string, string?> action)
+    {
+        var href = _menuFor;
+        _menuFor = null;
+        if (href == null) return;
+        var next = action(href);
+        if (next != null) Navigation.NavigateTo(next);
+    }
 
     protected override void OnInitialized()
     {

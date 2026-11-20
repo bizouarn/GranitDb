@@ -369,15 +369,15 @@ public class ErDiagram
             svg.Append(inv, $"<rect width=\"{node.Width:0.#}\" height=\"{node.HeaderHeight}\" rx=\"4\" fill=\"{(node.TableType == "Table" ? "#1976d2" : "#7b1fa2")}\"/>\n");
             svg.Append(inv, $"<text x=\"10\" y=\"{HeaderHeight / 2 + 4}\" fill=\"#ffffff\" font-weight=\"bold\">{Xml(node.Name)}</text>\n");
             if (node.Caption != null)
-                svg.Append(inv, $"<text x=\"10\" y=\"{HeaderHeight + CaptionHeight / 2 + 1}\" fill=\"#e3f2fd\" font-size=\"11\">{Xml(node.Caption)}</text>\n");
+                svg.Append(inv, $"<text x=\"10\" y=\"{HeaderHeight + CaptionHeight / 2 + 1}\" fill=\"#ffffff\" font-size=\"11\">{Xml(node.Caption)}</text>\n");
             for (var i = 0; i < node.Rows.Count; i++)
             {
                 var row = node.Rows[i];
                 var y = node.HeaderHeight + (i + 0.5) * RowHeight + 4;
                 var mark = row.IsPrimaryKey ? "PK" : row.IsForeignKey ? "FK" : "";
-                svg.Append(inv, $"<text x=\"10\" y=\"{y:0.#}\" fill=\"#d84315\" font-size=\"10\" font-weight=\"bold\">{mark}</text>\n");
+                svg.Append(inv, $"<text x=\"10\" y=\"{y:0.#}\" fill=\"#bf360c\" font-size=\"10\" font-weight=\"bold\">{mark}</text>\n");
                 svg.Append(inv, $"<text x=\"34\" y=\"{y:0.#}\" fill=\"#263238\"{(row.IsPrimaryKey ? " font-weight=\"bold\"" : "")}>{Xml(row.Name)}</text>\n");
-                svg.Append(inv, $"<text x=\"{node.Width - 8:0.#}\" y=\"{y:0.#}\" fill=\"#78909c\" text-anchor=\"end\">{Xml(row.DataType)}</text>\n");
+                svg.Append(inv, $"<text x=\"{node.Width - 8:0.#}\" y=\"{y:0.#}\" fill=\"#546e7a\" text-anchor=\"end\">{Xml(row.DataType)}</text>\n");
             }
 
             svg.Append("</g>\n");

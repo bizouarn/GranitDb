@@ -1,4 +1,5 @@
 @page "/search"
+@using GranitDb.Client.Components
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
@@ -9,12 +10,19 @@
 <PageTitle>Recherche</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudBreadcrumbs Items="_crumbs" />
+    <PageCrumbs Current="Recherche" />
     <MudText Typo="Typo.h4" Class="mb-4">Recherche</MudText>
 
     @if (string.IsNullOrWhiteSpace(Q) || Q.Trim().Length < 2)
     {
         <MudText Style="color: var(--mud-palette-text-secondary)">Saisissez au moins 2 caractères dans la barre de recherche, puis validez avec Entrée.</MudText>
+        <div class="search-examples" aria-label="Exemples de recherche">
+            <span>Essayez :</span>
+            @foreach (var example in Examples)
+            {
+                <a class="search-example" href="@($"/search?q={Uri.EscapeDataString(example)}")">@example</a>
+            }
+        </div>
     }
     else if (_loading)
     {
@@ -30,7 +38,18 @@
     }
     else
     {
-        <MudText Class="mb-3" Style="color: var(--mud-palette-text-secondary)">@_hits.Length résultat(s) pour « @Q »</MudText>
+        @if (DatabasesInHits.Count > 1)
+        {
+            <div class="search-scope" role="group" aria-label="Limiter à une base">
+                <button type="button" class="@ScopeClass(null)" aria-pressed="@(_scope == null ? "true" : "false")" @onclick="() => _scope = null">Toutes les bases (@_hits.Length)</button>
+                @foreach (var (id, name, count) in DatabasesInHits)
+                {
+                    var scopeId = id;
+                    <button type="button" class="@ScopeClass(id)" aria-pressed="@(_scope == id ? "true" : "false")" @onclick="() => _scope = scopeId">@name (@count)</button>
+                }
+            </div>
+        }
+        <MudText Class="mb-3" Style="color: var(--mud-palette-text-secondary)">@Shown.Length résultat(s) pour « @Q »</MudText>
         @foreach (var group in Groups)
         {
             <MudText Typo="Typo.h6" Class="mt-4">@group.Label (@group.Hits.Count)</MudText>
@@ -39,7 +58,7 @@
                 {
                     <MudListItem T="string" Href="@hit.Href">
                         <MudText>@hit.Name</MudText>
-                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@Context(hit)</MudText>
+                        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@Context(hit) · <span class="match-reason">@hit.MatchReason(Q)</span></MudText>
                         @if (!string.IsNullOrWhiteSpace(hit.Description))
                         {
                             <MudText Typo="Typo.body2">@hit.Description</MudText>
@@ -55,20 +74,27 @@
     private static readonly (string Kind, string Label)[] Kinds =
         [("database", "Bases"), ("table", "Tables"), ("column", "Colonnes"), ("index", "Index")];
 
-    private readonly List<BreadcrumbItem> _crumbs =
-    [
-        new("Bases", href: "/"),
-        new("Recherche", href: null, disabled: true)
-    ];
 
     private SearchHit[] _hits = [];
     private bool _loading;
+    private string? _scope;
+
+    private static readonly string[] Examples = ["client", "email", "date", "id"];
+
+    private SearchHit[] Shown => _scope == null ? _hits : _hits.Where(h => h.DatabaseId == _scope).ToArray();
+
+    private List<(string Id, string Name, int Count)> DatabasesInHits => _hits
+        .GroupBy(h => h.DatabaseId)
+        .Select(g => (g.Key, g.First().DatabaseName, g.Count()))
+        .OrderByDescending(d => d.Item3).ToList();
+
+    private string ScopeClass(string? id) => _scope == id ? "search-scope-chip active" : "search-scope-chip";
     private string? _error;
 
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
 
     private IEnumerable<(string Label, List<SearchHit> Hits)> Groups => Kinds
-        .Select(k => (k.Label, Hits: _hits.Where(h => h.Kind == k.Kind).ToList()))
+        .Select(k => (k.Label, Hits: Shown.Where(h => h.Kind == k.Kind).ToList()))
         .Where(g => g.Hits.Count > 0);
 
     protected override async Task OnParametersSetAsync()

@@ -10,7 +10,7 @@
 <PageTitle>Journal d'audit</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <PageCrumbs Current="Journal d'audit" />
     <MudText Typo="Typo.h4" Class="mb-1">Journal d'audit</MudText>
     <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
         Qui a modifié quoi et quand : chaque requête d'écriture et chaque export, du plus récent au plus ancien. Le contenu des requêtes n'est jamais gardé.
@@ -20,6 +20,8 @@
     {
         <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _error = null">@_error</MudAlert>
     }
+
+    <ActiveFilterBar Description="@AppliedDescription" Result="@(_loading ? null : $"{_page.Total} entrée(s)")" OnClear="ResetAsync" />
 
     <MudPaper Class="pa-3 mb-3 audit-filters" Outlined="true">
         <form @onsubmit="ApplyAsync" @onsubmit:preventDefault="true">
@@ -86,11 +88,25 @@
     private const int PageSize = 50;
     private static readonly string[] Methods = ["POST", "PUT", "PATCH", "DELETE", "GET"];
 
-    private readonly List<BreadcrumbItem> _crumbs = [new("Bases", href: "/"), new("Journal d'audit", href: null, disabled: true)];
     private Page<AuditEntry> _page = new([], 0);
     private string? _actor, _method, _controller;
     private int? _status;
     private int _skip;
+    private AuditFilter _applied = new();
+
+    /// <summary>Le filtre réellement appliqué à la liste (pas ce qui est en cours de saisie).</summary>
+    private string? AppliedDescription
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(_applied.Actor)) parts.Add($"auteur « {_applied.Actor.Trim()} »");
+            if (!string.IsNullOrWhiteSpace(_applied.Method)) parts.Add($"méthode {_applied.Method}");
+            if (_applied.Status != null) parts.Add($"code {_applied.Status}");
+            if (!string.IsNullOrWhiteSpace(_applied.Controller)) parts.Add($"ressource « {_applied.Controller.Trim()} »");
+            return parts.Count == 0 ? null : string.Join(", ", parts);
+        }
+    }
     private string? _error;
     private bool _loading = true;
 
@@ -105,7 +121,8 @@
         _loading = true;
         try
         {
-            _page = await Api.GetAuditAsync(new AuditFilter(_actor, _method, _status, _controller), _skip, PageSize);
+            _applied = new AuditFilter(_actor, _method, _status, _controller);
+            _page = await Api.GetAuditAsync(_applied, _skip, PageSize);
             _error = null;
         }
         catch (ApiException e)

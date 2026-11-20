@@ -1,11 +1,15 @@
 @inherits LayoutComponentBase
 @implements IDisposable
 @implements IAsyncDisposable
+@using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
+@using GranitDb.Client.Components.Dialogs
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject WorkspaceState Workspace
 @inject AuthState Auth
+@inject GranitDb.Client.api.Client Api
+@inject IDialogService Dialogs
 
 <MudThemeProvider @ref="_themeProvider" @bind-IsDarkMode="_isDarkMode" Theme="_theme" />
 <MudPopoverProvider />
@@ -31,10 +35,32 @@ else
                        aria-label="Afficher ou masquer l'explorateur" title="Explorateur (Ctrl+B)" />
         <span class="brand"><img src="menhir.svg" alt="" class="brand-icon" />Granit DB</span>
         <MudSpacer />
-        <MudTextField T="string" @bind-Value="_query" Immediate="true" Placeholder="Rechercher une table, une colonne, un index…"
+        <div class="search-wrap">
+        <MudTextField T="string" Value="_query" ValueChanged="OnQueryChanged" Immediate="true" Placeholder="Rechercher une table, une colonne, un index… (essayez : client, email)"
                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="search-box"
                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                       Clearable="true" OnKeyDown="OnSearchKeyDown" aria-label="Recherche globale" />
+        @if (_suggestions.Length > 0)
+        {
+            <div class="search-suggest-backdrop" @onclick="CloseSuggestions"></div>
+            <div class="search-suggest" role="region" aria-label="Suggestions de recherche">
+                <div class="visually-hidden" aria-live="polite">@_suggestions.Length suggestion(s)</div>
+                <ul class="search-suggest-list" role="listbox" aria-label="Suggestions">
+                    @for (var i = 0; i < _suggestions.Length; i++)
+                    {
+                        var hit = _suggestions[i];
+                        <li class="@(i == _suggestIndex ? "search-suggest-item active" : "search-suggest-item")" role="option" aria-selected="@(i == _suggestIndex ? "true" : "false")"
+                            @onclick="() => OpenSuggestion(hit)">
+                            <span class="suggest-kind">@SearchHit.KindLabel(hit.Kind)</span>
+                            <span class="suggest-name">@SearchHit.Label(hit)</span>
+                            <span class="suggest-where">@hit.DatabaseName · @hit.MatchReason(_query)</span>
+                        </li>
+                    }
+                    <li class="search-suggest-all" role="option" aria-selected="false" @onclick="SearchEverywhere">Voir tous les résultats pour « @_query?.Trim() »</li>
+                </ul>
+            </div>
+        }
+        </div>
         <MudButton Variant="Variant.Outlined" Color="Color.Inherit" Size="Size.Small" Class="palette-button ml-2" OnClick="OpenPalette"
                    aria-label="Ouvrir la palette de commandes" title="Palette de commandes (Ctrl+K)">Ctrl K</MudButton>
         <MudSpacer />
@@ -117,6 +143,9 @@ else
     private MudThemeProvider? _themeProvider;
     private bool _isDarkMode;
     private string? _query;
+    private SearchHit[] _suggestions = [];
+    private int _suggestIndex = -1;
+    private CancellationTokenSource? _suggestCts;
     private bool _workspaceRestored;
     private DotNetObjectReference<MainLayout>? _shortcuts;
 
@@ -135,6 +164,7 @@ else
     {
         Auth.Changed -= OnAuthChanged;
         Navigation.LocationChanged -= OnLocationChanged;
+        _suggestCts?.Cancel();
         Workspace.Changed -= OnWorkspaceChanged;
     }
 
@@ -155,6 +185,7 @@ else
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         Workspace.Open(e.Location);
+        CloseSuggestions();
     }
 
     private void OnWorkspaceChanged()
@@ -229,6 +260,9 @@ else
             case "closeTab":
                 if (Workspace.ActiveHref != null && Workspace.Close(Workspace.ActiveHref) is { } next) Navigation.NavigateTo(next);
                 break;
+            case "shortcuts":
+                _ = ShowShortcutsAsync();
+                break;
             case "toggleExplorer":
                 ToggleExplorer();
                 break;
@@ -236,6 +270,8 @@ else
 
         return Task.CompletedTask;
     }
+
+    private Task ShowShortcutsAsync() => Dialogs.ShowFormAsync("Raccourcis clavier", new DialogParameters<ShortcutsDialog>());
 
     private void ToggleExplorer() => Workspace.SetExplorerOpen(!Workspace.ExplorerOpen);
 
@@ -256,10 +292,76 @@ else
         }
     }
 
-    private void OnSearchKeyDown(KeyboardEventArgs e)
+    /// <summary>Suggestions pendant la frappe : tables, colonnes et bases qui correspondent, après une courte pause.</summary>
+    private async Task OnQueryChanged(string? value)
+    {
+        _query = value;
+        _suggestCts?.Cancel();
+        var term = value?.Trim();
+        if (term is not { Length: >= 2 })
+        {
+            CloseSuggestions();
+            return;
+        }
+
+        var cts = _suggestCts = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(250, cts.Token);
+            var hits = await Api.SearchAsync(term);
+            if (cts.IsCancellationRequested) return;
+            _suggestions = hits.OrderBy(h => h.MatchReason(term) == "dans le nom" ? 0 : 1).ThenBy(h => SearchHit.KindOrder(h.Kind)).ThenBy(h => h.Name.Length).Take(8).ToArray();
+            _suggestIndex = -1;
+        }
+        catch (TaskCanceledException)
+        {
+            // Une frappe plus récente a pris le relais.
+        }
+        catch (Exception e) when (e is HttpRequestException or GranitDb.Client.api.ApiException)
+        {
+            _suggestions = [];
+        }
+    }
+
+    private void CloseSuggestions()
+    {
+        _suggestCts?.Cancel();
+        _suggestions = [];
+        _suggestIndex = -1;
+    }
+
+    private void OpenSuggestion(SearchHit hit)
+    {
+        CloseSuggestions();
+        Navigation.NavigateTo(hit.Href);
+    }
+
+    private void SearchEverywhere()
     {
         var term = _query?.Trim();
-        if (e.Key == "Enter" && term is { Length: >= 2 })
-            Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(term)}");
+        CloseSuggestions();
+        if (term is { Length: >= 2 }) Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(term)}");
+    }
+
+    private void OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case "ArrowDown" when _suggestions.Length > 0:
+                _suggestIndex = Math.Min(_suggestions.Length - 1, _suggestIndex + 1);
+                return;
+            case "ArrowUp" when _suggestions.Length > 0:
+                _suggestIndex = Math.Max(-1, _suggestIndex - 1);
+                return;
+            case "Escape":
+                CloseSuggestions();
+                return;
+            case "Enter" when _suggestIndex >= 0 && _suggestIndex < _suggestions.Length:
+                OpenSuggestion(_suggestions[_suggestIndex]);
+                return;
+            case "Enter":
+                SearchEverywhere();
+                return;
+        }
     }
 }

@@ -26,7 +26,7 @@
     opacity: 1;
 }
 
-.er-card {
+.er-svg ::deep .er-card {
     fill: var(--mud-palette-text-secondary);
     font-size: 11px;
 }
@@ -52,7 +52,7 @@
     fill: var(--mud-palette-secondary);
 }
 
-.er-title {
+.er-svg ::deep .er-title {
     fill: var(--mud-palette-primary-text);
     font-weight: bold;
 }
@@ -65,19 +65,19 @@
     fill: var(--mud-palette-action-default-hover);
 }
 
-.er-col, .er-type {
+.er-svg ::deep .er-col, .er-svg ::deep .er-type {
     fill: var(--mud-palette-text-primary);
 }
 
-.er-type {
+.er-svg ::deep .er-type {
     fill: var(--mud-palette-text-secondary);
 }
 
-.er-col-pk {
+.er-svg ::deep .er-col-pk {
     font-weight: bold;
 }
 
-.er-key {
+.er-svg ::deep .er-key {
     fill: var(--mud-palette-warning);
     font-size: 10px;
     font-weight: bold;
@@ -123,7 +123,7 @@
     opacity: .7;
 }
 
-.er-caption {
+.er-svg ::deep .er-caption {
     fill: var(--mud-palette-primary-text);
     font-size: 11px;
     opacity: .85;

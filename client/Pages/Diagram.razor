@@ -18,7 +18,7 @@
 
 @* Un dépôt relâché n'importe où ailleurs que sur un domaine annule le glisser en cours. *@
 <MudContainer MaxWidth="MaxWidth.ExtraExtraLarge" Class="mt-6" @onpointerup="ClearDragged">
-    <MudBreadcrumbs Items="Crumbs" />
+    <PageCrumbs DatabaseId="@Id" DatabaseName="@_database?.Name" Current="Diagramme" />
 
     @if (_loading)
     {
@@ -216,12 +216,12 @@
                     @if (_legendOpen)
                     {
                         <div class="er-help" role="note" aria-label="Légende du diagramme">
-                            <span class="er-legend-item"><b>1</b> = clé référencée (le côté « parent »)</span>
+                            <span class="er-legend-item"><b>1</b> = clé référencée (le côté « parent ») · <Term Key="cardinalite">cardinalité</Term></span>
                             <span class="er-legend-item"><b>N</b> = colonne qui référence (le côté « enfant »)</span>
-                            <span class="er-legend-item"><b>PK</b> clé primaire · <b>FK</b> clé étrangère</span>
+                            <span class="er-legend-item"><b>PK</b> <Term Key="cle-primaire">clé primaire</Term> · <b>FK</b> <Term Key="cle-etrangere">clé étrangère</Term></span>
                             <span class="er-legend-item"><i class="er-swatch er-swatch-frontier"></i>Table en pointillés : d'un autre domaine, liée à celui-ci</span>
                             <span class="er-legend-item">Un trait qui part de plusieurs colonnes = une relation multi-colonnes (clé composite)</span>
-                            <span class="er-legend-item">Glisser une table la déplace ; clic = voir ce qu'elle impacte ; Échap ou clic dans le vide = désélectionner</span>
+                            <span class="er-legend-item">Glisser une table la déplace ; clic = voir ce qu'elle impacte ; Échap ou clic dans le vide = désélectionner · <a href="/help" class="help-link">En savoir plus</a></span>
                         </div>
                     }
                     @if (CurrentDomain != null && HiddenInDomain > 0)
@@ -296,6 +296,8 @@
                 {
                     <MudPaper Class="pa-3 mt-3" id="impact">
                         <MudText Typo="Typo.h6">Impact de @Describe(_impact.Root)</MudText>
+                        <MudText Class="impact-sentence">@Phrases.Impact(_impact.Root.ColumnId != null, _impact.Dependents.Count, _impact.Dependencies.Count)</MudText>
+                        <a class="impact-open" href="@NodeHref(_impact.Root)">Ouvrir la fiche de @_impact.Root.TableName</a>
                         @if (_impact.Dependents.Count == 0 && _impact.Dependencies.Count == 0)
                         {
                             <MudText>Aucune relation : rien ne dépend de cet élément dans le catalogue, et il ne dépend de rien.</MudText>
@@ -310,7 +312,7 @@
                                 <MudList T="string" Dense="true">
                                     @foreach (var node in _impact.Dependents)
                                     {
-                                        <MudListItem T="string">@Describe(node) <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
+                                        <MudListItem T="string"><a class="impact-link" href="@NodeHref(node)">@Describe(node)</a> <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
                                     }
                                 </MudList>
                             </MudItem>
@@ -323,7 +325,7 @@
                                 <MudList T="string" Dense="true">
                                     @foreach (var node in _impact.Dependencies)
                                     {
-                                        <MudListItem T="string">@Describe(node) <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
+                                        <MudListItem T="string"><a class="impact-link" href="@NodeHref(node)">@Describe(node)</a> <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
                                     }
                                 </MudList>
                             </MudItem>
@@ -380,12 +382,6 @@
     private IReadOnlySet<string> _dependents = new HashSet<string>();
     private IReadOnlySet<string> _dependencies = new HashSet<string>();
 
-    private List<BreadcrumbItem> Crumbs =>
-    [
-        new("Bases", href: "/"),
-        new(_database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
-        new("Diagramme", href: null, disabled: true)
-    ];
 
     private DomainView? CurrentDomain => _domainId == null ? null : _domains.FirstOrDefault(d => d.Id == _domainId);
 
@@ -958,6 +954,10 @@
 
         return ids;
     }
+
+    /// <summary>La fiche de la table (colonne mise en évidence) : un résultat de l'analyse d'impact y mène.</summary>
+    private string NodeHref(ImpactNode node) =>
+        $"/databases/{Uri.EscapeDataString(Id)}/tables/{Uri.EscapeDataString(node.TableId)}" + (node.ColumnId == null ? "" : $"?column={Uri.EscapeDataString(node.ColumnId)}");
 
     private static string Describe(ImpactNode node)
     {

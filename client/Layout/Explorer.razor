@@ -1,5 +1,6 @@
 @implements IDisposable
 @using GranitDb.Client.api
+@using GranitDb.Client.Components
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
 @inject Client Api
@@ -33,6 +34,8 @@
             }
         </MudMenu>
     </div>
+
+    <ActiveFilterBar Description="@(Filtering ? $"nom contient « {_filter!.Trim()} »" : null)" Result="@FilterResult" OnClear="ClearFilterAsync" />
 
     @if (_loadError != null)
     {
@@ -383,6 +386,18 @@
         foreach (var db in _databases.Where(d => !_tables.ContainsKey(d.Id)).ToList())
             await LoadDatabaseAsync(db.Id);
     }
+
+    private string? FilterResult
+    {
+        get
+        {
+            if (!Filtering) return null;
+            var tables = _databases.Sum(d => _tables.TryGetValue(d.Id, out var t) ? VisibleTables(d, t).Count() : 0);
+            return $"{VisibleDatabases.Count()} base(s), {tables} table(s) affichée(s)";
+        }
+    }
+
+    private Task ClearFilterAsync() => OnFilterChangedAsync(null);
 
     private bool Matches(string name) => name.Contains(_filter!.Trim(), StringComparison.OrdinalIgnoreCase);
 

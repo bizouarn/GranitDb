@@ -1,0 +1,20 @@
+@* Bandeau « Filtre actif » : dit qu'une liste est filtrée, par quoi, ce qu'il en reste, et l'efface d'un clic. Rien quand aucun filtre n'est posé. *@
+@if (Active)
+{
+    <div class="filter-bar" role="status">
+        <span class="filter-bar-text"><strong>Filtre actif :</strong> @Description@if (!string.IsNullOrEmpty(Result)) {<text> · @Result</text>}</span>
+        <button type="button" class="filter-bar-clear" @onclick="OnClear">Effacer le filtre</button>
+    </div>
+}
+
+@code {
+    /// <summary>Le filtre en clair (« nom contient « client », domaine Ventes »). Vide : pas de filtre, pas de bandeau.</summary>
+    [Parameter, EditorRequired] public string? Description { get; set; }
+
+    /// <summary>Ce qu'il en reste (« 12 tables sur 80 »).</summary>
+    [Parameter] public string? Result { get; set; }
+
+    [Parameter] public EventCallback OnClear { get; set; }
+
+    private bool Active => !string.IsNullOrWhiteSpace(Description);
+}

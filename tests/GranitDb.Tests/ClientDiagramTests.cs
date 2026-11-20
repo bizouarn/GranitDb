@@ -145,6 +145,38 @@ public class ErDiagramTests
         Assert.True(diagram.Size().Height > sizeBefore.Height);
     }
 
+    private static double Luminance(string hex)
+    {
+        double Channel(int offset)
+        {
+            var v = Convert.ToInt32(hex.Substring(1 + offset, 2), 16) / 255.0;
+            return v <= 0.03928 ? v / 12.92 : Math.Pow((v + 0.055) / 1.055, 2.4);
+        }
+
+        return 0.2126 * Channel(0) + 0.7152 * Channel(2) + 0.0722 * Channel(4);
+    }
+
+    private static double Contrast(string a, string b)
+    {
+        var (x, y) = (Luminance(a), Luminance(b));
+        return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+    }
+
+    [Fact]
+    public void Svg_export_text_is_readable_on_its_background_WCAG_AA()
+    {
+        var svg = ErDiagram.Build(Shop()).ToSvg();
+        var text = (string kind) => System.Text.RegularExpressions.Regex.Matches(svg, "<text[^>]*fill=\"(#[0-9a-f]{6})\"[^>]*>" + kind)
+            .Select(m => m.Groups[1].Value).Distinct().ToList();
+
+        foreach (var header in new[] { "#1976d2", "#7b1fa2" }) // tables et vues
+            Assert.True(Contrast("#ffffff", header) >= 4.5, $"titre blanc sur {header}");
+        foreach (var color in System.Text.RegularExpressions.Regex.Matches(svg, "<text[^>]*fill=\"(#[0-9a-f]{6})\"").Select(m => m.Groups[1].Value).Distinct()
+                     .Where(c => c != "#ffffff"))
+            Assert.True(Contrast(color, "#ffffff") >= 4.5, $"texte {color} sur fond blanc : {Contrast(color, "#ffffff"):0.0}");
+        Assert.NotEmpty(text(""));
+    }
+
     [Fact]
     public void Svg_export_is_self_contained_and_escapes_names()
     {

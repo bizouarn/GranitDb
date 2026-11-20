@@ -1,0 +1,29 @@
+@page "/help"
+@using GranitDb.Client.Components.Dialogs
+@using GranitDb.Client.Workspace
+@inject NavigationManager Navigation
+@inject WorkspaceState Workspace
+@inject IDialogService Dialogs
+
+<PageTitle>Aide</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
+    <MudText Typo="Typo.h4" Class="mb-2">Aide</MudText>
+    <MudText Class="mb-4">Les mots utilisés dans GranitDb, en une phrase chacun. Au quotidien, survolez un terme souligné pour retrouver sa définition.</MudText>
+    <MudButton Variant="Variant.Outlined" Size="Size.Small" Class="help-shortcuts mb-4" OnClick="ShowShortcutsAsync">Voir les raccourcis clavier</MudButton>
+    <dl class="glossary-list">
+        @foreach (var entry in Glossary.Entries)
+        {
+            <div id="@entry.Key" class="glossary-entry">
+                <dt>@entry.Label</dt>
+                <dd>@entry.Definition</dd>
+            </div>
+        }
+    </dl>
+</MudContainer>
+
+@code {
+    protected override void OnInitialized() => Workspace.Describe(Navigation.Uri, "Aide");
+
+    private Task ShowShortcutsAsync() => Dialogs.ShowFormAsync("Raccourcis clavier", new DialogParameters<ShortcutsDialog>());
+}

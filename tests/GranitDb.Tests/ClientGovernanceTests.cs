@@ -670,9 +670,8 @@ public class ClientDetailGovernanceTests : IAsyncLifetime
 
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#sync-preview")));
         var preview = page.Find("#sync-preview");
-        Assert.Contains("2 ajout(s)", preview.TextContent);
-        Assert.Contains("1 suppression(s)", preview.TextContent);
-        Assert.Contains("1 suppression(s) feront perdre une documentation", page.Find(".loses-documentation").TextContent);
+        Assert.Contains("1 colonne ajoutée, 1 relation ajoutée, 1 colonne supprimée.", preview.TextContent);
+        Assert.Contains("1 suppression emporte une documentation que vous avez saisie", page.Find(".loses-documentation").TextContent);
         Assert.Contains("customers.nickname", preview.TextContent);
         Assert.Contains("invoices.order_id → orders.id", preview.TextContent); // une relation s'affiche par son libellé
         Assert.Single(page.FindAll("tr.change-removed"));

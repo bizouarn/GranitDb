@@ -135,6 +135,22 @@ public partial class SearchHit
         ? $"/databases/{Uri.EscapeDataString(DatabaseId)}"
         : $"/databases/{Uri.EscapeDataString(DatabaseId)}/tables/{Uri.EscapeDataString(TableId)}" +
           (Kind == "column" ? $"?column={Uri.EscapeDataString(Id)}" : "");
+
+    public static string KindLabel(string kind) => kind switch { "database" => "Base", "table" => "Table", "column" => "Colonne", _ => "Index" };
+
+    public static int KindOrder(string kind) => kind switch { "table" => 0, "column" => 1, "database" => 2, _ => 3 };
+
+    /// <summary>Le nom qu'on affiche : une colonne est précédée de sa table.</summary>
+    public static string Label(SearchHit hit) => hit.Kind == "column" ? $"{hit.TableName}.{hit.Name}" : hit.Name;
+
+    /// <summary>Pourquoi ce résultat correspond : le terme est dans le nom, la description (ou, pour un index, ses colonnes).</summary>
+    public string MatchReason(string? term)
+    {
+        var t = term?.Trim();
+        if (string.IsNullOrEmpty(t) || Name.Contains(t, StringComparison.OrdinalIgnoreCase)) return "dans le nom";
+        if (Description != null && Description.Contains(t, StringComparison.OrdinalIgnoreCase)) return "dans la description";
+        return Kind == "index" ? "dans les colonnes de l'index" : "dans le nom";
+    }
 }
 
 /// <summary>Une page de résultats avec le nombre total d'éléments.</summary>

@@ -179,6 +179,54 @@ public class WorkspaceState
         return next;
     }
 
+    /// <summary>Ferme les onglets non épinglés à droite de celui-ci. Renvoie où aller si l'onglet affiché a disparu.</summary>
+    public string? CloseToTheRight(string hrefOrUri)
+    {
+        var index = Find(Normalize(hrefOrUri));
+        return index < 0 ? null : CloseWhere((i, _) => i > index, _tabs[index].Href);
+    }
+
+    /// <summary>Ferme tous les onglets non épinglés sauf celui-ci.</summary>
+    public string? CloseOthers(string hrefOrUri)
+    {
+        var index = Find(Normalize(hrefOrUri));
+        return index < 0 ? null : CloseWhere((i, _) => i != index, _tabs[index].Href);
+    }
+
+    /// <summary>Ferme tous les onglets non épinglés ; renvoie l'accueil (ou le premier onglet épinglé) si l'onglet affiché a disparu.</summary>
+    public string? CloseAll() => CloseWhere((_, _) => true, null);
+
+    /// <summary>Nombre d'onglets que « fermer à droite » fermerait (les épinglés restent).</summary>
+    public int CountToTheRight(string hrefOrUri)
+    {
+        var index = Find(Normalize(hrefOrUri));
+        return index < 0 ? 0 : _tabs.Where((t, i) => i > index && !t.Pinned).Count();
+    }
+
+    private string? CloseWhere(Func<int, WorkspaceTab, bool> predicate, string? preferred)
+    {
+        var activeKey = ActiveHref == null ? null : KeyOf(ActiveHref);
+        var before = _tabs.Count;
+        var activeClosed = false;
+        for (var i = _tabs.Count - 1; i >= 0; i--)
+        {
+            if (_tabs[i].Pinned || !predicate(i, _tabs[i])) continue;
+            if (KeyOf(_tabs[i].Href) == activeKey) activeClosed = true;
+            _tabs.RemoveAt(i);
+        }
+
+        if (_tabs.Count == before) return null;
+        string? next = null;
+        if (activeClosed)
+        {
+            next = preferred ?? (_tabs.Count == 0 ? "/" : _tabs[0].Href);
+            ActiveHref = next;
+        }
+
+        Changed?.Invoke();
+        return next;
+    }
+
     public void TogglePin(string hrefOrUri)
     {
         var index = Find(Normalize(hrefOrUri));

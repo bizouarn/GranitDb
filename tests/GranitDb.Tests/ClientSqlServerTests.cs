@@ -374,13 +374,13 @@ public class ClientSqlServerWorkspaceTests : ShellTestBase
         Override = r => r.RequestUri!.AbsolutePath == "/api/v1/Capabilities" ? FakeApi.Json("""{"allowSqlServerSources":true,"allowLocalPaths":false}""") : null;
         var enabled = Ctx.Render<Databases>();
         enabled.WaitForAssertion(() => Assert.Contains("Boutique", enabled.Markup));
-        Assert.Equal("/import/sqlserver", enabled.Find("a.connect-sqlserver").GetAttribute("href"));
+        Assert.NotNull(enabled.Find("button.connect-sqlserver")); // ouvre l'assistant d'import
         Assert.Empty(enabled.FindAll(".sqlserver-disabled"));
 
         Override = _ => null;
         var disabled = Ctx.Render<Databases>();
         disabled.WaitForAssertion(() => Assert.Contains("Boutique", disabled.Markup));
-        Assert.Empty(disabled.FindAll("a.connect-sqlserver"));
+        Assert.Empty(disabled.FindAll("button.connect-sqlserver"));
         Assert.Contains("Catalog:AllowSqlServerSources", disabled.Find(".sqlserver-disabled").TextContent);
     }
 
@@ -407,7 +407,7 @@ public class ClientSqlServerWorkspaceTests : ShellTestBase
 
         page.WaitForAssertion(() => Assert.Contains("customers", page.Markup));
         Assert.Contains("srv:1444 / Boutique", page.Find(".source-label").TextContent);
-        Assert.Equal("/import/sqlserver?id=d1", page.Find("a.edit-connection").GetAttribute("href"));
+        Assert.NotNull(page.Find("button.edit-connection")); // ouvre l'assistant, pas une autre page
         Assert.Contains(page.FindAll("button"), b => b.TextContent.Contains("Resynchroniser"));
     }
 
@@ -420,13 +420,13 @@ public class ClientSqlServerWorkspaceTests : ShellTestBase
 
         var file = Ctx.Render<DatabaseDetail>(p => p.Add(x => x.Id, "d1"));
         file.WaitForAssertion(() => Assert.Contains("customers", file.Markup));
-        Assert.Empty(file.FindAll("a.edit-connection"));
+        Assert.Empty(file.FindAll("button.edit-connection"));
         Assert.Empty(file.FindAll(".source-label"));
         Assert.Contains(file.FindAll("button"), b => b.TextContent.Contains("Resynchroniser"));
 
         var frozen = Ctx.Render<DatabaseDetail>(p => p.Add(x => x.Id, "d2"));
         frozen.WaitForAssertion(() => Assert.Contains("Figée", frozen.Markup));
-        Assert.Empty(frozen.FindAll("a.edit-connection"));
+        Assert.Empty(frozen.FindAll("button.edit-connection"));
         Assert.DoesNotContain(frozen.FindAll("button"), b => b.TextContent.Contains("Resynchroniser"));
     }
 }

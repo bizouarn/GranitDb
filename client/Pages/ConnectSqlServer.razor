@@ -12,7 +12,7 @@
 <PageTitle>@Title</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
-    <MudBreadcrumbs Items="Crumbs" />
+    <PageCrumbs Current="@Title" />
     <MudText Typo="Typo.h4" Class="mb-2">@Title</MudText>
 
     @if (_loading)
@@ -182,11 +182,6 @@
         _error = null;
     }
 
-    private List<BreadcrumbItem> Crumbs =>
-    [
-        new("Bases", href: "/"),
-        new(Title, href: null, disabled: true)
-    ];
 
     /// <summary>Les champs obligatoires sont remplis (le serveur de l'API valide le reste).</summary>
     private bool Ready => !string.IsNullOrWhiteSpace(_form.Server) && !string.IsNullOrWhiteSpace(_form.Database)

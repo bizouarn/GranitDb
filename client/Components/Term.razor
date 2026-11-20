@@ -1,0 +1,13 @@
+@using GranitDb.Client.Workspace
+@* Un terme technique expliqué au survol et au focus clavier ; « En savoir plus » mène à la page d'aide. *@
+<abbr class="glossary-term" tabindex="0" title="@Definition" aria-label="@($"{Label} : {Definition}")" data-term="@Key">@(ChildContent ?? (RenderFragment)(b => b.AddContent(0, Label)))</abbr>
+
+@code {
+    /// <summary>Clé du terme dans <see cref="Glossary" />.</summary>
+    [Parameter, EditorRequired] public string Key { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string Label => Glossary.Find(Key)?.Label ?? Key;
+    private string Definition => Glossary.Define(Key);
+}

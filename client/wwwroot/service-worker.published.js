@@ -18,6 +18,8 @@ const manifestUrlList = self.assetsManifest.assets.map(asset => new URL(asset.ur
 
 async function onInstall(event) {
     console.info('Service worker: Install');
+    // La nouvelle version prend la main sans attendre que tous les onglets se ferment (la page propose de recharger).
+    self.skipWaiting();
 
     // Fetch and cache all matching items from the assets manifest
     const assetsRequests = self.assetsManifest.assets
@@ -29,6 +31,7 @@ async function onInstall(event) {
 
 async function onActivate(event) {
     console.info('Service worker: Activate');
+    await self.clients.claim();
 
     // Delete unused caches
     const cacheKeys = await caches.keys();

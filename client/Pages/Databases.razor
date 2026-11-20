@@ -2,6 +2,7 @@
 @page "/databases"
 @using GranitDb.Client.api
 @using GranitDb.Client.Components
+@using GranitDb.Client.Components.Dialogs
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
 @inject Client Api
@@ -9,6 +10,7 @@
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
 @inject AuthState Auth
+@inject IDialogService Dialogs
 
 <PageTitle>Bases documentées</PageTitle>
 
@@ -42,7 +44,7 @@
         }
         else if (_capabilities.AllowSqlServerSources)
         {
-            <MudButton Variant="Variant.Outlined" Href="/import/sqlserver" StartIcon="@Icons.Material.Filled.Dns" Class="connect-sqlserver">
+            <MudButton Variant="Variant.Outlined" OnClick="ConnectServerAsync" StartIcon="@Icons.Material.Filled.Dns" Class="connect-sqlserver">
                 Connecter un serveur (SQL Server, PostgreSQL, MySQL)
             </MudButton>
         }
@@ -76,7 +78,7 @@
             <li><strong>2. Explorez et documentez</strong>Parcourez l'arbre à gauche, cliquez une table ou une colonne et décrivez-la sur place.</li>
             <li><strong>3. Partagez</strong>Ouvrez le diagramme d'un domaine et exportez-le en SVG, PNG ou Mermaid.</li>
         </ol>
-        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">Astuce : Ctrl+K ouvre la palette de commandes.</MudText>
+        <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">Astuce : Ctrl+K ouvre la palette de commandes, ? affiche tous les raccourcis.</MudText>
     }
     else
     {
@@ -160,6 +162,12 @@
 
     private Task OnFileSelected(InputFileChangeEventArgs e) =>
         ImportAsync(() => { var stream = e.File.OpenReadStream(MaxFileSize); return Api.UploadSqliteAsync(stream, e.File.Name, null, null); });
+
+    private async Task ConnectServerAsync()
+    {
+        var id = await Dialogs.ShowDataAsync<ImportWizardDialog, string>("Connecter un serveur", new DialogParameters<ImportWizardDialog>(), MaxWidth.Medium);
+        if (id != null) Navigation.NavigateTo($"/databases/{id}");
+    }
 
     private Task TrySampleAsync() => ImportAsync(Api.ImportSampleAsync);
 

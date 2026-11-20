@@ -1,0 +1,58 @@
+@* Feuille « Raccourcis clavier » (touche ?) : tout ce qui se fait au clavier, au même endroit. *@
+<MudDialog>
+    <DialogContent>
+        <div class="shortcuts-sheet">
+            @foreach (var group in Groups)
+            {
+                <section class="shortcuts-group" aria-label="@group.Title">
+                    <h3 class="shortcuts-title">@group.Title</h3>
+                    <dl class="shortcuts-list">
+                        @foreach (var (keys, what) in group.Items)
+                        {
+                            <div class="shortcut-row">
+                                <dt><kbd>@keys</kbd></dt>
+                                <dd>@what</dd>
+                            </div>
+                        }
+                    </dl>
+                </section>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Close" Class="shortcuts-close">Fermer</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    private sealed record Group(string Title, (string Keys, string What)[] Items);
+
+    private static readonly Group[] Groups =
+    [
+        new("Partout",
+        [
+            ("Ctrl + K", "Ouvrir la palette de commandes"),
+            ("?", "Afficher cette feuille"),
+            ("Ctrl + B", "Afficher ou masquer l'explorateur"),
+            ("Alt + W", "Fermer l'onglet courant"),
+            ("Échap", "Fermer une fenêtre, un panneau ou annuler une saisie")
+        ]),
+        new("Explorateur",
+        [
+            ("↑ ↓", "Passer à l'élément suivant ou précédent"),
+            ("← →", "Replier ou déplier, remonter au parent"),
+            ("Début / Fin", "Premier ou dernier élément"),
+            ("Entrée", "Ouvrir l'élément")
+        ]),
+        new("Saisie",
+        [
+            ("Entrée", "Enregistrer une description ou valider une cellule"),
+            ("Tab", "Passer à la cellule suivante"),
+            ("Échap", "Annuler la modification en cours")
+        ])
+    ];
+
+    private void Close() => MudDialog.Close();
+}

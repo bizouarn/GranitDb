@@ -13,7 +13,7 @@
 <PageTitle>Webhooks</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <PageCrumbs Current="Webhooks" />
     <MudText Typo="Typo.h4" Class="mb-1">Webhooks</MudText>
     <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
         Une adresse appelée en POST (JSON, signé si un secret est défini) quand un événement survient : changement de schéma,
@@ -101,7 +101,6 @@
 </MudContainer>
 
 @code {
-    private readonly List<BreadcrumbItem> _crumbs = [new("Bases", href: "/"), new("Webhooks", href: null, disabled: true)];
     private WebhookView[] _hooks = [];
     private DatabaseView[] _databases = [];
     private WebhookDelivery[] _deliveries = [];

@@ -1,5 +1,6 @@
 @page "/databases/{Id}/documentation"
 @implements IDisposable
+@using GranitDb.Client.Components
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
@@ -12,7 +13,7 @@
 <PageTitle>Assistant de documentation</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <MudBreadcrumbs Items="_crumbs" Class="pa-0 mb-2" />
+    <PageCrumbs DatabaseId="@Id" DatabaseName="@_databaseName" Current="Assistant de documentation" />
     <MudText Typo="Typo.h4" Class="mb-1">Assistant de documentation</MudText>
     <MudText Typo="Typo.body2" Class="mb-4" Style="color: var(--mud-palette-text-secondary)">
         Propose des descriptions pour les éléments qui n'en ont pas, avec un modèle d'IA léger et local qui ne reçoit que des noms, des types et
@@ -122,7 +123,7 @@
 @code {
     [Parameter] public string Id { get; set; } = "";
 
-    private List<BreadcrumbItem> _crumbs = [new("Bases", href: "/")];
+    private string? _databaseName;
     private List<SuggestionView> _items = [];
     private readonly Dictionary<string, string> _edited = new();
     private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
@@ -153,12 +154,7 @@
         {
             _capabilities = await Api.GetCapabilitiesAsync();
             var database = await Api.GetDatabaseAsync(Id);
-            _crumbs =
-            [
-                new("Bases", href: "/"),
-                new(database?.Name ?? "Base", href: $"/databases/{Uri.EscapeDataString(Id)}"),
-                new("Assistant de documentation", href: null, disabled: true)
-            ];
+            _databaseName = database?.Name;
             _job = await Api.GetSuggestionJobAsync(Id);
             _items = await Api.GetSuggestionsAsync(Id);
             _error = null;
