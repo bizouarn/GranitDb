@@ -15,7 +15,7 @@ public record RelationSuggestionView(string Id, string DatabaseId, string ChildT
     long NonNullCount, long OrphanCount, string Status, DateTime DetectedAt);
 
 /// <summary>Bilan d'une détection : candidats trouvés par le nom, vérifiés à la source, suggestions retenues, vérifications en échec.</summary>
-public record DetectionRunView(int Candidates, int Checked, int Suggested, int Failed, int Skipped, List<string> Errors);
+public record DetectionRunView(int Candidates, int Checked, int Suggested, int Failed, int Skipped, List<string> Errors, int Empty = 0, int Mismatched = 0);
 
 /// <summary>Bilan d'une acceptation en lot.</summary>
 public record AcceptBatchView(int Accepted, int Skipped);
@@ -195,6 +195,146 @@ public static partial class RelationCandidates
 
         return found;
     }
+
+    /// <summary>Noms trop courants pour prouver à eux seuls que deux colonnes parlent de la même chose.</summary>
+    private static readonly HashSet<string> GenericNames = new(StringComparer.Ordinal)
+    {
+        "id", "code", "libelle", "nom", "name", "type", "date", "valeur", "value", "titre", "label", "description", "numero", "num", "ordre",
+        "etat", "statut", "status", "indice", "niveau", "version", "commentaire", "fichier", "defaut", "quantite", "qte", "montant", "prix",
+        "unite", "actif", "guid", "uuid", "ligne", "position", "rang", "tri", "zone", "langue", "mois", "annee", "year", "month"
+    };
+
+    /// <summary>Un nom réduit à ses lettres et chiffres, sans accent ni casse : <c>Code_Client</c>, <c>codeClient</c> et <c>code client</c> se valent.</summary>
+    public static string Key(string name)
+    {
+        var decomposed = name.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(decomposed.Length);
+        foreach (var ch in decomposed)
+            if (char.IsLetterOrDigit(ch) && System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(char.ToLowerInvariant(ch));
+        return sb.ToString();
+    }
+
+    /// <summary>Types dont on peut prélever des valeurs distinctes et les comparer (pas de texte long, binaire, XML, JSON…).</summary>
+    private static bool Comparable(string dataType, string engine)
+    {
+        var t = dataType.ToLowerInvariant();
+        var longText = t is "ntext" or "longtext" or "mediumtext" || (t == "text" && engine.Equals(SqlServerSchemaConnector.TypeName, StringComparison.OrdinalIgnoreCase));
+        return !(longText || t.Contains("clob") || t.Contains("blob") || t.Contains("xml") || t.Contains("image") || t.Contains("json") ||
+                 t.Contains("binary") || t.Contains("geo") || t.Contains("hierarchy") || t.Contains("variant") || t.Contains("(max)"));
+    }
+
+    private static string BaseType(string dataType)
+    {
+        var paren = dataType.IndexOf('(');
+        return (paren > 0 ? dataType[..paren] : dataType).Trim().ToLowerInvariant();
+    }
+
+    /// <summary>La longueur déclarée (<c>nvarchar(20)</c> → 20), ou <c>null</c>.</summary>
+    private static int? Length(string dataType)
+    {
+        var open = dataType.IndexOf('(');
+        var close = dataType.IndexOf(')');
+        if (open < 0 || close < open) return null;
+        var first = dataType[(open + 1)..close].Split(',')[0].Trim();
+        return int.TryParse(first, out var length) && length > 0 ? length : null;
+    }
+
+    /// <summary>Les mots d'un nom qui désignent quelque chose (ni marqueur d'identifiant, ni mot de moins de 3 lettres), au singulier.</summary>
+    private static HashSet<string> SignificantWords(string name) =>
+        Words(name).Where(w => w.Length >= 3 && !Markers.Contains(w)).Select(Singular).ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    ///     Candidats rapprochés par les valeurs plutôt que par le nom : toute colonne dont le type est celui d'une colonne unique d'une
+    ///     autre table. Le catalogue seul ne dit pas qui contient quoi ; il classe les paires par ressemblance (même nom que la colonne
+    ///     cible, mot commun avec elle ou avec sa table) pour que le test à la source commence par les plus plausibles. Sans
+    ///     ressemblance aucune, une paire n'est proposée que si <paramref name="includeBlind" /> (petites bases : sinon il y en aurait
+    ///     des millions). Les paires de <paramref name="already" /> (candidats du nom), déjà reliées ou écartées ne reviennent pas.
+    /// </summary>
+    public static List<RelationCandidate> FindByValues(IReadOnlyList<TableInfo> tables, IReadOnlyList<ColumnInfo> columns,
+        IReadOnlyList<IndexInfo> indexes, IEnumerable<RelationInfo> relations, Func<string, string, bool> excluded,
+        ISet<(string Child, string Parent)> already, bool includeBlind, string engine)
+    {
+        var realTables = tables.Where(t => t.TableType == "Table").ToList();
+        var columnsByTable = columns.ToLookup(c => c.TableId);
+        var indexesByTable = indexes.ToLookup(i => i.TableId);
+
+        var linked = new HashSet<(string, string)>();
+        var referencing = new HashSet<(string Column, string ParentTable)>();
+        var tableOfColumn = columns.ToDictionary(c => c.Id, c => c.TableId);
+        foreach (var relation in relations)
+            foreach (var (first, second) in relation.Pairs())
+            {
+                linked.Add((first, second));
+                linked.Add((second, first));
+                if (tableOfColumn.TryGetValue(first, out var parentTable)) referencing.Add((second, parentTable));
+            }
+
+        var parents = new List<(TableInfo Table, ColumnInfo Column, string Origin, string Family, string Base, int? Length, string Key, HashSet<string> Words)>();
+        foreach (var table in realTables)
+        {
+            var own = columnsByTable[table.Id].ToList();
+            foreach (var (id, origin) in UniqueColumns(table, own, indexesByTable[table.Id].ToList()))
+            {
+                var column = own.First(c => c.Id == id);
+                var family = TypeFamily(column.DataType);
+                if (family is not ("text" or "number" or "guid") || !Comparable(column.DataType, engine)) continue;
+                var words = SignificantWords(column.Name);
+                words.UnionWith(TableWords(table.Name).Where(w => w.Length >= 3));
+                parents.Add((table, column, origin, family, BaseType(column.DataType), Length(column.DataType), Key(column.Name), words));
+            }
+        }
+
+        var byFamily = parents.ToLookup(p => p.Family);
+        var found = new List<RelationCandidate>();
+        foreach (var childTable in realTables)
+        foreach (var child in columnsByTable[childTable.Id])
+        {
+            var family = TypeFamily(child.DataType);
+            if (family is not ("text" or "number" or "guid") || !Comparable(child.DataType, engine)) continue;
+            var childKey = Key(child.Name);
+            var childWords = SignificantWords(child.Name);
+            var childBase = BaseType(child.DataType);
+            var childLength = Length(child.DataType);
+            foreach (var parent in byFamily[family])
+            {
+                if (parent.Table.Id == childTable.Id) continue;
+                // Une valeur plus longue que la colonne cible ne peut pas s'y trouver.
+                if (childLength is { } cl && parent.Length is { } pl && cl > pl) continue;
+                if (linked.Contains((child.Id, parent.Column.Id)) || referencing.Contains((child.Id, parent.Table.Id))) continue;
+                if (already.Contains((child.Id, parent.Column.Id)) || excluded(child.Id, parent.Column.Id)) continue;
+
+                int affinity;
+                string reason;
+                if (childKey.Length >= 4 && childKey == parent.Key && !GenericNames.Contains(childKey))
+                {
+                    affinity = 25;
+                    reason = $"`{child.Name}` porte le même nom que la colonne `{parent.Table.Name}.{parent.Column.Name}`.";
+                }
+                else if (childWords.Overlaps(parent.Words))
+                {
+                    affinity = 12;
+                    reason = $"`{child.Name}` partage « {childWords.First(parent.Words.Contains)} » avec `{parent.Table.Name}.{parent.Column.Name}`.";
+                }
+                else
+                {
+                    // Rien ne rapproche les deux noms : seules les valeurs peuvent le dire. Ni une clé primaire contre une autre, ni des nombres : des identifiants
+                    // numériques 1..n tiennent tous les uns dans les autres, l'inclusion ne prouverait rien.
+                    if (!includeBlind || child.IsPrimaryKey || family == "number") continue;
+                    affinity = 0;
+                    reason = "Aucun rapport entre les noms : le rapprochement ne repose que sur les valeurs.";
+                }
+
+                var sameType = childBase == parent.Base;
+                found.Add(new RelationCandidate(child, childTable, parent.Column, parent.Table, affinity, sameType ? 10 : 5,
+                    parent.Origin == "la clé primaire" ? 15 : 12,
+                    [reason, sameType ? $"Même type ({child.DataType})." : $"Types de même famille ({child.DataType} / {parent.Column.DataType}).",
+                        $"`{parent.Table.Name}.{parent.Column.Name}` est {parent.Origin}."]));
+            }
+        }
+
+        return found;
+    }
 }
 
 /// <summary>
@@ -211,6 +351,9 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
 
     /// <summary>En dessous, la table cible est trop petite pour que l'inclusion prouve quelque chose (codes, statuts).</summary>
     public const int SmallTarget = 20;
+
+    /// <summary>Au plus autant de tables : au-delà, la recherche par les valeurs ne tente que les paires dont les noms se ressemblent.</summary>
+    public const int BlindTableLimit = 80;
 
     private CatalogOptions Options => options.Value;
 
@@ -236,7 +379,7 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
     ///     Détecte les relations d'une base et remplace ses suggestions en attente (les refusées et les acceptées restent).
     ///     <c>null</c> si la base n'existe pas.
     /// </summary>
-    public async Task<DetectionRunView?> DetectAsync(string databaseId, CancellationToken ct = default)
+    public async Task<DetectionRunView?> DetectAsync(string databaseId, bool byValues = false, CancellationToken ct = default)
     {
         EnsureAllowed();
         var database = await repository.GetAsync<DatabaseInfo>(databaseId, ct);
@@ -261,33 +404,53 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
 
         var suggestions = new List<RelationSuggestionInfo>();
         var errors = new List<string>();
-        int checkedCount = 0, failed = 0;
+        int checkedCount = 0, failed = 0, empty = 0, mismatched = 0;
         var now = DateTime.UtcNow;
-        foreach (var candidate in candidates.Take(take))
+
+        // Un candidat : test d'inclusion à la source (d'abord sur un échantillon s'il vient des valeurs), puis note.
+        async Task<bool> EvaluateAsync(RelationCandidate candidate, bool byValue)
         {
             ct.ThrowIfCancellationRequested();
+            var label = $"{candidate.ChildTable.Name}.{candidate.Child.Name}";
             InclusionResult result;
+            long? distinct = null;
             try
             {
+                if (byValue)
+                {
+                    // Test rapide : si des valeurs distinctes échantillonnées manquent déjà dans la cible, inutile de tout compter.
+                    var sample = Math.Max(20, Options.RelationDetectionSampleSize);
+                    var quick = await profiler.CheckInclusionAsync(source.Source,
+                        new InclusionCheck(candidate.ChildTable.Name, candidate.Child.Name, candidate.ParentTable.Name, candidate.Parent.Name, sample),
+                        Options.ProfilingTimeoutSeconds, ct);
+                    checkedCount++;
+                    if (quick.ChildNonNull < 5) { empty++; return true; }
+                    if (InclusionScore(quick.ChildNonNull, quick.Orphans) is null) { mismatched++; return true; }
+                    if (quick.ChildNonNull < sample) distinct = quick.ChildNonNull;
+                    // Un rapprochement sans rapport de nom doit porter sur une colonne qui varie : un drapeau ou un statut tient dans n'importe quelle clé.
+                    if (candidate.NameScore == 0 && distinct is < 20) { empty++; return true; }
+                }
+
                 result = await profiler.CheckInclusionAsync(source.Source,
                     new InclusionCheck(candidate.ChildTable.Name, candidate.Child.Name, candidate.ParentTable.Name, candidate.Parent.Name),
                     Options.ProfilingTimeoutSeconds, ct);
-                checkedCount++;
+                if (!byValue) checkedCount++;
             }
             catch (GranitExceptions e)
             {
                 failed++;
-                if (errors.Count < 20) errors.Add($"{candidate.ChildTable.Name}.{candidate.Child.Name} : {e.Message}");
-                continue;
+                if (errors.Count < 20) errors.Add($"{label} : {e.Message}");
+                return false;
             }
 
-            if (InclusionScore(result.ChildNonNull, result.Orphans) is not { } inclusion) continue;
+            if (InclusionScore(result.ChildNonNull, result.Orphans) is not { } inclusion) { if (result.ChildNonNull <= 0) empty++; else mismatched++; return true; }
             var score = candidate.NameScore + candidate.TypeScore + candidate.TargetScore + inclusion;
             var reasons = new List<string>(candidate.Reasons);
             var found = result.ChildNonNull - result.Orphans;
             reasons.Add(result.Orphans == 0
                 ? $"100 % des {result.ChildNonNull:N0} valeurs existent dans `{candidate.ParentTable.Name}.{candidate.Parent.Name}`."
                 : $"{found:N0} valeurs sur {result.ChildNonNull:N0} ({100.0 * found / result.ChildNonNull:0.#} %) existent dans `{candidate.ParentTable.Name}.{candidate.Parent.Name}` ; {result.Orphans:N0} sans équivalent.");
+            if (distinct is { } d) reasons.Add($"La colonne porte {d:N0} valeurs distinctes.");
             if (result.ParentRows < SmallTarget)
             {
                 // Une petite table de codes (statuts, types) se retrouve par hasard dans n'importe quelle colonne d'entiers.
@@ -296,7 +459,7 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
             }
 
             score = Math.Clamp(score, 0, 100);
-            if (score < 40) continue;
+            if (score < 40) return true;
             suggestions.Add(new RelationSuggestionInfo
             {
                 Id = Guid.NewGuid().ToString(), DatabaseId = databaseId, ChildColumnId = candidate.Child.Id,
@@ -304,6 +467,33 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
                 Score = score, Reasons = string.Join("\n", reasons), NonNullCount = result.ChildNonNull, OrphanCount = result.Orphans,
                 Status = RelationSuggestionInfo.Pending, DetectedAt = now
             });
+            return true;
+        }
+
+        foreach (var candidate in candidates.Take(take)) await EvaluateAsync(candidate, false);
+
+        var valueCandidates = 0;
+        if (byValues)
+        {
+            var named = candidates.Select(c => (c.Child.Id, c.Parent.Id)).ToHashSet();
+            // Sans ressemblance de nom, on ne tente les paires qu'en petite base : dans une grande il y en aurait des millions.
+            var byValue = RelationCandidates.FindByValues(tables, columns, indexes, relations, (child, parent) => decided.Contains((child, parent)),
+                    named, tables.Count(t => t.TableType == "Table") <= BlindTableLimit, source.Type)
+                .OrderByDescending(c => c.NameScore).ThenByDescending(c => c.TypeScore).ThenBy(c => c.ChildTable.Name, StringComparer.Ordinal)
+                .ThenBy(c => c.Child.Name, StringComparer.Ordinal).ToList();
+            valueCandidates = byValue.Count;
+            var valueTake = Math.Max(1, Options.RelationDetectionMaxValueChecks);
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var limit = TimeSpan.FromSeconds(Math.Max(1, Options.RelationDetectionMaxValueSeconds));
+            var tested = 0;
+            foreach (var candidate in byValue.Take(valueTake))
+            {
+                if (clock.Elapsed > limit) break;
+                await EvaluateAsync(candidate, true);
+                tested++;
+            }
+
+            skipped += Math.Min(byValue.Count, valueTake) - tested;
         }
 
         await repository.InTransactionAsync(async repo =>
@@ -314,7 +504,7 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
             return 0;
         }, ct);
 
-        return new DetectionRunView(candidates.Count, checkedCount, suggestions.Count, failed, skipped, errors);
+        return new DetectionRunView(candidates.Count + valueCandidates, checkedCount, suggestions.Count, failed, skipped, errors, empty, mismatched);
     }
 
     /// <summary>Les suggestions d'une base, les mieux notées d'abord ; <c>status</c> filtre (pending par défaut). <c>null</c> si la base n'existe pas.</summary>

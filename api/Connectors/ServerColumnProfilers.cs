@@ -27,6 +27,9 @@ public abstract class ServerColumnProfiler<TException> : IColumnProfiler where T
 
     protected virtual string CountBig => "COUNT";
 
+    /// <summary>Limite des lignes écrite <c>TOP (n)</c> (SQL Server) plutôt que <c>LIMIT n</c>.</summary>
+    protected virtual bool TopSyntax => false;
+
     protected virtual bool DistinctAllowed(ProfiledColumn column) => true;
 
     /// <summary>Le message du moteur (droit de lecture refusé, table absente…) dit mieux ce qui manque qu'un texte de connexion.</summary>
@@ -44,7 +47,7 @@ public abstract class ServerColumnProfiler<TException> : IColumnProfiler where T
             await using var cmd = db.CreateCommand();
             cmd.CommandTimeout = Math.Max(1, timeoutSeconds);
             cmd.CommandText = ProfileQuery.BuildInclusion(TableOf(check.ChildTable), check.ChildColumn,
-                TableOf(check.ParentTable), check.ParentColumn, Quote, CountBig);
+                TableOf(check.ParentTable), check.ParentColumn, Quote, CountBig, check.SampleSize, TopSyntax);
             await using var reader = await cmd.ExecuteReaderAsync(ct);
             await reader.ReadAsync(ct);
             return ProfileQuery.ReadInclusion(reader);
@@ -111,6 +114,7 @@ public class SqlServerColumnProfiler : ServerColumnProfiler<SqlException>
     protected override string Quote(string name) => QuoteName(name);
     protected override string TableOf(string name) => TableReference(name);
     protected override string CountBig => "COUNT_BIG";
+    protected override bool TopSyntax => true;
     protected override bool DistinctAllowed(ProfiledColumn column) => !NoDistinct.Contains(column.DataType);
 }
 

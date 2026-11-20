@@ -101,9 +101,9 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
     /// </summary>
     [HttpPost("{id}/relation-suggestions/detect")]
     [MinimumRole(Role.Admin)]
-    public async Task<IActionResult> DetectRelations(string id, CancellationToken ct)
+    public async Task<IActionResult> DetectRelations(string id, [FromQuery] bool byValues, CancellationToken ct)
     {
-        var run = await detection.DetectAsync(id, ct);
+        var run = await detection.DetectAsync(id, byValues, ct);
         return this.OkOrNotFound(run);
     }
 

@@ -764,6 +764,13 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "byValues",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -4569,6 +4576,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "empty": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mismatched": {
+            "type": "integer",
+            "format": "int32"
           }
         },
         "additionalProperties": false

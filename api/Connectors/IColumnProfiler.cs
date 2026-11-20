@@ -12,12 +12,17 @@ public record ColumnProfileResult(string Column, long NullCount, long? DistinctC
 public record TableProfileResult(long RowCount, IReadOnlyList<ColumnProfileResult> Columns);
 
 /// <summary>Une colonne qui en référencerait une autre : table et colonne de chaque côté (noms tels que le connecteur les donne).</summary>
-public record InclusionCheck(string ChildTable, string ChildColumn, string ParentTable, string ParentColumn);
+/// <param name="SampleSize">
+///     Plus de 0 : le test ne porte que sur autant de valeurs <em>distinctes</em> de la colonne enfant (un test rapide qui écarte les
+///     faux rapprochements avant la vérification complète). 0 : toutes les valeurs.
+/// </param>
+public record InclusionCheck(string ChildTable, string ChildColumn, string ParentTable, string ParentColumn, int SampleSize = 0);
 
 /// <summary>
 ///     Résultat d'un test d'inclusion, des comptes seulement : valeurs non nulles de la colonne qui référence, celles qui n'existent
 ///     pas dans la colonne référencée (orphelines) et lignes de la table référencée.
 /// </summary>
+/// <remarks>Sur un échantillon, <c>ChildNonNull</c> et <c>Orphans</c> comptent des valeurs distinctes.</remarks>
 public record InclusionResult(long ChildNonNull, long Orphans, long ParentRows);
 
 /// <summary>
@@ -73,10 +78,21 @@ internal static class ProfileQuery
     ///     Trois sous-requêtes scalaires plutôt qu'un agrégat sur un <c>NOT EXISTS</c> (SQL Server le refuse).
     /// </summary>
     public static string BuildInclusion(string child, string childColumn, string parent, string parentColumn,
-        Func<string, string> quote, string countBig)
+        Func<string, string> quote, string countBig, int sampleSize = 0, bool topSyntax = false)
     {
         var c = quote(childColumn);
         var p = quote(parentColumn);
+        if (sampleSize > 0)
+        {
+            // Les n premières valeurs distinctes : le test coûte au plus n recherches dans le parent, quelle que soit la taille de la table.
+            var sample = topSyntax
+                ? $"SELECT DISTINCT TOP ({sampleSize}) {c} FROM {child} WHERE {c} IS NOT NULL"
+                : $"SELECT DISTINCT {c} FROM {child} WHERE {c} IS NOT NULL LIMIT {sampleSize}";
+            return $"SELECT (SELECT {countBig}(*) FROM ({sample}) s), " +
+                   $"(SELECT {countBig}(*) FROM ({sample}) c WHERE NOT EXISTS (SELECT 1 FROM {parent} p WHERE p.{p} = c.{c})), " +
+                   $"(SELECT {countBig}(*) FROM {parent})";
+        }
+
         return $"SELECT (SELECT {countBig}(*) FROM {child} WHERE {c} IS NOT NULL), " +
                $"(SELECT {countBig}(*) FROM {child} c WHERE c.{c} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {parent} p WHERE p.{p} = c.{c})), " +
                $"(SELECT {countBig}(*) FROM {parent})";
@@ -122,7 +138,7 @@ public class SqliteColumnProfiler : IColumnProfiler
             await db.OpenAsync(timeout.Token);
             await using var cmd = db.CreateCommand();
             cmd.CommandText = ProfileQuery.BuildInclusion(Quote(check.ChildTable), check.ChildColumn, Quote(check.ParentTable),
-                check.ParentColumn, Quote, "COUNT");
+                check.ParentColumn, Quote, "COUNT", check.SampleSize);
             await using var reader = await cmd.ExecuteReaderAsync(timeout.Token);
             await reader.ReadAsync(timeout.Token);
             return ProfileQuery.ReadInclusion(reader);

@@ -81,6 +81,26 @@ public class ClientRelationSuggestionsTests : ShellTestBase
     }
 
     [BunitFact]
+    public void The_value_search_asks_the_api_to_match_by_values_too()
+    {
+        Override = r =>
+        {
+            var path = r.RequestUri!.AbsolutePath;
+            if (path == "/api/v1/Capabilities") return FakeApi.Json("""{"allowSqlServerSources":false,"allowLocalPaths":false,"allowProfiling":true}""");
+            if (r.Method == HttpMethod.Post && path == "/api/v1/DatabaseInfo/d1/relation-suggestions/detect")
+                return FakeApi.Json("""{"candidates":120,"checked":40,"suggested":2,"failed":0,"skipped":0,"errors":[]}""");
+            return r.Method == HttpMethod.Get && path == "/api/v1/DatabaseInfo/d1/relation-suggestions" ? FakeApi.Json("[]") : null;
+        };
+        var page = Open();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".detect-relations-values")));
+
+        page.Find(".detect-relations-values").Click();
+
+        page.WaitForAssertion(() => Assert.Contains("le nom et les valeurs", page.Find(".detect-summary").TextContent));
+        Assert.True(WasSent(HttpMethod.Post, "/api/v1/DatabaseInfo/d1/relation-suggestions/detect?byValues=true"));
+    }
+
+    [BunitFact]
     public void Detecting_runs_the_detection_then_reloads_the_list()
     {
         var served = "[]";

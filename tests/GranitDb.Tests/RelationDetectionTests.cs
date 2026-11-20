@@ -118,6 +118,71 @@ public sealed class RelationDetectionTests : IDisposable
         Assert.Equal(list.OrderByDescending(s => s.Score).Select(s => s.Id), list.Select(s => s.Id));
     }
 
+    /// <summary>
+    ///     <c>machines.code_fab</c> et <c>machines.sous_traitant</c> visent <c>fabricants.code_fab</c> sans que le nom de la table le dise ;
+    ///     <c>serie</c> (valeurs absentes) et <c>actif</c> (deux valeurs) ne visent rien.
+    /// </summary>
+    private async Task<string> ImportByValuesAsync()
+    {
+        var path = _env.NewFile($"{Guid.NewGuid():N}.db");
+        TestCatalog.Execute(path, """
+            CREATE TABLE fabricants (code_fab TEXT PRIMARY KEY, nom TEXT);
+            CREATE TABLE machines (id INTEGER PRIMARY KEY, modele TEXT, code_fab TEXT, sous_traitant TEXT, serie TEXT, actif INTEGER);
+            WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 30)
+                INSERT INTO fabricants SELECT 'F' || i, 'SECRET-FAB-' || i FROM n;
+            WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 40)
+                INSERT INTO machines SELECT i, 'm' || i, 'F' || ((i % 30) + 1), 'F' || (((i * 7) % 30) + 1), 'S' || i, i % 2 FROM n;
+            """);
+        await using var stream = File.OpenRead(path);
+        return (await _env.Importer.ImportSqliteAsync(stream, "usine.db", "Usine", null, true)).Database.Id;
+    }
+
+    [Fact]
+    public async Task Names_alone_miss_a_column_whose_name_does_not_say_the_table_but_the_values_find_it()
+    {
+        var database = await ImportByValuesAsync();
+
+        var byName = (await Service().DetectAsync(database))!;
+        Assert.Equal(0, byName.Candidates);
+        Assert.Empty((await Service().ListAsync(database, null))!);
+
+        var run = (await Service().DetectAsync(database, byValues: true))!;
+        var list = (await Service().ListAsync(database, null))!.ToDictionary(s => s.ChildColumn);
+
+        Assert.True(run.Candidates > 0);
+        Assert.Equal(["code_fab", "sous_traitant"], list.Keys.OrderBy(k => k, StringComparer.Ordinal).ToArray());
+        Assert.Equal(("fabricants", "code_fab", "probable"), (list["code_fab"].ParentTable, list["code_fab"].ParentColumn, list["code_fab"].Level));
+        Assert.Contains(list["code_fab"].Reasons, r => r.Contains("même nom"));
+        // Aucun rapport de nom : seule l'inclusion des valeurs parle, la suggestion reste « possible ».
+        Assert.Equal("possible", list["sous_traitant"].Level);
+        Assert.Contains(list["sous_traitant"].Reasons, r => r.Contains("Aucun rapport entre les noms"));
+        Assert.Contains(list["sous_traitant"].Reasons, r => r.Contains("100 %"));
+        // Des comptes seulement : aucune valeur de la source dans le résultat.
+        Assert.DoesNotContain("SECRET-FAB", System.Text.Json.JsonSerializer.Serialize(list.Values));
+    }
+
+    [Fact]
+    public async Task The_value_search_is_repeatable_and_keeps_a_refusal()
+    {
+        var database = await ImportByValuesAsync();
+        var service = Service();
+        await service.DetectAsync(database, byValues: true);
+        var refused = (await service.ListAsync(database, null))!.First(s => s.ChildColumn == "sous_traitant");
+        await service.RejectAsync(database, refused.Id);
+
+        await service.DetectAsync(database, byValues: true);
+
+        Assert.Equal(["code_fab"], (await service.ListAsync(database, null))!.Select(s => s.ChildColumn).ToArray());
+    }
+
+    [Fact]
+    public void Column_names_are_compared_without_case_accents_or_separators()
+    {
+        Assert.Equal(RelationCandidates.Key("Code_Client"), RelationCandidates.Key("codeClient"));
+        Assert.Equal("codeclient", RelationCandidates.Key("Code client"));
+        Assert.Equal("numeroequipe", RelationCandidates.Key("Numéro-équipe"));
+    }
+
     [Fact]
     public async Task A_role_prefix_is_recognised_but_scores_below_an_exact_name()
     {

@@ -123,7 +123,9 @@ public class Client(HttpClient http)
         CallAsync(() => _api.Databases.RelationSuggestionsAsync(databaseId, status));
 
     /// <summary>Lance la détection (vérification par comptes à la source) ; lève <see cref="ApiException" /> avec la raison si elle est refusée.</summary>
-    public Task<DetectionRunView> DetectRelationsAsync(string databaseId) => CallAsync(() => _api.Databases.DetectRelationsAsync(databaseId));
+    /// <summary>Détecte les relations par le nom ; <paramref name="byValues" /> cherche aussi celles que seules les valeurs trahissent.</summary>
+    public Task<DetectionRunView> DetectRelationsAsync(string databaseId, bool byValues = false) =>
+        CallAsync(() => _api.Databases.DetectRelationsAsync(databaseId, byValues ? true : null));
 
     public Task<RelationInfo> AcceptRelationSuggestionAsync(string databaseId, string suggestionId) =>
         CallAsync(() => _api.Databases.AcceptRelationSuggestionAsync(databaseId, suggestionId));

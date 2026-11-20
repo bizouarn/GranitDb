@@ -14,8 +14,11 @@
     <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
         @if (CanDetect)
         {
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="DetectAsync" Disabled="_busy" Class="detect-relations"
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => DetectAsync(false)" Disabled="_busy" Class="detect-relations"
                        StartIcon="@Icons.Material.Filled.AutoFixHigh">Détecter les relations</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => DetectAsync(true)" Disabled="_busy" Class="detect-relations-values"
+                       title="Cherche aussi les colonnes dont le nom ne désigne pas la table visée mais dont les valeurs s'y retrouvent (plus long : chaque rapprochement est testé à la source)."
+                       StartIcon="@Icons.Material.Filled.ManageSearch">Détecter aussi par les valeurs</MudButton>
         }
         @if (Auth.CanEdit && _items.Any(s => s.Score >= 75))
         {
@@ -66,13 +69,14 @@
         _ => Color.Default
     };
 
-    private Task DetectAsync() => RunAsync(async () =>
+    private Task DetectAsync(bool byValues) => RunAsync(async () =>
     {
-        var run = await Api.DetectRelationsAsync(Id);
+        var run = await Api.DetectRelationsAsync(Id, byValues);
         _items = await Api.GetRelationSuggestionsAsync(Id);
         var failed = run.Failed > 0 ? $", {run.Failed} vérification(s) en échec" : "";
         var skipped = run.Skipped > 0 ? $", {run.Skipped} candidat(s) non vérifié(s) (limite atteinte)" : "";
-        _summary = $"{run.Candidates} candidat(s) par le nom, {run.Suggested} suggestion(s) retenue(s){failed}{skipped}.";
+        var dropped = run.Empty + run.Mismatched > 0 ? $" ({run.Empty} sans assez de valeurs, {run.Mismatched} dont les valeurs ne se retrouvent pas dans la cible)" : "";
+        _summary = $"{run.Candidates} candidat(s) par {(byValues ? "le nom et les valeurs" : "le nom")}, {run.Suggested} suggestion(s) retenue(s){dropped}{failed}{skipped}.";
         if (run.Errors.Count > 0) _error = string.Join(" ", run.Errors.Take(3));
     });
 

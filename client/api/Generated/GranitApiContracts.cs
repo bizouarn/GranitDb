@@ -174,7 +174,7 @@ namespace GranitDb.Client.Models
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        System.Threading.Tasks.Task<DetectionRunView> DetectRelationsAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+        System.Threading.Tasks.Task<DetectionRunView> DetectRelationsAsync(string id, bool? byValues = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
@@ -1123,6 +1123,12 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("errors")]
         public System.Collections.Generic.List<string> Errors { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("empty")]
+        public int Empty { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("mismatched")]
+        public int Mismatched { get; set; } = default!;
 
     }
 

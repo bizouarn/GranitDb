@@ -46,6 +46,18 @@ public class CatalogOptions
     public int RelationDetectionMaxChecks { get; set; } = 500;
 
     /// <summary>
+    ///     Candidats rapprochés par les valeurs (et non par le nom) testés au plus par détection : chacun coûte d'abord un test sur
+    ///     un échantillon de valeurs distinctes, puis, s'il passe, la vérification complète. Les plus ressemblants passent d'abord.
+    /// </summary>
+    public int RelationDetectionMaxValueChecks { get; set; } = 20000;
+
+    /// <summary>Durée au plus passée à tester des candidats rapprochés par les valeurs (secondes) ; passé ce délai, les suivants sont comptés comme ignorés.</summary>
+    public int RelationDetectionMaxValueSeconds { get; set; } = 300;
+
+    /// <summary>Valeurs distinctes prélevées pour le test rapide d'un candidat rapproché par les valeurs.</summary>
+    public int RelationDetectionSampleSize { get; set; } = 200;
+
+    /// <summary>
     ///     Autorise l'assistant d'IA (section <c>Ai</c> : modèle local léger par défaut). Désactivé par défaut : il envoie à un modèle
     ///     des noms, types et descriptions du catalogue (jamais de valeur de ligne).
     /// </summary>
