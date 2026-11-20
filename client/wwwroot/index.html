@@ -85,7 +85,13 @@
 			if (!opened) throw new Error("Le navigateur a bloqué l'ouverture de l'onglet : autorisez les fenêtres pour ce site.");
 			setTimeout(() => URL.revokeObjectURL(url), 60000);
 		};
-		window.granitdb.copyText = text => navigator.clipboard.writeText(text);
+		window.granitdb.openHtml = html => {
+				const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
+				const opened = window.open(url, "_blank");
+				if (!opened) throw new Error("Le navigateur a bloqué l'ouverture de l'onglet : autorisez les fenêtres pour ce site.");
+				setTimeout(() => URL.revokeObjectURL(url), 60000);
+			};
+			window.granitdb.copyText = text => navigator.clipboard.writeText(text);
 		window.granitdb.downloadPng = (fileName, svg, width, height) => new Promise((resolve, reject) => {
 			const scale = 2;
 			const image = new Image();

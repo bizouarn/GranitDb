@@ -177,6 +177,8 @@
                     }
                     <MudButton Size="Size.Small" Variant="@(_legendOpen ? Variant.Filled : Variant.Outlined)" OnClick="() => _legendOpen = !_legendOpen"
                                StartIcon="@Icons.Material.Filled.HelpOutline" Class="er-legend-toggle" aria-expanded="@(_legendOpen ? "true" : "false")">Légende</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="OpenPreviewTabAsync" Disabled="_previewLoading"
+                               StartIcon="@Icons.Material.Filled.OpenInNew" Class="html-preview-open">Aperçu HTML</MudButton>
                     <MudSpacer />
                     @* Un seul menu pour tous les exports du diagramme. *@
                     <MudMenu Label="Exporter" StartIcon="@Icons.Material.Filled.Download" EndIcon="@Icons.Material.Filled.ArrowDropDown"
@@ -336,6 +338,7 @@
     private CompletenessReport? _domainCompleteness;
 
     private bool _legendOpen;
+    private bool _previewLoading;
 
     /// <summary>Relations entre les tables du domaine que son plan ne dessine pas.</summary>
     private int HiddenInDomain => CurrentDomain == null ? 0 : DomainRelations.Count(r => CurrentDomain.HiddenRelations.Contains(r.Id));
@@ -893,6 +896,26 @@
     private void ShowError(string message) => _message.Warning(message);
 
     private void ShowInfo(string message) => _message.Success(message);
+
+    // --- Aperçu de l'export HTML (sans téléchargement) ---
+
+    // Toujours dans un nouvel onglet : l'export est relu à chaque clic, il reflète donc le catalogue actuel.
+    private async Task OpenPreviewTabAsync()
+    {
+        _previewLoading = true;
+        try
+        {
+            await CallJsAsync("granitdb.openHtml", await Api.ExportAsync(_database!.Id, "html"));
+        }
+        catch (Exception e)
+        {
+            Notifier.Show("Aperçu impossible : " + e.Message);
+        }
+        finally
+        {
+            _previewLoading = false;
+        }
+    }
 
     // --- Exports ---
 
