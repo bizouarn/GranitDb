@@ -14,17 +14,17 @@ public class SqliteSchemaConnector : ISchemaConnector
 
     public string Type => TypeName;
 
-    public async Task<SourceSchema> ReadSchemaAsync(string source, CancellationToken ct = default)
+    /// <summary>Chaîne de connexion en lecture seule, sans pool (le fichier peut être remplacé ou supprimé juste après) ; erreur si le fichier manque.</summary>
+    public static string ReadOnlyConnectionString(string source)
     {
         if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
             throw new InvalidSourceException($"Fichier SQLite introuvable : {source}");
+        return new SqliteConnectionStringBuilder { DataSource = source, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
+    }
 
-        var connectionString = new SqliteConnectionStringBuilder
-        {
-            DataSource = source,
-            Mode = SqliteOpenMode.ReadOnly,
-            Pooling = false
-        }.ToString();
+    public async Task<SourceSchema> ReadSchemaAsync(string source, CancellationToken ct = default)
+    {
+        var connectionString = ReadOnlyConnectionString(source);
 
         try
         {

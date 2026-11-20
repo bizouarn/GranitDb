@@ -25,7 +25,7 @@ public static class HtmlDocumentationExporter
         var database = await repository.GetAsync<DatabaseInfo>(databaseId, ct);
         if (database == null) return null;
 
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
+        var byDatabase = CatalogFilter.ForDatabase(databaseId);
         var domains = await repository.GetAllAsync<DomainInfo>(byDatabase, ct);
         var links = new List<DomainTableInfo>();
         var hidden = new List<DomainHiddenRelationInfo>();

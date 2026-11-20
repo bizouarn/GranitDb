@@ -53,9 +53,7 @@ public class ColumnProfilingService(ICatalogRepository repository, DatabaseImpor
             throw new GranitExceptions("Le profilage des colonnes est désactivé (Catalog:AllowProfiling = false) : il lit des données de la source, pas seulement son schéma.");
     }
 
-    private IColumnProfiler ProfilerOf(string type) =>
-        profilers.FirstOrDefault(p => p.Type.Equals(type, StringComparison.OrdinalIgnoreCase))
-        ?? throw new InvalidSourceException($"Type de base non pris en charge pour le profilage : {type}");
+    private IColumnProfiler ProfilerOf(string type) => profilers.For(type, "le profilage");
 
     /// <summary>Les profils enregistrés d'une table (vides tant qu'elle n'a pas été profilée) ; <c>null</c> si la table n'existe pas.</summary>
     public async Task<TableProfileView?> GetAsync(string tableId, CancellationToken ct = default)
@@ -127,7 +125,7 @@ public class ColumnProfilingService(ICatalogRepository repository, DatabaseImpor
         if (database == null) return null;
         var source = (await import.ResolveSourceAsync(database))!.Value;
 
-        var tables = (await repository.GetAllAsync<TableInfo>([new CatalogFilter("DatabaseId", databaseId)], ct))
+        var tables = (await repository.GetByDatabaseAsync<TableInfo>(databaseId, ct))
             .Where(t => t.TableType == "Table").ToList();
         var lastByTable = (await repository.GetAllAsync<ColumnProfileInfo>(
                 [CatalogFilter.In("TableId", tables.Select(t => t.Id))], ct))

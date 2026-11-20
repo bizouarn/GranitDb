@@ -156,7 +156,7 @@ public partial class DescriptionAssistant(ICatalogRepository repository, IAiProv
     private async Task<Context> LoadAsync(string databaseId, CancellationToken ct)
     {
         var database = await repository.GetAsync<DatabaseInfo>(databaseId, ct) ?? throw new GranitExceptions("Cette base n'existe pas.");
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
+        var byDatabase = CatalogFilter.ForDatabase(databaseId);
         var tables = (await repository.GetAllAsync<TableInfo>(byDatabase, ct)).OrderBy(t => t.Name, StringComparer.Ordinal).ToList();
         var columns = (await repository.GetAllAsync<ColumnInfo>(byDatabase, ct)).OrderBy(c => c.Position).ToList();
         var relations = (await repository.GetRelationsOfDatabaseAsync(databaseId, ct)).ToList();
@@ -306,7 +306,7 @@ public partial class DescriptionAssistant(ICatalogRepository repository, IAiProv
         if (created.Count == 0) return;
         await repository.InTransactionAsync(async repo =>
         {
-            var pending = await repo.GetAllAsync<DescriptionSuggestionInfo>([new CatalogFilter("DatabaseId", databaseId)], ct);
+            var pending = await repo.GetByDatabaseAsync<DescriptionSuggestionInfo>(databaseId, ct);
             foreach (var old in pending.Where(p => p.Status == DescriptionSuggestionInfo.Pending && p.Kind == DescriptionSuggestionInfo.KindDescription &&
                                                     created.Any(c => c.TargetType == p.TargetType && c.TargetId == p.TargetId)))
                 await repo.DeleteAsync<DescriptionSuggestionInfo>(old.Id, ct);
@@ -552,7 +552,7 @@ public partial class DescriptionAssistant(ICatalogRepository repository, IAiProv
     public async Task<int?> DetectSensitiveAsync(string databaseId, CancellationToken ct = default)
     {
         if (await repository.GetAsync<DatabaseInfo>(databaseId, ct) == null) return null;
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
+        var byDatabase = CatalogFilter.ForDatabase(databaseId);
         var columns = await repository.GetAllAsync<ColumnInfo>(byDatabase, ct);
         var existing = (await repository.GetAllAsync<DescriptionSuggestionInfo>(byDatabase, ct)).Where(s => s.Kind == DescriptionSuggestionInfo.KindSensitive).ToList();
         var decided = existing.Where(s => s.Status != DescriptionSuggestionInfo.Pending).Select(s => s.TargetId).ToHashSet();
@@ -582,7 +582,7 @@ public partial class DescriptionAssistant(ICatalogRepository repository, IAiProv
     {
         if (await repository.GetAsync<DatabaseInfo>(databaseId, ct) == null) return null;
         var wanted = string.IsNullOrWhiteSpace(status) ? DescriptionSuggestionInfo.Pending : status.Trim().ToLowerInvariant();
-        var rows = (await repository.GetAllAsync<DescriptionSuggestionInfo>([new CatalogFilter("DatabaseId", databaseId)], ct)).Where(s => s.Status == wanted).ToList();
+        var rows = (await repository.GetByDatabaseAsync<DescriptionSuggestionInfo>(databaseId, ct)).Where(s => s.Status == wanted).ToList();
         if (rows.Count == 0) return [];
         var ctx = await LoadAsync(databaseId, ct);
         var views = new List<SuggestionView>();
@@ -678,7 +678,7 @@ public partial class DescriptionAssistant(ICatalogRepository repository, IAiProv
     public async Task<AcceptBatchView?> AcceptConfidentAsync(string databaseId, string? actor, CancellationToken ct = default)
     {
         if (await repository.GetAsync<DatabaseInfo>(databaseId, ct) == null) return null;
-        var rows = (await repository.GetAllAsync<DescriptionSuggestionInfo>([new CatalogFilter("DatabaseId", databaseId)], ct))
+        var rows = (await repository.GetByDatabaseAsync<DescriptionSuggestionInfo>(databaseId, ct))
             .Where(s => s.Status == DescriptionSuggestionInfo.Pending && s.Kind == DescriptionSuggestionInfo.KindDescription && !s.Uncertain).ToList();
         int accepted = 0, skipped = 0;
         foreach (var suggestion in rows)

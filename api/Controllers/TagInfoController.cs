@@ -80,7 +80,7 @@ public class TagInfoController(ICatalogRepository repository) : BaseDbInfoContro
     public async Task<IActionResult> OfDatabase(string databaseId, CancellationToken ct)
     {
         if (await Repository.GetAsync<DatabaseInfo>(databaseId, ct) == null) return NotFound();
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
+        var byDatabase = CatalogFilter.ForDatabase(databaseId);
         var ids = (await Repository.GetAllAsync<TableInfo>(byDatabase, ct)).Select(t => t.Id)
             .Concat((await Repository.GetAllAsync<ColumnInfo>(byDatabase, ct)).Select(c => c.Id))
             .Append(databaseId).ToList();

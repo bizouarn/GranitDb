@@ -35,7 +35,7 @@ public static class SchemaDiffer
     public static async Task<SyncPreview> DiffAsync(ICatalogRepository repository, string databaseId, SourceSchema schema,
         CancellationToken ct = default)
     {
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
+        var byDatabase = CatalogFilter.ForDatabase(databaseId);
         var tables = (await repository.GetAllAsync<TableInfo>(byDatabase, ct)).ToFirstDictionary(t => t.Name);
         var columns = await repository.GetAllAsync<ColumnInfo>(byDatabase, ct);
         var indexes = await repository.GetAllAsync<IndexInfo>(byDatabase, ct);

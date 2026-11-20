@@ -74,7 +74,7 @@ public class ImpactController(ICatalogRepository repository) : ControllerBase
     private async Task<(Dictionary<string, ColumnInfo> Columns, Dictionary<string, TableInfo> Tables,
         IReadOnlyList<RelationInfo> Relations)> LoadAsync(string databaseId, CancellationToken ct)
     {
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
+        var byDatabase = CatalogFilter.ForDatabase(databaseId);
         var columns = (await repository.GetAllAsync<ColumnInfo>(byDatabase, ct)).ToDictionary(c => c.Id);
         var tables = (await repository.GetAllAsync<TableInfo>(byDatabase, ct)).ToDictionary(t => t.Id);
         return (columns, tables, await repository.GetRelationsOfDatabaseAsync(databaseId, ct));

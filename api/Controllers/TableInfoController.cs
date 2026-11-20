@@ -227,7 +227,7 @@ public class TableInfoController(ICatalogRepository repository, ColumnProfilingS
         var indexes = new List<IndexInfo>();
         foreach (var databaseId in databaseIds)
         {
-            var byDatabase = new[] { new CatalogFilter(nameof(ColumnInfo.DatabaseId), databaseId) };
+            var byDatabase = CatalogFilter.ForDatabase(databaseId);
             columns.AddRange(await Repository.GetAllAsync<ColumnInfo>(byDatabase, ct));
             relations.AddRange(await Repository.GetRelationsOfDatabaseAsync(databaseId, ct));
             indexes.AddRange(await Repository.GetAllAsync<IndexInfo>(byDatabase, ct));

@@ -947,54 +947,25 @@
         if (!_notesOpen.Remove(columnId)) _notesOpen.Add(columnId);
     }
 
-    private async Task ToggleSensitiveAsync(ColumnInfo column)
+    private Task ToggleSensitiveAsync(ColumnInfo column) => CatalogActions.ToggleSensitiveAsync(Api, Notifier, column, async () =>
     {
-        var now = !column.IsSensitive;
-        try
-        {
-            await Api.SetSensitiveAsync(column.Id, now);
-            column.IsSensitive = now;
-            await RefreshCompletenessAsync();
-            Changed();
-            Notifier.Show(now ? $"{column.Name} marquée comme sensible." : $"{column.Name} n'est plus marquée comme sensible.",
-                Severity.Success, async () =>
-                {
-                    await Api.SetSensitiveAsync(column.Id, !now);
-                    column.IsSensitive = !now;
-                    await RefreshCompletenessAsync();
-                    Changed();
-                    await InvokeAsync(StateHasChanged);
-                });
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
-    }
+        await RefreshCompletenessAsync();
+        Changed();
+        await InvokeAsync(StateHasChanged);
+    }, ShowError);
 
     // --- Étiquettes ---
 
-    private async Task AddTagAsync(string name, string type, string entityId)
-    {
-        await Api.AttachTagAsync(name, type, entityId);
-        _tagLinks = await Api.GetTagLinksAsync(Id);
-        Changed();
-        StateHasChanged();
-    }
+    private Task AddTagAsync(string name, string type, string entityId) =>
+        CatalogActions.AddTagAsync(Api, Id, name, type, entityId, ApplyTagLinksAsync);
 
-    private async Task RemoveTagAsync(TagLinkView tag)
+    private Task RemoveTagAsync(TagLinkView tag) => CatalogActions.RemoveTagAsync(Api, Notifier, Id, tag, ApplyTagLinksAsync);
+
+    private Task ApplyTagLinksAsync(TagLinkView[] links)
     {
-        await Api.DetachTagAsync(tag.TagId, tag.EntityType, tag.EntityId);
-        _tagLinks = await Api.GetTagLinksAsync(Id);
+        _tagLinks = links;
         Changed();
-        StateHasChanged();
-        Notifier.Show($"Étiquette {tag.TagName} retirée.", Severity.Success, async () =>
-        {
-            await Api.AttachTagAsync(tag.TagName, tag.EntityType, tag.EntityId);
-            _tagLinks = await Api.GetTagLinksAsync(Id);
-            Changed();
-            await InvokeAsync(StateHasChanged);
-        });
+        return InvokeAsync(StateHasChanged);
     }
 
     // --- Tables saisies à la main et colonnes en grille ---

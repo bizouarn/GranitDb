@@ -97,7 +97,7 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
     public async Task<IActionResult> OfDatabase(string databaseId, CancellationToken ct)
     {
         if (await Repository.GetAsync<DatabaseInfo>(databaseId, ct) == null) return NotFound();
-        var domains = await Repository.GetAllAsync<DomainInfo>([new CatalogFilter("DatabaseId", databaseId)], ct);
+        var domains = await Repository.GetByDatabaseAsync<DomainInfo>(databaseId, ct);
         var ids = domains.Select(d => d.Id).ToList();
         var links = (await Repository.GetAllAsync<DomainTableInfo>([CatalogFilter.In("DomainId", ids)], ct))
             .ToLookup(l => l.DomainId);
@@ -238,7 +238,7 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
     {
         var members = (await repo.FindAsync<DomainTableInfo>(nameof(DomainTableInfo.DomainId), domain.Id, ct))
             .Select(l => l.TableId).ToHashSet();
-        var tableOf = (await repo.GetAllAsync<ColumnInfo>([new CatalogFilter("DatabaseId", domain.DatabaseId)], ct))
+        var tableOf = (await repo.GetByDatabaseAsync<ColumnInfo>(domain.DatabaseId, ct))
             .ToDictionary(c => c.Id, c => c.TableId);
         var result = new List<string>();
         foreach (var r in await repo.GetRelationsOfDatabaseAsync(domain.DatabaseId, ct))

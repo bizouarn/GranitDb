@@ -113,10 +113,7 @@ public class SqliteColumnProfiler : IColumnProfiler
 
     public async Task<InclusionResult> CheckInclusionAsync(string source, InclusionCheck check, int timeoutSeconds, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
-            throw new InvalidSourceException($"Fichier SQLite introuvable : {source}");
-        var connectionString = new SqliteConnectionStringBuilder
-            { DataSource = source, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
+        var connectionString = SqliteSchemaConnector.ReadOnlyConnectionString(source);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
         try
@@ -143,10 +140,7 @@ public class SqliteColumnProfiler : IColumnProfiler
     public async Task<TableProfileResult> ProfileAsync(string source, string table, IReadOnlyList<ProfiledColumn> columns,
         int timeoutSeconds, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(source) || !File.Exists(source))
-            throw new InvalidSourceException($"Fichier SQLite introuvable : {source}");
-        var connectionString = new SqliteConnectionStringBuilder
-            { DataSource = source, Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
+        var connectionString = SqliteSchemaConnector.ReadOnlyConnectionString(source);
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(1, timeoutSeconds)));
@@ -176,4 +170,12 @@ public class SqliteColumnProfiler : IColumnProfiler
             throw new InvalidSourceException($"Profilage de {table} impossible : {e.Message}", e);
         }
     }
+}
+
+public static class ColumnProfilers
+{
+    /// <summary>Le profileur du moteur <paramref name="type" />, ou une erreur qui dit pour quoi il manque (« le profilage », « la détection »).</summary>
+    public static IColumnProfiler For(this IEnumerable<IColumnProfiler> profilers, string type, string purpose) =>
+        profilers.FirstOrDefault(p => p.Type.Equals(type, StringComparison.OrdinalIgnoreCase))
+        ?? throw new InvalidSourceException($"Type de base non pris en charge pour {purpose} : {type}");
 }

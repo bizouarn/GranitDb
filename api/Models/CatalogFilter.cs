@@ -21,6 +21,9 @@ public record CatalogFilter(string Property, string Value, FilterMode Mode = Fil
     /// <summary>Valeurs admises pour <see cref="FilterMode.In" />.</summary>
     public IReadOnlyList<string> Values { get; init; } = [];
 
+    /// <summary>Les éléments d'une base : le filtre le plus courant du catalogue.</summary>
+    public static CatalogFilter[] ForDatabase(string databaseId) => [new CatalogFilter("DatabaseId", databaseId)];
+
     public static CatalogFilter In(string property, IEnumerable<string> values)
     {
         return new CatalogFilter(property, "", FilterMode.In) { Values = values.Distinct().ToList() };

@@ -328,51 +328,24 @@
         Changed();
     }
 
-    private async Task ToggleSensitiveAsync()
+    private Task ToggleSensitiveAsync() => CatalogActions.ToggleSensitiveAsync(Api, Notifier, _column!, RefreshAsync);
+
+    private Task AddTagAsync(string name, string type, string entityId) =>
+        CatalogActions.AddTagAsync(Api, _selection!.DatabaseId, name, type, entityId, ApplyTagLinksAsync);
+
+    private Task RemoveTagAsync(TagLinkView tag) =>
+        CatalogActions.RemoveTagAsync(Api, Notifier, _selection!.DatabaseId, tag, ApplyTagLinksAsync);
+
+    private Task ApplyTagLinksAsync(TagLinkView[] links)
     {
-        var column = _column!;
-        var now = !column.IsSensitive;
-        try
-        {
-            await Api.SetSensitiveAsync(column.Id, now);
-            column.IsSensitive = now;
-            Changed();
-            Notifier.Show(now ? $"{column.Name} marquée comme sensible." : $"{column.Name} n'est plus marquée comme sensible.",
-                Severity.Success, async () =>
-                {
-                    await Api.SetSensitiveAsync(column.Id, !now);
-                    column.IsSensitive = !now;
-                    Changed();
-                    await InvokeAsync(StateHasChanged);
-                });
-        }
-        catch (ApiException ex)
-        {
-            Notifier.Error(ex.Message);
-        }
+        _tagLinks = links;
+        return RefreshAsync();
     }
 
-    private async Task AddTagAsync(string name, string type, string entityId)
+    private Task RefreshAsync()
     {
-        await Api.AttachTagAsync(name, type, entityId);
-        _tagLinks = await Api.GetTagLinksAsync(_selection!.DatabaseId);
         Changed();
-        StateHasChanged();
-    }
-
-    private async Task RemoveTagAsync(TagLinkView tag)
-    {
-        await Api.DetachTagAsync(tag.TagId, tag.EntityType, tag.EntityId);
-        _tagLinks = await Api.GetTagLinksAsync(_selection!.DatabaseId);
-        Changed();
-        StateHasChanged();
-        Notifier.Show($"Étiquette {tag.TagName} retirée.", Severity.Success, async () =>
-        {
-            await Api.AttachTagAsync(tag.TagName, tag.EntityType, tag.EntityId);
-            _tagLinks = await Api.GetTagLinksAsync(_selection!.DatabaseId);
-            Changed();
-            await InvokeAsync(StateHasChanged);
-        });
+        return InvokeAsync(StateHasChanged);
     }
 
     /// <summary>Les autres vues (onglets ouverts, explorateur) relisent ce que ce panneau vient de modifier.</summary>

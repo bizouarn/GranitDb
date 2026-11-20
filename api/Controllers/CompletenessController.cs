@@ -43,7 +43,7 @@ public class CompletenessController(ICatalogRepository repository) : ControllerB
     public async Task<IActionResult> OfDatabase(string id, [FromQuery] string? domainId, CancellationToken ct)
     {
         if (await repository.GetAsync<DatabaseInfo>(id, ct) == null) return NotFound();
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", id) };
+        var byDatabase = CatalogFilter.ForDatabase(id);
         var tables = await repository.GetAllAsync<TableInfo>(byDatabase, ct);
         var columns = (await repository.GetAllAsync<ColumnInfo>(byDatabase, ct)).ToLookup(c => c.TableId);
 

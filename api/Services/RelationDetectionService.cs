@@ -230,9 +230,7 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
             throw new GranitExceptions("La détection des relations est désactivée (Catalog:AllowProfiling = false) : elle vérifie les candidats en lisant des comptes à la source, pas seulement son schéma.");
     }
 
-    private IColumnProfiler ProfilerOf(string type) =>
-        profilers.FirstOrDefault(p => p.Type.Equals(type, StringComparison.OrdinalIgnoreCase))
-        ?? throw new InvalidSourceException($"Type de base non pris en charge pour la détection : {type}");
+    private IColumnProfiler ProfilerOf(string type) => profilers.For(type, "la détection");
 
     /// <summary>
     ///     Détecte les relations d'une base et remplace ses suggestions en attente (les refusées et les acceptées restent).
@@ -246,7 +244,7 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
         var source = (await import.ResolveSourceAsync(database))!.Value;
         var profiler = ProfilerOf(source.Type);
 
-        var byDatabase = new[] { new CatalogFilter("DatabaseId", databaseId) };
+        var byDatabase = CatalogFilter.ForDatabase(databaseId);
         var tables = (await repository.GetAllAsync<TableInfo>(byDatabase, ct)).ToList();
         var columns = (await repository.GetAllAsync<ColumnInfo>(byDatabase, ct)).ToList();
         var indexes = (await repository.GetAllAsync<IndexInfo>(byDatabase, ct)).ToList();
@@ -324,10 +322,10 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
     {
         if (await repository.GetAsync<DatabaseInfo>(databaseId, ct) == null) return null;
         var wanted = string.IsNullOrWhiteSpace(status) ? RelationSuggestionInfo.Pending : status.Trim().ToLowerInvariant();
-        var rows = (await repository.GetAllAsync<RelationSuggestionInfo>([new CatalogFilter("DatabaseId", databaseId)], ct))
+        var rows = (await repository.GetByDatabaseAsync<RelationSuggestionInfo>(databaseId, ct))
             .Where(s => s.Status == wanted).ToList();
-        var columns = (await repository.GetAllAsync<ColumnInfo>([new CatalogFilter("DatabaseId", databaseId)], ct)).ToDictionary(c => c.Id);
-        var tables = (await repository.GetAllAsync<TableInfo>([new CatalogFilter("DatabaseId", databaseId)], ct)).ToDictionary(t => t.Id);
+        var columns = (await repository.GetByDatabaseAsync<ColumnInfo>(databaseId, ct)).ToDictionary(c => c.Id);
+        var tables = (await repository.GetByDatabaseAsync<TableInfo>(databaseId, ct)).ToDictionary(t => t.Id);
         return rows.Where(s => columns.ContainsKey(s.ChildColumnId) && columns.ContainsKey(s.ParentColumnId))
             .OrderByDescending(s => s.Score).ThenBy(s => tables[s.ChildTableId].Name, StringComparer.Ordinal)
             .Select(s => ViewOf(s, columns, tables)).ToList();
@@ -397,7 +395,7 @@ public class RelationDetectionService(ICatalogRepository repository, DatabaseImp
     public async Task<AcceptBatchView?> AcceptAboveAsync(string databaseId, int minScore, CancellationToken ct = default)
     {
         if (await repository.GetAsync<DatabaseInfo>(databaseId, ct) == null) return null;
-        var rows = (await repository.GetAllAsync<RelationSuggestionInfo>([new CatalogFilter("DatabaseId", databaseId)], ct))
+        var rows = (await repository.GetByDatabaseAsync<RelationSuggestionInfo>(databaseId, ct))
             .Where(s => s.Status == RelationSuggestionInfo.Pending && s.Score >= minScore).OrderByDescending(s => s.Score).ToList();
         int accepted = 0, skipped = 0;
         foreach (var suggestion in rows)
