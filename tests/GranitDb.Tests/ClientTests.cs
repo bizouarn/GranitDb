@@ -354,7 +354,7 @@ public class ClientPagesTests : IAsyncLifetime
 
         withFile.FindAll("button").Single(b => b.TextContent.Contains("Appliquer la synchronisation")).Click();
 
-        withFile.WaitForAssertion(() => Assert.Contains(_ctx.Services.GetRequiredService<Notifier>().Toasts, t => t.Message.Contains("2 index ajouté(s)")));
+        withFile.WaitForAssertion(() => Assert.Contains(_ctx.Services.GetRequiredService<Notifier>().Toasts, t => t.Message.Contains("1 colonne ajoutée, 2 index ajoutés")));
         Assert.Empty(withFile.FindAll("#sync-preview"));
 
         ServeDatabase("""{"id":"db2","name":"Sans","type":"Sqlite"}""", $"[{Customers}]");

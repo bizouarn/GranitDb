@@ -69,6 +69,23 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
     }
 
     [BunitFact]
+    public async Task Showing_every_relation_reports_how_many_were_touched_and_undoing_restores_the_hidden_list()
+    {
+        var page = OpenDomain("""[{"id":"g1","databaseId":"d1","name":"Ventes","color":"#1976d2","hiddenRelations":["r1"],"tables":[{"tableId":"t1"},{"tableId":"t2"}]}]""");
+        page.Find(".er-hidden-show").Click();
+
+        page.WaitForAssertion(() => Assert.Contains(Notices.Toasts, t => t.Message == "1 relation de nouveau affichée."));
+        var toast = Notices.Toasts.Single(t => t.Message == "1 relation de nouveau affichée.");
+        Assert.NotNull(toast.Undo);
+
+        await Notices.UndoAsync(toast.Id);
+
+        page.WaitForAssertion(() => Assert.Equal(["r1"], BodyOf(HttpMethod.Put, "/api/v1/DomainInfo/g1/settings").GetProperty("hiddenRelations")
+            .EnumerateArray().Select(e => e.GetString()!).ToArray()));
+        page.WaitForAssertion(() => Assert.Contains("1 relation masquée dans ce domaine", page.Find(".er-hidden-banner").TextContent));
+    }
+
+    [BunitFact]
     public void Neighbour_tables_appear_only_when_the_domain_asks_for_them_and_the_choice_is_saved()
     {
         var page = OpenDomain();
@@ -202,6 +219,27 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
     }
 
     [BunitFact]
+    public void Filtering_by_name_says_so_counts_what_is_left_and_is_cleared_in_one_click()
+    {
+        var page = OpenManage();
+        Assert.Empty(page.FindAll(".filter-bar"));
+
+        page.Find("input.manage-filter").Input("rgp");
+
+        page.WaitForAssertion(() => Assert.Equal(["RGPD"], page.FindAll("[data-tag]").Select(r => r.GetAttribute("data-tag")!).ToArray()));
+        Assert.Contains("nom contient « rgp »", page.Find(".filter-bar").TextContent);
+        Assert.Contains("1 étiquette(s) et 0 domaine(s) affichés", page.Find(".filter-bar").TextContent);
+        Assert.Empty(page.FindAll("[data-domain]"));
+        Assert.Contains("Aucun domaine ne correspond au filtre", page.Markup);
+
+        page.Find(".filter-bar-clear").Click();
+
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("[data-tag]").Count));
+        Assert.Empty(page.FindAll(".filter-bar"));
+        Assert.Single(page.FindAll("[data-domain]"));
+    }
+
+    [BunitFact]
     public void A_tag_is_renamed_recoloured_and_deleted_everywhere_after_a_confirmation()
     {
         var page = OpenManage();
@@ -266,7 +304,7 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/DomainInfo/g1/tables/t1")));
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Delete, "/api/v1/DomainInfo/g1/tables/t2")));
         Dialogs!.WaitForAssertion(() => Assert.Empty(Dialogs!.FindAll(".domain-dialog")));
-        Assert.Contains(Notices.Toasts, t => t.Message == "Domaine modifié.");
+        Assert.Contains(Notices.Toasts, t => t.Message == "Domaine Ventes modifié : 1 table ajoutée, 1 retirée.");
     }
 
     [BunitFact]
@@ -290,7 +328,7 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
 
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/DomainInfo/g9/tables/t3")));
         Assert.Equal("Achats", BodyOf(HttpMethod.Post, "/api/v1/DomainInfo").GetProperty("name").GetString());
-        Assert.Contains(Notices.Toasts, t => t.Message == "Domaine créé.");
+        Assert.Contains(Notices.Toasts, t => t.Message == "Domaine Achats créé avec 1 table.");
     }
 
     [BunitFact]

@@ -32,14 +32,15 @@ else
 <MudLayout>
     <MudAppBar Dense="true" Elevation="1">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="ToggleExplorer"
-                       aria-label="Afficher ou masquer l'explorateur" title="Explorateur (Ctrl+B)" />
+                       aria-label="Afficher ou masquer l'explorateur" title="@Shortcuts.Hint("Explorateur", Shortcuts.Explorer)" />
         <span class="brand"><img src="menhir.svg" alt="" class="brand-icon" />Granit DB</span>
         <MudSpacer />
         <div class="search-wrap">
         <MudTextField T="string" Value="_query" ValueChanged="OnQueryChanged" Immediate="true" Placeholder="Rechercher une table, une colonne, un index… (essayez : client, email)"
                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="search-box"
                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
-                      Clearable="true" OnKeyDown="OnSearchKeyDown" aria-label="Recherche globale" />
+                      Clearable="true" OnKeyDown="OnSearchKeyDown" aria-label="Recherche globale"
+                      title="Rechercher (↑ ↓ pour choisir, Entrée pour ouvrir, Échap pour fermer)" />
         @if (_suggestions.Length > 0)
         {
             <div class="search-suggest-backdrop" @onclick="CloseSuggestions"></div>
@@ -62,7 +63,7 @@ else
         }
         </div>
         <MudButton Variant="Variant.Outlined" Color="Color.Inherit" Size="Size.Small" Class="palette-button ml-2" OnClick="OpenPalette"
-                   aria-label="Ouvrir la palette de commandes" title="Palette de commandes (Ctrl+K)">Ctrl K</MudButton>
+                   aria-label="Ouvrir la palette de commandes" title="@(Shortcuts.Hint("Palette de commandes", Shortcuts.Palette) + " · " + Shortcuts.Help + " : tous les raccourcis")">Ctrl K</MudButton>
         <MudSpacer />
         <MudIconButton Icon="@Icons.Material.Filled.ViewSidebar" Color="Color.Inherit" OnClick="ToggleDetail"
                        aria-label="Afficher ou masquer les détails" title="Détails de la sélection" />
@@ -340,7 +341,9 @@ else
     {
         var term = _query?.Trim();
         CloseSuggestions();
-        if (term is { Length: >= 2 }) Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(term)}");
+        if (term is { Length: >= 2 })
+            Navigation.NavigateTo($"/search?q={Uri.EscapeDataString(term)}" +
+                (Workspace.ActiveDatabaseId is { } database ? $"&db={Uri.EscapeDataString(database)}" : ""));
     }
 
     private void OnSearchKeyDown(KeyboardEventArgs e)

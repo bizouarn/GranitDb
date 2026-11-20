@@ -37,3 +37,41 @@ public class PhrasesTests
         Assert.Equal(expected, Phrases.Impact(column, dependents, dependencies));
     }
 }
+
+public class HiddenRelationsPhraseTests
+{
+    [Theory]
+    [InlineData(12, 0, "12 relations masquées dans ce domaine.")]
+    [InlineData(1, 0, "1 relation masquée dans ce domaine.")]
+    [InlineData(0, 3, "3 relations de nouveau affichées.")]
+    [InlineData(2, 1, "2 relations masquées, 1 de nouveau affichée.")]
+    [InlineData(0, 0, "Rien n'a changé : les relations du domaine étaient déjà ainsi.")]
+    public void A_bulk_change_of_hidden_relations_is_told_in_a_sentence(int hidden, int shown, string expected) =>
+        Assert.Equal(expected, GranitDb.Client.Workspace.Phrases.HiddenRelationsChanged(hidden, shown));
+}
+
+public class SyncResultPhraseTests
+{
+    [Fact]
+    public void The_result_of_a_synchronisation_is_told_like_its_preview()
+    {
+        var summary = new GranitDb.Client.Models.SyncSummaryView { TablesAdded = 2, ColumnsAdded = 1, ColumnsRemoved = 3, IndexesAdded = 1 };
+
+        Assert.Equal("2 tables ajoutées, 1 colonne ajoutée, 1 index ajouté, 3 colonnes supprimées.",
+            GranitDb.Client.Workspace.Phrases.SyncSummary(summary));
+        Assert.Equal("Aucun changement.", GranitDb.Client.Workspace.Phrases.SyncSummary(new GranitDb.Client.Models.SyncSummaryView()));
+    }
+}
+
+public class DomainSavedPhraseTests
+{
+    [Theory]
+    [InlineData("Achats", true, 3, 0, 0, "Domaine Achats créé avec 3 tables.")]
+    [InlineData("Achats", true, 1, 0, 0, "Domaine Achats créé avec 1 table.")]
+    [InlineData("Achats", true, 0, 0, 0, "Domaine Achats créé, sans table.")]
+    [InlineData("Ventes", false, 5, 2, 1, "Domaine Ventes modifié : 2 tables ajoutées, 1 retirée.")]
+    [InlineData("Ventes", false, 5, 0, 3, "Domaine Ventes modifié : 3 retirées.")]
+    [InlineData("Ventes", false, 5, 0, 0, "Domaine Ventes modifié.")]
+    public void Saving_a_domain_says_what_changed(string name, bool created, int tables, int added, int removed, string expected) =>
+        Assert.Equal(expected, GranitDb.Client.Workspace.Phrases.DomainSaved(name, created, tables, added, removed));
+}

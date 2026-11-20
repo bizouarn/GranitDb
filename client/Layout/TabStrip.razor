@@ -26,7 +26,7 @@
             </button>
             @if (!tab.Pinned)
             {
-                <button type="button" class="tab-close" aria-label="@("Fermer " + tab.Title)" title="Fermer (Alt+W)" @onclick="() => CloseTab(current.Href)">
+                <button type="button" class="tab-close" aria-label="@("Fermer " + tab.Title)" title="@Shortcuts.Hint("Fermer", Shortcuts.CloseTab)" @onclick="() => CloseTab(current.Href)">
                     <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
                 </button>
             }

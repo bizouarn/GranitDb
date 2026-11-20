@@ -36,7 +36,8 @@
             var state = StateOf(node.Id) + (node.IsFrontier ? " er-frontier" : "");
             <g class="@($"er-node{state}")" transform="translate(@N(node.X) @N(node.Y))"
                data-table="@node.Name" @onpointerdown="e => StartDrag(node, e)" @onpointerdown:preventDefault="true"
-               @onpointerup="() => EndDrag(node, null)" @onpointerup:stopPropagation="true">
+               @onpointerup="() => EndDrag(node, null)" @onpointerup:stopPropagation="true"
+               @ondblclick="() => OnOpenTable.InvokeAsync((node.Id, null))">
                 <rect class="er-box" width="@N(node.Width)" height="@N(node.Height)" rx="4" />
                 <rect class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")" width="@N(node.Width)" height="@N(node.HeaderHeight)" rx="4" />
                 @Txt("er-title", 10, ErDiagram.HeaderHeight / 2 + 4, node.Name)
@@ -50,7 +51,8 @@
                     var y = node.HeaderHeight + (i + 0.5) * ErDiagram.RowHeight + 4;
                     var rowState = RowStateOf(row.ColumnId) + (siblings.Contains(row.ColumnId) ? " er-sibling" : "");
                     <g class="@($"er-row{rowState}")" data-column="@row.Name"
-                       @onpointerup="() => EndDrag(node, row)" @onpointerup:stopPropagation="true">
+                       @onpointerup="() => EndDrag(node, row)" @onpointerup:stopPropagation="true"
+                       @ondblclick="() => OnOpenTable.InvokeAsync((node.Id, row.ColumnId))" @ondblclick:stopPropagation="true">
                         <rect x="1" y="@N(node.HeaderHeight + i * ErDiagram.RowHeight)" width="@N(node.Width - 2)" height="@N(ErDiagram.RowHeight)" class="er-row-bg" />
                         @Txt("er-key", 10, y, row.IsPrimaryKey ? "PK" : row.IsForeignKey ? "FK" : "")
                         @Txt(row.IsPrimaryKey ? "er-col er-col-pk" : "er-col", 34, y, row.Name)
@@ -98,6 +100,9 @@
     [Parameter] public EventCallback OnClearSelection { get; set; }
 
     [Parameter] public EventCallback<string> OnSelectTable { get; set; }
+
+    /// <summary>Double-clic sur une table (ou une de ses colonnes) : ouvrir sa fiche.</summary>
+    [Parameter] public EventCallback<(string TableId, string? ColumnId)> OnOpenTable { get; set; }
 
     [Parameter] public EventCallback<(string TableId, string ColumnId)> OnSelectColumn { get; set; }
 

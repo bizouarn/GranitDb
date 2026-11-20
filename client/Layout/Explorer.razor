@@ -188,7 +188,7 @@
 
                     @if (_domains.TryGetValue(db.Id, out var domains) && domains.Length > 0 && !Filtering)
                     {
-                        <div class="section-title" style="padding-left: 1.5rem;">Domaines</div>
+                        <div class="section-title" style="padding-left: 1.5rem;"><Term Key="domaine">Domaines</Term></div>
                         @foreach (var domain in domains)
                         {
                             var d = domain;
@@ -272,6 +272,7 @@
         Workspace.Changed += OnWorkspaceChanged;
         Workspace.CatalogChanged += OnCatalogChanged;
         await LoadDatabasesAsync();
+        await RevealActiveAsync();
         _loading = false;
     }
 
@@ -283,7 +284,59 @@
         Workspace.CatalogChanged -= OnCatalogChanged;
     }
 
-    private void OnWorkspaceChanged() => _ = InvokeAsync(StateHasChanged);
+    private void OnWorkspaceChanged() => _ = InvokeAsync(async () =>
+    {
+        await RevealActiveAsync();
+        StateHasChanged();
+    });
+
+    private static readonly System.Text.RegularExpressions.Regex ActiveRoute =
+        new(@"^/databases/(?<db>[^/?#]+)(?:/tables/(?<table>[^/?#]+))?", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    private string? _revealedHref;
+    private string? _pendingReveal;
+
+    /// <summary>
+    ///     Quand la page active change (autre onglet, lien, retour), l'arbre s'ouvre sur son élément : la base est dépliée, la table
+    ///     est rendue (même au-delà de la première tranche) puis amenée dans la vue. Un pli fait à la main tient jusqu'à la prochaine
+    ///     navigation.
+    /// </summary>
+    private async Task RevealActiveAsync()
+    {
+        var href = Workspace.ActiveHref;
+        if (href == null || href == _revealedHref) return;
+        var match = ActiveRoute.Match(WorkspaceState.Normalize(href));
+        if (!match.Success) return;
+        var databaseId = Uri.UnescapeDataString(match.Groups["db"].Value);
+        if (_databases.All(d => d.Id != databaseId)) return;
+        _revealedHref = href;
+
+        _expandedDbs.Add(databaseId);
+        if (!_tables.ContainsKey(databaseId)) await LoadDatabaseAsync(databaseId);
+        _pendingReveal = "db:" + databaseId;
+        if (!match.Groups["table"].Success) return;
+
+        var tableId = Uri.UnescapeDataString(match.Groups["table"].Value);
+        var index = Array.FindIndex(_tables[databaseId], t => t.Id == tableId);
+        if (index < 0) return;
+        if (index >= _tableLimits.GetValueOrDefault(databaseId, TablePage))
+            _tableLimits[databaseId] = (index / TablePage + 1) * TablePage;
+        _pendingReveal = "t:" + tableId;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pendingReveal is not { } node) return;
+        _pendingReveal = null;
+        try
+        {
+            await JS.InvokeVoidAsync("granitdb.scrollIntoView", $"[data-node=\"{node}\"]");
+        }
+        catch (JSException)
+        {
+            // Le défilement est un confort : sans lui l'arbre reste correct.
+        }
+    }
 
     /// <summary>Le catalogue a changé ailleurs (import, synchronisation, édition) : l'explorateur relit ce qu'il affiche.</summary>
     private void OnCatalogChanged(string? databaseId, object? source)
@@ -522,7 +575,7 @@
         builder.AddAttribute(3, "tabindex", "-1");
         builder.AddAttribute(4, "aria-pressed", on ? "true" : "false");
         builder.AddAttribute(5, "aria-label", (on ? "Retirer des favoris : " : "Ajouter aux favoris : ") + item.Name);
-        builder.AddAttribute(6, "title", on ? "Retirer des favoris" : "Ajouter aux favoris (F)");
+        builder.AddAttribute(6, "title", Shortcuts.Hint(on ? "Retirer des favoris" : "Ajouter aux favoris", Shortcuts.Favorite));
         builder.AddAttribute(7, "onclick", EventCallback.Factory.Create(this, () => Workspace.ToggleFavorite(item)));
         builder.OpenComponent<MudIcon>(8);
         builder.AddAttribute(9, "Icon", on ? Icons.Material.Filled.Star : Icons.Material.Outlined.StarBorder);

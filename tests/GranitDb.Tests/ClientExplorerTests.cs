@@ -120,10 +120,45 @@ public class ClientExplorerTests : ShellTestBase
     {
         State.Open("/databases/d1/tables/t1");
         var page = Open();
-        ExpandDb(page, "Boutique");
 
-        Assert.Contains("node-current", page.Find("[data-table='customers']").ClassName);
+        page.WaitForAssertion(() => Assert.Contains("node-current", page.Find("[data-table='customers']").ClassName));
         Assert.DoesNotContain("node-current", page.Find("[data-table='orders']").ClassName);
+    }
+
+    [BunitFact]
+    public void The_tree_opens_on_the_page_being_shown_and_scrolls_it_into_view()
+    {
+        State.Open("/databases/d1/tables/t1");
+        var page = Open();
+
+        page.WaitForAssertion(() => Assert.Equal("true", page.Find("[data-db='Boutique']").GetAttribute("aria-expanded")));
+        Assert.Equal("false", page.Find("[data-db='RH']").GetAttribute("aria-expanded"));
+        page.WaitForAssertion(() => Ctx.JSInterop.VerifyInvoke("granitdb.scrollIntoView"));
+    }
+
+    [BunitFact]
+    public void Switching_to_a_page_of_another_database_brings_the_tree_back_to_it()
+    {
+        State.Open("/databases/d1");
+        var page = Open();
+        page.WaitForAssertion(() => Assert.Equal("true", page.Find("[data-db='Boutique']").GetAttribute("aria-expanded")));
+
+        State.Open("/databases/d2");
+
+        page.WaitForAssertion(() => Assert.Equal("true", page.Find("[data-db='RH']").GetAttribute("aria-expanded")));
+        Assert.Contains("node-current", page.Find("[data-db='RH']").ClassName);
+    }
+
+    [BunitFact]
+    public void A_fold_made_by_hand_is_kept_until_the_next_navigation()
+    {
+        State.Open("/databases/d1");
+        var page = Open();
+        page.WaitForAssertion(() => Assert.Equal("true", page.Find("[data-db='Boutique']").GetAttribute("aria-expanded")));
+
+        page.Find("[data-db='Boutique'] button.chev").Click();
+
+        page.WaitForAssertion(() => Assert.Equal("false", page.Find("[data-db='Boutique']").GetAttribute("aria-expanded")));
     }
 
     // --- Filtre ---

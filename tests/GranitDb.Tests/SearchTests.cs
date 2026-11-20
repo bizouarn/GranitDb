@@ -29,6 +29,56 @@ public class SearchRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task Finds_a_domain_and_the_tables_filed_in_it()
+    {
+        await SeedAsync();
+        var customers = (await _env.Repository.FindAsync<TableInfo>("DatabaseId", "shop")).Single(t => t.Name == "customers");
+        var domain = await _env.Repository.CreateAsync(new DomainInfo { Name = "Ventes", DatabaseId = "shop" });
+        await _env.Repository.CreateAsync(new DomainTableInfo { DomainId = domain.Id, TableId = customers.Id });
+
+        var hits = await _env.Repository.SearchAsync("vent", 25);
+
+        var found = Assert.Single(hits, h => h.Kind == "domain");
+        Assert.Equal("Ventes", found.Name);
+        Assert.Equal("shop", found.DatabaseId);
+        var table = Assert.Single(hits, h => h.Kind == "table");
+        Assert.Equal("customers", table.Name);
+        Assert.Equal("domaine « Ventes »", table.Via);
+    }
+
+    [Fact]
+    public async Task Finds_the_elements_carrying_a_tag_with_the_tag_as_the_reason()
+    {
+        await SeedAsync();
+        var customers = (await _env.Repository.FindAsync<TableInfo>("DatabaseId", "shop")).Single(t => t.Name == "customers");
+        var email = (await _env.Repository.FindAsync<ColumnInfo>("TableId", customers.Id)).Single(c => c.Name == "email");
+        var tag = await _env.Repository.CreateAsync(new TagInfo { Name = "RGPD" });
+        await _env.Repository.CreateAsync(new TagLinkInfo { TagId = tag.Id, EntityType = TagLinkInfo.Table, EntityId = customers.Id });
+        await _env.Repository.CreateAsync(new TagLinkInfo { TagId = tag.Id, EntityType = TagLinkInfo.Column, EntityId = email.Id });
+        await _env.Repository.CreateAsync(new TagLinkInfo { TagId = tag.Id, EntityType = TagLinkInfo.Database, EntityId = "shop" });
+
+        var hits = await _env.Repository.SearchAsync("rgpd", 25);
+
+        Assert.All(hits, h => Assert.Equal("étiquette « RGPD »", h.Via));
+        Assert.Equal(["column", "database", "table"], hits.Select(h => h.Kind).Order().ToArray());
+        Assert.Equal("email", hits.Single(h => h.Kind == "column").Name);
+    }
+
+    [Fact]
+    public async Task A_match_by_name_is_not_repeated_by_its_tag_and_keeps_no_reason()
+    {
+        await SeedAsync();
+        var customers = (await _env.Repository.FindAsync<TableInfo>("DatabaseId", "shop")).Single(t => t.Name == "customers");
+        var tag = await _env.Repository.CreateAsync(new TagInfo { Name = "customers-legacy" });
+        await _env.Repository.CreateAsync(new TagLinkInfo { TagId = tag.Id, EntityType = TagLinkInfo.Table, EntityId = customers.Id });
+
+        var hits = await _env.Repository.SearchAsync("customers", 25);
+
+        var table = Assert.Single(hits, h => h.Kind == "table" && h.Name == "customers");
+        Assert.Null(table.Via);
+    }
+
+    [Fact]
     public async Task Finds_each_kind_by_name_with_its_context()
     {
         await SeedAsync();

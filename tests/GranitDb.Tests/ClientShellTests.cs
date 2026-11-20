@@ -527,7 +527,7 @@ public class ClientCommandPaletteTests : ShellTestBase
 
         palette.FindAll(".palette-item").First(i => i.TextContent.Contains("Rechercher")).Click();
 
-        Assert.EndsWith("/search?q=custom", Nav.Uri);
+        palette.WaitForAssertion(() => Assert.EndsWith("/search?q=custom", Nav.Uri));
     }
 
     [BunitFact]

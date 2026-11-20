@@ -48,7 +48,7 @@
                                        aria-expanded="@(_domainsOpen ? "true" : "false")" aria-controls="domains-body"
                                        aria-label="@(_domainsOpen ? "Réduire le panneau des domaines" : "Déployer le panneau des domaines")"
                                        title="@(_domainsOpen ? "Réduire pour voir la liste des tables" : "Déployer les domaines")" />
-                        <MudText Typo="Typo.subtitle1">Domaines (@_domains.Length)</MudText>
+                        <MudText Typo="Typo.subtitle1"><Term Key="domaine">Domaines</Term> (@_domains.Length)</MudText>
                         @if (!_domainsOpen)
                         {
                             <Muted Typo="Typo.caption" Class="domains-current">
@@ -218,25 +218,25 @@
                             <span class="er-legend-item"><b>PK</b> <Term Key="cle-primaire">clé primaire</Term> · <b>FK</b> <Term Key="cle-etrangere">clé étrangère</Term></span>
                             <span class="er-legend-item"><i class="er-swatch er-swatch-frontier"></i>Table en pointillés : d'un autre domaine, liée à celui-ci</span>
                             <span class="er-legend-item">Un trait qui part de plusieurs colonnes = une relation multi-colonnes (clé composite)</span>
-                            <span class="er-legend-item">Glisser une table la déplace ; clic = voir ce qu'elle impacte ; Échap ou clic dans le vide = désélectionner · <a href="/help" class="help-link">En savoir plus</a></span>
+                            <span class="er-legend-item">Glisser une table la déplace ; clic = voir ce qu'elle impacte ; double-clic = ouvrir sa fiche ; Échap ou clic dans le vide = désélectionner · <a href="/help" class="help-link">En savoir plus</a></span>
                         </div>
                     }
                     @if (CurrentDomain != null && HiddenInDomain > 0)
                     {
                         <div class="er-hidden-banner" role="status">
-                            @HiddenInDomain relation@(HiddenInDomain > 1 ? "s" : "") masquée@(HiddenInDomain > 1 ? "s" : "") dans ce domaine (le dessin est volontairement moins chargé).
+                            @HiddenInDomain <Term Key="relation-masquee">relation@(HiddenInDomain > 1 ? "s" : "") masquée@(HiddenInDomain > 1 ? "s" : "")</Term> dans ce domaine (le dessin est volontairement moins chargé).
                             <MudButton Size="Size.Small" OnClick="ShowAllRelationsAsync" Class="er-hidden-show">Tout afficher</MudButton>
                         </div>
                     }
                     <div class="er-focus" tabindex="-1" @onkeydown="OnDiagramKey">
                     <ErDiagramView Diagram="_diagram" Zoom="_zoom" SelectedTableId="@_selectedTable" SelectedColumnId="@_selectedColumn"
                                    Dependents="_dependents" Dependencies="_dependencies"
-                                   OnSelectTable="SelectTableAsync" OnSelectColumn="SelectColumnAsync" OnClearSelection="ClearSelection"
+                                   OnSelectTable="SelectTableAsync" OnOpenTable="OpenTable" OnSelectColumn="SelectColumnAsync" OnClearSelection="ClearSelection"
                                    OnNodeMoved="NodeMovedAsync" OnDragLeave="DragLeave" />
                     </div>
                     <Muted Typo="Typo.caption">
                         Glissez une table pour la déplacer@(CurrentDomain == null ? "" : " (sa place est mémorisée pour ce domaine)") .
-                        Cliquez une table ou une colonne pour voir ce qu'elle impacte, cliquez dans le vide pour désélectionner.
+                        Cliquez une table ou une colonne pour voir ce qu'elle impacte, double-cliquez pour ouvrir sa fiche, cliquez dans le vide pour désélectionner.
                         1 = clé référencée, N = colonne qui référence.
                     </Muted>
                     @if (_selectedTable != null)
@@ -264,8 +264,9 @@
                             <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
                                 <MudTextField @bind-Value="_relationFilter" Label="Filtrer" Immediate="true" Clearable="true" Dense="true" />
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ShowAllRelationsAsync"
-                                           Disabled="@(CurrentDomain.HiddenRelations.Count == 0)">Tout afficher</MudButton>
-                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="HideAllRelationsAsync">Tout masquer</MudButton>
+                                           Disabled="@(HiddenInDomain == 0)">Tout afficher@(HiddenInDomain > 0 ? $" ({HiddenInDomain})" : "")</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="HideAllRelationsAsync"
+                                           Disabled="@(VisibleInDomain == 0)">Tout masquer@(VisibleInDomain > 0 ? $" ({VisibleInDomain})" : "")</MudButton>
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="HideIndirectAsync" Class="hide-indirect"
                                            Disabled="@(IndirectToHide == 0)"
                                            title="Ne garde que les clés étrangères détectées : masque les relations manuelles ou déduites des noms">Masquer les relations indirectes@(IndirectToHide > 0 ? $" ({IndirectToHide})" : "")</MudButton>
@@ -291,7 +292,7 @@
 
                 @if (_impact != null)
                 {
-                    <MudPaper Class="pa-3 mt-3" id="impact">
+                    <MudPaper Class="pa-3 mt-3" id="impact" tabindex="-1" @onkeydown="OnDiagramKey">
                         <MudText Typo="Typo.h6">Impact de @_impact.Root.Label()</MudText>
                         <MudText Class="impact-sentence">@Phrases.Impact(_impact.Root.ColumnId != null, _impact.Dependents.Count, _impact.Dependencies.Count)</MudText>
                         <a class="impact-open" href="@_impact.Root.Href(Id)">Ouvrir la fiche de @_impact.Root.TableName</a>
@@ -346,6 +347,8 @@
 
     /// <summary>Relations entre les tables du domaine que son plan ne dessine pas.</summary>
     private int HiddenInDomain => CurrentDomain == null ? 0 : DomainRelations.Count(r => CurrentDomain.HiddenRelations.Contains(r.Id));
+
+    private int VisibleInDomain => CurrentDomain == null ? 0 : DomainRelations.Count - HiddenInDomain;
 
     private void OnDiagramKey(KeyboardEventArgs e)
     {
@@ -534,30 +537,47 @@
     /// <summary>Relations indirectes (ni clé étrangère détectée) encore dessinées dans le domaine.</summary>
     private int IndirectToHide => CurrentDomain == null ? 0 : DomainRelations.Count(r => r.Indirect && !CurrentDomain.HiddenRelations.Contains(r.Id));
 
-    private async Task HideIndirectAsync()
-    {
-        if (CurrentDomain is not { } domain) return;
+    private Task HideIndirectAsync() => ChangeHiddenAsync(async domain =>
         await ApiErrors.TryAsync(async () =>
         {
             await Api.HideIndirectRelationsAsync(domain.Id);
             await ReloadDomainsAsync();
-            ClearSelection();
-            Rebuild();
-            Notifier.Show("Relations indirectes masquées : il ne reste que les clés étrangères détectées.");
-        }, ShowError);
-    }
+        }, ShowError));
 
-    private async Task ResetToDocumentationAsync()
-    {
-        if (CurrentDomain is not { } domain) return;
+    private Task ResetToDocumentationAsync() => ChangeHiddenAsync(async domain =>
         await ApiErrors.TryAsync(async () =>
         {
             await Api.ResetDomainToDocumentationAsync(domain.Id);
             await ReloadDomainsAsync();
+        }, ShowError));
+
+    /// <summary>
+    ///     Change les relations masquées du domaine (en lot), puis dit ce qui a été touché (« 12 relations masquées ») avec « Annuler » : la liste
+    ///     d'avant est remise telle quelle.
+    /// </summary>
+    private async Task ChangeHiddenAsync(Func<DomainView, Task<bool>> change)
+    {
+        if (CurrentDomain is not { } domain) return;
+        var domainId = domain.Id;
+        var before = domain.HiddenRelations.ToList();
+        if (!await change(domain)) return;
+        ClearSelection();
+        Rebuild();
+        var after = (_domains.FirstOrDefault(d => d.Id == domainId) ?? domain).HiddenRelations;
+        var changed = before.Union(after).Count(id => before.Contains(id) != after.Contains(id));
+        var hidden = after.Count(id => !before.Contains(id));
+        var shown = before.Count(id => !after.Contains(id));
+        Notifier.Show(Phrases.HiddenRelationsChanged(hidden, shown), Severity.Success, changed == 0 ? null : async () =>
+        {
+            if (!await ApiErrors.TryAsync(async () =>
+                {
+                    await Api.SaveDomainSettingsAsync(domainId, null, before);
+                    await ReloadDomainsAsync();
+                }, ShowError)) return;
             ClearSelection();
             Rebuild();
-            Notifier.Show("Relations masquées remises comme dans la documentation d'origine.");
-        }, ShowError);
+            await InvokeAsync(StateHasChanged);
+        });
     }
 
     /// <summary>Fenêtre « Modifier le domaine » : le même éditeur que l'écran de gestion, avec ajout en lot et aperçu des relations.</summary>
@@ -568,22 +588,20 @@
         {
             { x => x.DatabaseId, Id }, { x => x.Tables, _tables }, { x => x.Domains, _domains }, { x => x.Existing, domain }
         };
-        if (!await Dialogs.ShowFormAsync("Modifier le domaine", parameters, MaxWidth.Large)) return;
+        if (await Dialogs.ShowDataAsync<DomainDialog, DomainSaved>("Modifier le domaine", parameters, MaxWidth.Large) is not { } saved) return;
         await ReloadDomainsAsync();
         ClearSelection();
         Rebuild();
-        Workspace.Saved(Notifier, Id, this, "Domaine modifié.");
+        Workspace.Saved(Notifier, Id, this, saved.Summary);
     }
 
-    private Task ShowAllRelationsAsync() => CurrentDomain is { } d ? SaveDomainSettingsAsync(d, hiddenRelations: []) : Task.CompletedTask;
+    private Task ShowAllRelationsAsync() => ChangeHiddenAsync(d => SaveDomainSettingsAsync(d, hiddenRelations: []));
 
-    private Task HideAllRelationsAsync() => CurrentDomain is { } d
-        ? SaveDomainSettingsAsync(d, hiddenRelations: DomainRelations.Select(r => r.Id).ToHashSet())
-        : Task.CompletedTask;
+    private Task HideAllRelationsAsync() => ChangeHiddenAsync(d => SaveDomainSettingsAsync(d, hiddenRelations: DomainRelations.Select(r => r.Id).ToHashSet()));
 
-    private async Task SaveDomainSettingsAsync(DomainView domain, bool? showNeighbors = null, IEnumerable<string>? hiddenRelations = null)
+    private async Task<bool> SaveDomainSettingsAsync(DomainView domain, bool? showNeighbors = null, IEnumerable<string>? hiddenRelations = null)
     {
-        await ApiErrors.TryAsync(async () =>
+        return await ApiErrors.TryAsync(async () =>
         {
             await Api.SaveDomainSettingsAsync(domain.Id, showNeighbors, hiddenRelations);
             if (showNeighbors != null) domain.ShowNeighbors = showNeighbors.Value;
@@ -659,12 +677,11 @@
             { x => x.DatabaseId, Id }, { x => x.Tables, _tables }, { x => x.Domains, _domains },
             { x => x.InitialTables, CurrentDomain == null ? _visible.ToList() : null }
         };
-        var created = await Dialogs.ShowDataAsync<DomainDialog, string>("Nouveau domaine", parameters, MaxWidth.Large);
-        if (created == null) return;
+        if (await Dialogs.ShowDataAsync<DomainDialog, DomainSaved>("Nouveau domaine", parameters, MaxWidth.Large) is not { } created) return;
         await ReloadDomainsAsync();
         Workspace.NotifyCatalogChanged(Id, this);
-        await SelectDomainAsync(created);
-        Notifier.Show("Domaine créé.");
+        await SelectDomainAsync(created.Id);
+        Notifier.Show(created.Summary);
     }
 
     private async Task OnNewDomainKey(KeyboardEventArgs e)
@@ -856,6 +873,11 @@
         _dependents = new HashSet<string>();
         _dependencies = new HashSet<string>();
     }
+
+    /// <summary>Double-clic : la fiche de la table s'ouvre (la colonne y est mise en évidence).</summary>
+    private void OpenTable((string TableId, string? ColumnId) target) => Navigation.NavigateTo(
+        $"/databases/{Uri.EscapeDataString(Id)}/tables/{Uri.EscapeDataString(target.TableId)}" +
+        (target.ColumnId == null ? "" : $"?column={Uri.EscapeDataString(target.ColumnId)}"));
 
     private async Task SelectTableAsync(string tableId)
     {

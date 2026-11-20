@@ -194,14 +194,16 @@ public partial class ServerConnectionInput
 public partial class SearchHit
 {
     /// <summary>Page du client qui affiche ce résultat : la base, ou l'onglet de la table (la colonne y est mise en évidence).</summary>
-    public string Href => string.IsNullOrEmpty(TableId)
+    public string Href => Kind == "domain"
+        ? $"/databases/{Uri.EscapeDataString(DatabaseId)}/diagram?domain={Uri.EscapeDataString(Id)}"
+        : string.IsNullOrEmpty(TableId)
         ? $"/databases/{Uri.EscapeDataString(DatabaseId)}"
         : $"/databases/{Uri.EscapeDataString(DatabaseId)}/tables/{Uri.EscapeDataString(TableId)}" +
           (Kind == "column" ? $"?column={Uri.EscapeDataString(Id)}" : "");
 
-    public static string KindLabel(string kind) => kind switch { "database" => "Base", "table" => "Table", "column" => "Colonne", _ => "Index" };
+    public static string KindLabel(string kind) => kind switch { "database" => "Base", "table" => "Table", "column" => "Colonne", "domain" => "Domaine", _ => "Index" };
 
-    public static int KindOrder(string kind) => kind switch { "table" => 0, "column" => 1, "database" => 2, _ => 3 };
+    public static int KindOrder(string kind) => kind switch { "table" => 0, "column" => 1, "database" => 2, "domain" => 3, _ => 4 };
 
     /// <summary>Le nom qu'on affiche : une colonne est précédée de sa table.</summary>
     public static string Label(SearchHit hit) => hit.Kind == "column" ? $"{hit.TableName}.{hit.Name}" : hit.Name;
@@ -212,6 +214,7 @@ public partial class SearchHit
         var t = term?.Trim();
         if (string.IsNullOrEmpty(t) || Name.Contains(t, StringComparison.OrdinalIgnoreCase)) return "dans le nom";
         if (Description != null && Description.Contains(t, StringComparison.OrdinalIgnoreCase)) return "dans la description";
+        if (Via != null) return Via;
         return Kind == "index" ? "dans les colonnes de l'index" : "dans le nom";
     }
 }

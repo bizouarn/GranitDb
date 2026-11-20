@@ -5460,6 +5460,10 @@
           "tableName": {
             "type": "string",
             "nullable": true
+          },
+          "via": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false

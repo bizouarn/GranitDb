@@ -32,6 +32,11 @@
     {
         <Muted Typo="Typo.body1">Aucun résultat pour « @Q ». Essayez un mot plus court, ou une partie du nom d'une table ou d'une colonne.</Muted>
     }
+    else if (_scope != null && Shown.Length == 0)
+    {
+        <Muted Typo="Typo.body1" Class="search-scope-empty">Aucun résultat pour « @Q » dans la base courante.</Muted>
+        <MudButton Variant="Variant.Outlined" Class="search-widen" OnClick="@(() => _scope = null)">Chercher dans toutes les bases (@_hits.Length)</MudButton>
+    }
     else
     {
         @if (DatabasesInHits.Count > 1)
@@ -68,7 +73,7 @@
 
 @code {
     private static readonly (string Kind, string Label)[] Kinds =
-        [("database", "Bases"), ("table", "Tables"), ("column", "Colonnes"), ("index", "Index")];
+        [("database", "Bases"), ("domain", "Domaines"), ("table", "Tables"), ("column", "Colonnes"), ("index", "Index")];
 
 
     private SearchHit[] _hits = [];
@@ -91,6 +96,9 @@
 
     [SupplyParameterFromQuery(Name = "q")] public string? Q { get; set; }
 
+    /// <summary>La base à laquelle la recherche est limitée d'office (celle dont la page est affichée quand on a cherché).</summary>
+    [SupplyParameterFromQuery(Name = "db")] public string? Db { get; set; }
+
     private IEnumerable<(string Label, List<SearchHit> Hits)> Groups => Kinds
         .Select(k => (k.Label, Hits: Shown.Where(h => h.Kind == k.Kind).ToList()))
         .Where(g => g.Hits.Count > 0);
@@ -99,6 +107,7 @@
     {
         _error = null;
         _hits = [];
+        _scope = Db;
         var term = Q?.Trim();
         if (term is not { Length: >= 2 }) return;
 

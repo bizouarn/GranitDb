@@ -13,16 +13,21 @@
 <PageShell Title="Étiquettes et domaines" Description="Renommez, colorez ou supprimez les étiquettes (communes à toutes les bases) et les domaines de chaque base. Cliquez un nom pour le modifier ; il s'enregistre en le quittant." Error="@_error" ErrorChanged="@(v => _error = v)">
     <AiPanel />
 
-
     @if (_loading)
     {
         <MudProgressCircular Indeterminate="true" />
     }
     else
     {
+        <div class="manage-filter-row">
+            <input class="manage-filter" type="search" placeholder="Filtrer par nom…" aria-label="Filtrer les étiquettes et les domaines par nom"
+                   @bind="_filter" @bind:event="oninput" />
+        </div>
+        <ActiveFilterBar Description="@FilterDescription" Result="@FilterResult" OnClear="ClearFilter" />
+
         <MudPaper Class="pa-4 mb-4" Outlined="true" id="manage-tags">
             <MudStack Row="true" AlignItems="AlignItems.Center">
-                <MudText Typo="Typo.h6">Étiquettes (@_tags.Length)</MudText>
+                <MudText Typo="Typo.h6"><Term Key="etiquette">Étiquettes</Term> (@CountOf(VisibleTags.Count(), _tags.Length))</MudText>
                 <MudSpacer />
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="NewTagAsync" Class="new-tag">Nouvelle étiquette</MudButton>
             </MudStack>
@@ -30,7 +35,11 @@
             {
                 <Muted>Aucune étiquette : posez-en une depuis une base, une table ou une colonne.</Muted>
             }
-            @foreach (var tag in _tags)
+            @if (_tags.Length > 0 && !VisibleTags.Any())
+            {
+                <Muted Class="manage-no-match">Aucune étiquette ne correspond au filtre.</Muted>
+            }
+            @foreach (var tag in VisibleTags)
             {
                 var current = tag;
                 <div class="manage-row" data-tag="@tag.Name">
@@ -51,16 +60,21 @@
 
         @foreach (var db in _databases)
         {
-            var domains = _domains.GetValueOrDefault(db.Id) ?? [];
+            var allDomains = _domains.GetValueOrDefault(db.Id) ?? [];
+            var domains = VisibleDomains(db).ToArray();
             <MudPaper Class="pa-4 mb-4" Outlined="true" data-database="@db.Name">
                 <MudStack Row="true" AlignItems="AlignItems.Center">
-                    <MudText Typo="Typo.h6">Domaines de @db.Name (@domains.Length)</MudText>
+                    <MudText Typo="Typo.h6"><Term Key="domaine">Domaines</Term> de @db.Name (@CountOf(domains.Length, allDomains.Length))</MudText>
                     <MudSpacer />
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => NewDomainAsync(db)" Class="new-domain">Nouveau domaine</MudButton>
                 </MudStack>
-                @if (domains.Length == 0)
+                @if (allDomains.Length == 0)
                 {
                     <Muted>Aucun domaine : créez-en un pour regrouper les tables d'un même sujet.</Muted>
+                }
+                else if (domains.Length == 0)
+                {
+                    <Muted Class="manage-no-match">Aucun domaine ne correspond au filtre.</Muted>
                 }
                 @foreach (var domain in domains)
                 {
@@ -93,6 +107,26 @@
 @code {
 
     private TagInfo[] _tags = [];
+    private string _filter = "";
+
+    private bool Filtering => !string.IsNullOrWhiteSpace(_filter);
+
+    private bool Matches(string name) => !Filtering || name.Contains(_filter.Trim(), StringComparison.CurrentCultureIgnoreCase);
+
+    private IEnumerable<TagInfo> VisibleTags => _tags.Where(t => Matches(t.Name));
+
+    private IEnumerable<DomainView> VisibleDomains(DatabaseView db) => (_domains.GetValueOrDefault(db.Id) ?? []).Where(d => Matches(d.Name));
+
+    /// <summary>« 3 » ou, quand un filtre est posé, « 1 sur 3 ».</summary>
+    private string CountOf(int shown, int total) => Filtering ? $"{shown} sur {total}" : total.ToString();
+
+    private string? FilterDescription => Filtering ? $"nom contient « {_filter.Trim()} »" : null;
+
+    private string? FilterResult => Filtering
+        ? $"{VisibleTags.Count()} étiquette(s) et {_databases.Sum(d => VisibleDomains(d).Count())} domaine(s) affichés"
+        : null;
+
+    private void ClearFilter() => _filter = "";
     private DatabaseView[] _databases = [];
     private Dictionary<string, DomainView[]> _domains = new();
     private string? _confirm;
@@ -193,10 +227,10 @@
             { x => x.DatabaseId, domain.DatabaseId }, { x => x.Tables, await Api.GetTablesAsync(domain.DatabaseId) },
             { x => x.Domains, _domains.GetValueOrDefault(domain.DatabaseId) ?? [] }, { x => x.Existing, domain }
         };
-        if (await Dialogs.ShowFormAsync("Modifier le domaine", parameters, MaxWidth.Large))
+        if (await Dialogs.ShowDataAsync<DomainDialog, DomainSaved>("Modifier le domaine", parameters, MaxWidth.Large) is { } saved)
         {
             await LoadAsync();
-            Workspace.Saved(Notifier, domain.DatabaseId, this, "Domaine modifié.");
+            Workspace.Saved(Notifier, domain.DatabaseId, this, saved.Summary);
         }
     }
 
@@ -207,9 +241,9 @@
             { x => x.DatabaseId, database.Id }, { x => x.Tables, await Api.GetTablesAsync(database.Id) },
             { x => x.Domains, _domains.GetValueOrDefault(database.Id) ?? [] }
         };
-        if (await Dialogs.ShowDataAsync<DomainDialog, string>("Nouveau domaine", parameters, MaxWidth.Large) == null) return;
+        if (await Dialogs.ShowDataAsync<DomainDialog, DomainSaved>("Nouveau domaine", parameters, MaxWidth.Large) is not { } created) return;
         await LoadAsync();
-        Workspace.Saved(Notifier, database.Id, this, "Domaine créé.");
+        Workspace.Saved(Notifier, database.Id, this, created.Summary);
     }
 
     /// <summary>Pour les champs en place : l'erreur remonte au champ, qui l'affiche sous la saisie.</summary>

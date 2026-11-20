@@ -3,7 +3,7 @@ namespace GranitDB.API.Models;
 /// <summary>Un résultat de recherche globale : une base, une table, une colonne ou un index.</summary>
 public class SearchHit
 {
-    /// <summary><c>database</c>, <c>table</c>, <c>column</c> ou <c>index</c>.</summary>
+    /// <summary><c>database</c>, <c>table</c>, <c>column</c>, <c>index</c> ou <c>domain</c>.</summary>
     public string Kind { get; set; } = "";
 
     public string Id { get; set; } = "";
@@ -20,4 +20,7 @@ public class SearchHit
     public string? TableId { get; set; }
 
     public string? TableName { get; set; }
+
+    /// <summary>Pourquoi un élément est trouvé sans que son nom corresponde : « domaine « X » » ou « étiquette « X » » ; absent sinon.</summary>
+    public string? Via { get; set; }
 }

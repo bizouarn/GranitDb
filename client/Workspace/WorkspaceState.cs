@@ -44,6 +44,12 @@ public class WorkspaceState
     /// <summary>Adresse de l'onglet affiché (celle de la page courante).</summary>
     public string? ActiveHref { get; private set; }
 
+    private static readonly System.Text.RegularExpressions.Regex DatabaseRoute = new(@"^/databases/([^/?#]+)");
+
+    /// <summary>La base dont une page est affichée (page de la base, d'une table, diagramme…), ou null ailleurs.</summary>
+    public string? ActiveDatabaseId =>
+        ActiveHref != null && DatabaseRoute.Match(Normalize(ActiveHref)) is { Success: true } m ? Uri.UnescapeDataString(m.Groups[1].Value) : null;
+
     public SelectionItem? Selection { get; private set; }
 
     public bool ExplorerOpen { get; private set; } = true;

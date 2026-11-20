@@ -22,6 +22,28 @@ public class ClientHelpTests : ShellTestBase
     }
 
     [BunitFact]
+    public void A_term_links_to_its_entry_in_the_help_page_unless_told_not_to()
+    {
+        var term = Ctx.Render<Term>(p => p.Add(x => x.Key, "domaine"));
+
+        Assert.Equal("/help#domaine", term.Find("a.glossary-more").GetAttribute("href"));
+        Assert.Equal("En savoir plus : Domaine", term.Find("a.glossary-more").GetAttribute("aria-label"));
+        Assert.DoesNotContain("ⓘ", term.Markup); // le symbole vient du CSS : il ne s'ajoute pas au texte lu
+
+        var plain = Ctx.Render<Term>(p => p.Add(x => x.Key, "domaine").Add(x => x.More, false));
+        Assert.Empty(plain.FindAll("a.glossary-more"));
+    }
+
+    [BunitFact]
+    public void The_vocabulary_of_the_management_page_is_explained()
+    {
+        var page = Ctx.Render<Manage>();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("abbr[data-term='etiquette']")));
+
+        Assert.NotEmpty(page.FindAll("abbr[data-term='domaine']"));
+    }
+
+    [BunitFact]
     public void The_help_page_lists_every_term_of_the_glossary()
     {
         var page = Ctx.Render<Help>();
@@ -75,5 +97,17 @@ public class ClientHelpTests : ShellTestBase
         panel.Find("aside").KeyDown(new Microsoft.AspNetCore.Components.Web.KeyboardEventArgs { Key = "Escape" });
 
         Assert.NotNull(State.Selection);
+    }
+}
+
+/// <summary>Lot 2 : les raccourcis sont écrits une fois et rappelés dans les infobulles des boutons.</summary>
+public class ShortcutHintTests
+{
+    [Fact]
+    public void A_hint_puts_the_keys_after_the_label_and_the_sheet_spaces_them()
+    {
+        Assert.Equal("Explorateur (Ctrl+B)", GranitDb.Client.Workspace.Shortcuts.Hint("Explorateur", GranitDb.Client.Workspace.Shortcuts.Explorer));
+        Assert.Equal("Ctrl + K", GranitDb.Client.Workspace.Shortcuts.Spaced(GranitDb.Client.Workspace.Shortcuts.Palette));
+        Assert.Equal("Alt + W", GranitDb.Client.Workspace.Shortcuts.Spaced(GranitDb.Client.Workspace.Shortcuts.CloseTab));
     }
 }

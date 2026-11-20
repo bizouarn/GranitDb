@@ -164,13 +164,13 @@
             Action("Ouvrir cette base", null, () => Go($"/databases/{current}"));
         }
 
-        Action("Fermer l'onglet", "Alt+W", () =>
+        Action("Fermer l'onglet", Shortcuts.CloseTab, () =>
         {
             if (Workspace.ActiveHref != null && Workspace.Close(Workspace.ActiveHref) is { } next) Navigation.NavigateTo(next);
             return Task.CompletedTask;
         });
         Action("Basculer le thème clair / sombre", null, () => OnToggleTheme.InvokeAsync());
-        Action("Afficher ou masquer l'explorateur", "Ctrl+B", () =>
+        Action("Afficher ou masquer l'explorateur", Shortcuts.Explorer, () =>
         {
             Workspace.SetExplorerOpen(!Workspace.ExplorerOpen);
             return Task.CompletedTask;
@@ -196,7 +196,7 @@
                 "column" => $"{hit.TableName}.{hit.Name}",
                 _ => hit.Name
             };
-            var group = hit.Kind switch { "database" => "Bases", "table" => "Tables", "column" => "Colonnes", _ => "Index" };
+            var group = hit.Kind switch { "database" => "Bases", "domain" => "Domaines", "table" => "Tables", "column" => "Colonnes", _ => "Index" };
             var href = hit.Kind == "table" ? $"/databases/{hit.DatabaseId}/tables/{hit.Id}" :
                 hit.Kind == "column" ? $"/databases/{hit.DatabaseId}/tables/{hit.TableId}?column={hit.Id}" : hit.Href;
             items.Add(new PaletteItem(group, label, hit.DatabaseName, () => Go(href)));

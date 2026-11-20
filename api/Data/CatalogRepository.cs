@@ -352,7 +352,42 @@ public class CatalogRepository : ICatalogRepository
             "SELECT * FROM (SELECT 'index' AS Kind, i.\"Id\" AS Id, i.\"Name\" AS Name, i.\"Description\" AS Description, " +
             "i.\"DatabaseId\" AS DatabaseId, d.\"Name\" AS DatabaseName, i.\"TableId\" AS TableId, t.\"Name\" AS TableName " +
             "FROM \"Indexes\" i JOIN \"Tables\" t ON t.\"Id\" = i.\"TableId\" JOIN \"Databases\" d ON d.\"Id\" = i.\"DatabaseId\" " +
-            $"WHERE {Match("i.\"Name\"")} OR {Match("i.\"ColumnNames\"")} OR {Match("i.\"Description\"")}) q" + Limit("q.Name, q.Id")
+            $"WHERE {Match("i.\"Name\"")} OR {Match("i.\"ColumnNames\"")} OR {Match("i.\"Description\"")}) q" + Limit("q.Name, q.Id"),
+
+            // Domaines : le domaine lui-même (nom, description)...
+            "SELECT * FROM (SELECT 'domain' AS Kind, g.\"Id\" AS Id, g.\"Name\" AS Name, g.\"Description\" AS Description, " +
+            "g.\"DatabaseId\" AS DatabaseId, d.\"Name\" AS DatabaseName, NULL AS TableId, NULL AS TableName " +
+            "FROM \"Domains\" g JOIN \"Databases\" d ON d.\"Id\" = g.\"DatabaseId\" " +
+            $"WHERE {Match("g.\"Name\"")} OR {Match("g.\"Description\"")}) q" + Limit("q.Name, q.Id")
+        };
+
+        // ... puis les éléments rangés dans un domaine ou portant une étiquette qui correspond : même type de résultat que par leur nom,
+        // avec la raison dans « Via ».
+        var viaQueries = new[]
+        {
+            "SELECT * FROM (SELECT 'table' AS Kind, t.\"Id\" AS Id, t.\"Name\" AS Name, t.\"Description\" AS Description, " +
+            "t.\"DatabaseId\" AS DatabaseId, d.\"Name\" AS DatabaseName, t.\"Id\" AS TableId, t.\"Name\" AS TableName, " +
+            "g.\"Name\" AS Via " +
+            "FROM \"DomainTables\" dt JOIN \"Domains\" g ON g.\"Id\" = dt.\"DomainId\" JOIN \"Tables\" t ON t.\"Id\" = dt.\"TableId\" " +
+            $"JOIN \"Databases\" d ON d.\"Id\" = t.\"DatabaseId\" WHERE {Match("g.\"Name\"")}) q" + Limit("q.Name, q.Id"),
+
+            "SELECT * FROM (SELECT 'database' AS Kind, d.\"Id\" AS Id, d.\"Name\" AS Name, d.\"Description\" AS Description, " +
+            "d.\"Id\" AS DatabaseId, d.\"Name\" AS DatabaseName, NULL AS TableId, NULL AS TableName, g.\"Name\" AS Via " +
+            "FROM \"TagLinks\" l JOIN \"Tags\" g ON g.\"Id\" = l.\"TagId\" JOIN \"Databases\" d ON d.\"Id\" = l.\"EntityId\" " +
+            $"WHERE l.\"EntityType\" = 'database' AND {Match("g.\"Name\"")}) q" + Limit("q.Name, q.Id"),
+
+            "SELECT * FROM (SELECT 'table' AS Kind, t.\"Id\" AS Id, t.\"Name\" AS Name, t.\"Description\" AS Description, " +
+            "t.\"DatabaseId\" AS DatabaseId, d.\"Name\" AS DatabaseName, t.\"Id\" AS TableId, t.\"Name\" AS TableName, " +
+            "g.\"Name\" AS Via " +
+            "FROM \"TagLinks\" l JOIN \"Tags\" g ON g.\"Id\" = l.\"TagId\" JOIN \"Tables\" t ON t.\"Id\" = l.\"EntityId\" " +
+            $"JOIN \"Databases\" d ON d.\"Id\" = t.\"DatabaseId\" WHERE l.\"EntityType\" = 'table' AND {Match("g.\"Name\"")}) q" + Limit("q.Name, q.Id"),
+
+            "SELECT * FROM (SELECT 'column' AS Kind, c.\"Id\" AS Id, c.\"Name\" AS Name, c.\"Description\" AS Description, " +
+            "c.\"DatabaseId\" AS DatabaseId, d.\"Name\" AS DatabaseName, c.\"TableId\" AS TableId, t.\"Name\" AS TableName, " +
+            "g.\"Name\" AS Via " +
+            "FROM \"TagLinks\" l JOIN \"Tags\" g ON g.\"Id\" = l.\"TagId\" JOIN \"Columns\" c ON c.\"Id\" = l.\"EntityId\" " +
+            "JOIN \"Tables\" t ON t.\"Id\" = c.\"TableId\" JOIN \"Databases\" d ON d.\"Id\" = c.\"DatabaseId\" " +
+            $"WHERE l.\"EntityType\" = 'column' AND {Match("g.\"Name\"")}) q" + Limit("q.Name, q.Id")
         };
 
         using var lease = await LeaseAsync(ct);
@@ -360,7 +395,18 @@ public class CatalogRepository : ICatalogRepository
         foreach (var sql in queries)
             hits.AddRange(await lease.Connection.QueryAsync<SearchHit>(new CommandDefinition(sql,
                 new { pattern, limit = limitPerKind }, lease.Transaction, cancellationToken: ct)));
-        return hits;
+        var seen = hits.Select(h => (h.Kind, h.Id)).ToHashSet();
+        string[] viaKinds = ["domaine", "étiquette", "étiquette", "étiquette"];
+        for (var i = 0; i < viaQueries.Length; i++)
+            foreach (var hit in await lease.Connection.QueryAsync<SearchHit>(new CommandDefinition(viaQueries[i],
+                         new { pattern, limit = limitPerKind }, lease.Transaction, cancellationToken: ct)))
+            {
+                if (!seen.Add((hit.Kind, hit.Id))) continue;
+                hit.Via = $"{viaKinds[i]} « {hit.Via} »";
+                hits.Add(hit);
+            }
+        // Au plus « limitPerKind » résultats par type, les correspondances par le nom d'abord.
+        return hits.GroupBy(h => h.Kind).SelectMany(g => g.Take(limitPerKind)).ToList();
     }
 
     public async Task<IReadOnlyList<T>> FindAsync<T>(string property, string value, CancellationToken ct = default)

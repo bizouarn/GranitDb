@@ -648,7 +648,12 @@ kbd { font: inherit; font-size: .8rem; padding: .05rem .4rem; border: 1px solid 
 
 /* Glossaire : termes expliqués au survol. */
 abbr.glossary-term { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.glossary-more::before { content: "ⓘ"; }
+.glossary-more { margin-left: .2rem; font-size: .8em; text-decoration: none; color: var(--mud-palette-text-secondary); }
+.glossary-more:hover, .glossary-more:focus-visible { color: var(--mud-palette-primary); }
 abbr.glossary-term:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 2px; }
+.manage-filter-row { margin-bottom: .75rem; }
+.manage-filter { width: 100%; max-width: 24rem; padding: .4rem .6rem; border: 1px solid var(--mud-palette-lines-inputs); border-radius: 4px; background: transparent; color: inherit; }
 .glossary-entry { padding: .5rem 0; border-bottom: 1px solid var(--mud-palette-lines-default); }
 .glossary-entry dt { font-weight: 600; }
 .glossary-entry dd { margin: .15rem 0 0; color: var(--mud-palette-text-secondary); }

@@ -98,4 +98,72 @@ public class ClientGuidedSearchTests : ShellTestBase
         Assert.Contains("customer_notes", page.Markup);
         Assert.Contains("1 résultat(s)", page.Markup);
     }
+
+    [BunitFact]
+    public void Searching_from_a_database_page_limits_the_results_to_that_database_until_widened()
+    {
+        Nav.NavigateTo("/databases/d1/tables/t1");
+        var layout = RenderLayout();
+        layout.Find("input[aria-label='Recherche globale']").Input("custom");
+        layout.WaitForAssertion(() => Assert.NotEmpty(layout.FindAll(".search-suggest-all")), TimeSpan.FromSeconds(3));
+
+        layout.Find(".search-suggest-all").Click();
+        layout.WaitForAssertion(() => Assert.EndsWith("/search?q=custom&db=d1", Nav.Uri));
+
+        var page = Ctx.Render<Search>();
+        page.WaitForAssertion(() => Assert.Contains("Adresse email du customer", page.Markup));
+        Assert.DoesNotContain("customer_notes", page.Markup);
+        Assert.Contains("2 résultat(s)", page.Markup);
+
+        page.FindAll(".search-scope-chip").First(c => c.TextContent.StartsWith("Toutes")).Click();
+
+        Assert.Contains("customer_notes", page.Markup);
+    }
+
+    [BunitFact]
+    public void A_scoped_search_without_result_offers_to_search_every_database()
+    {
+        Nav.NavigateTo("/search?q=custom&db=d3");
+        var page = Ctx.Render<Search>();
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".search-scope-empty")));
+
+        page.Find(".search-widen").Click();
+
+        Assert.Contains("customer_notes", page.Markup);
+        Assert.Empty(page.FindAll(".search-scope-empty"));
+    }
+}
+
+/// <summary>Domaines et étiquettes dans la recherche : un domaine est un résultat, une étiquette ou un domaine explique un élément trouvé.</summary>
+public class ClientSearchDomainsAndTagsTests : ShellTestBase
+{
+    private const string Hits = """
+        [{"kind":"domain","id":"g1","name":"Ventes","databaseId":"d1","databaseName":"Boutique"},
+         {"kind":"table","id":"t1","name":"customers","databaseId":"d1","databaseName":"Boutique","tableId":"t1","tableName":"customers","via":"domaine « Ventes »"},
+         {"kind":"column","id":"c9","name":"email","databaseId":"d1","databaseName":"Boutique","tableId":"t1","tableName":"customers","via":"étiquette « RGPD »"}]
+        """;
+
+    public ClientSearchDomainsAndTagsTests() : base(popoverProvider: false)
+    {
+        Override = r => r.RequestUri!.AbsolutePath == "/api/v1/Search" ? FakeApi.Json(Hits) : null;
+    }
+
+    [BunitFact]
+    public void A_domain_is_a_result_that_opens_the_diagram_on_it_and_the_reason_names_the_tag_or_domain()
+    {
+        Nav.NavigateTo("/search?q=ventes");
+        var page = Ctx.Render<Search>();
+        page.WaitForAssertion(() => Assert.Contains("Domaines (1)", page.Markup));
+
+        Assert.Contains("/databases/d1/diagram?domain=g1", page.Find("a[href*='diagram']").GetAttribute("href"));
+        Assert.Contains("domaine « Ventes »", page.Markup);
+        Assert.Contains("étiquette « RGPD »", page.Markup);
+    }
+
+    [BunitFact]
+    public void The_kinds_are_labelled_and_a_domain_comes_after_the_tables_and_columns()
+    {
+        Assert.Equal("Domaine", SearchHit.KindLabel("domain"));
+        Assert.True(SearchHit.KindOrder("domain") > SearchHit.KindOrder("database"));
+    }
 }

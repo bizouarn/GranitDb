@@ -400,6 +400,37 @@ public class ClientDiagramPageTests : IAsyncLifetime
     }
 
     [BunitFact]
+    public void Double_clicking_a_table_opens_its_sheet_and_a_column_highlights_it()
+    {
+        var page = Open();
+        var nav = _ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
+
+        page.Find("g.er-node[data-table='customers']").DoubleClick();
+
+        page.WaitForAssertion(() => Assert.Contains("/databases/db/tables/", nav.Uri));
+        Assert.DoesNotContain("column=", nav.Uri);
+
+        page.Find("g.er-node[data-table='customers'] g.er-row").DoubleClick();
+
+        page.WaitForAssertion(() => Assert.Contains("?column=", nav.Uri));
+    }
+
+    [BunitFact]
+    public void Escape_inside_the_impact_panel_closes_it_and_clears_the_selection()
+    {
+        var page = Open();
+        var customers = page.Find("g.er-node[data-table='customers']");
+        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#impact")));
+
+        page.Find("#impact").KeyDown(new KeyboardEventArgs { Key = "Escape" });
+
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll("#impact")));
+        Assert.Empty(page.FindAll(".er-legend"));
+    }
+
+    [BunitFact]
     public void The_legend_button_clears_the_selection_too()
     {
         var page = Open();

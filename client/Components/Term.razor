@@ -1,12 +1,18 @@
 @using GranitDb.Client.Workspace
-@* Un terme technique expliqué au survol et au focus clavier ; « En savoir plus » mène à la page d'aide. *@
-<abbr class="glossary-term" tabindex="0" title="@Definition" aria-label="@($"{Label} : {Definition}")" data-term="@Key">@(ChildContent ?? (RenderFragment)(b => b.AddContent(0, Label)))</abbr>
+@* Un terme technique expliqué au survol et au focus clavier ; le petit « ⓘ » qui suit mène à sa fiche dans la page d'aide. *@
+<abbr class="glossary-term" tabindex="0" title="@Definition" aria-label="@($"{Label} : {Definition}")" data-term="@Key">@(ChildContent ?? (RenderFragment)(b => b.AddContent(0, Label)))</abbr>@if (More)
+{
+    <a class="glossary-more" href="@($"/help#{Key}")" aria-label="@($"En savoir plus : {Label}")" title="En savoir plus"></a>
+}
 
 @code {
     /// <summary>Clé du terme dans <see cref="Glossary" />.</summary>
     [Parameter, EditorRequired] public string Key { get; set; } = "";
 
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Ajoute le lien « En savoir plus » vers la page d'aide (à retirer quand le terme est déjà dans un lien).</summary>
+    [Parameter] public bool More { get; set; } = true;
 
     private string Label => Glossary.Find(Key)?.Label ?? Key;
     private string Definition => Glossary.Define(Key);

@@ -54,13 +54,13 @@
                 <InlineText Value="@_table.Description" Placeholder="Décrire cette table" OnSave="SaveTableAsync" />
             </div>
             <div class="detail-field">
-                <MudText Typo="Typo.caption">Étiquettes</MudText>
+                <MudText Typo="Typo.caption"><Term Key="etiquette">Étiquettes</Term></MudText>
                 <TagEditor Tags="TagsOf(KindTable, _table.Id)" OnAdd="name => AddTagAsync(name, KindTable, _table.Id)" OnRemove="RemoveTagAsync" />
             </div>
             @if (_domains.Where(d => d.Tables.Any(t => t.TableId == _table.Id)).ToList() is { Count: > 0 } inDomains)
             {
                 <div class="detail-field">
-                    <MudText Typo="Typo.caption">Domaines</MudText>
+                    <MudText Typo="Typo.caption"><Term Key="domaine">Domaines</Term></MudText>
                     @foreach (var domain in inDomains)
                     {
                         <Badge Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/diagram?domain={domain.Id}")">@domain.Name</Badge>
@@ -105,7 +105,7 @@
                            aria-pressed="@(_column.IsSensitive ? "true" : "false")">@(_column.IsSensitive ? "Données sensibles" : "Marquer comme sensible")</MudButton>
             </div>
             <div class="detail-field">
-                <MudText Typo="Typo.caption">Étiquettes</MudText>
+                <MudText Typo="Typo.caption"><Term Key="etiquette">Étiquettes</Term></MudText>
                 <TagEditor Tags="TagsOf(KindColumn, _column.Id)" OnAdd="name => AddTagAsync(name, KindColumn, _column.Id)" OnRemove="RemoveTagAsync" />
             </div>
             @if (_impact != null)

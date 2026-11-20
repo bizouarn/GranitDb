@@ -1,4 +1,5 @@
 @* Feuille « Raccourcis clavier » (touche ?) : tout ce qui se fait au clavier, au même endroit. *@
+@using GranitDb.Client.Workspace
 <MudDialog>
     <DialogContent>
         <div class="shortcuts-sheet">
@@ -33,10 +34,10 @@
     [
         new("Partout",
         [
-            ("Ctrl + K", "Ouvrir la palette de commandes"),
-            ("?", "Afficher cette feuille"),
-            ("Ctrl + B", "Afficher ou masquer l'explorateur"),
-            ("Alt + W", "Fermer l'onglet courant"),
+            (Shortcuts.Spaced(Shortcuts.Palette), "Ouvrir la palette de commandes"),
+            (Shortcuts.Help, "Afficher cette feuille"),
+            (Shortcuts.Spaced(Shortcuts.Explorer), "Afficher ou masquer l'explorateur"),
+            (Shortcuts.Spaced(Shortcuts.CloseTab), "Fermer l'onglet courant"),
             ("Échap", "Fermer une fenêtre, un panneau ou annuler une saisie")
         ]),
         new("Explorateur",

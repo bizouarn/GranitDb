@@ -127,6 +127,7 @@
 			};
 			window.granitdb.unregisterShortcuts = () => { if (handler) document.removeEventListener("keydown", handler); handler = null; };
 			window.granitdb.isTyping = () => typing(document.activeElement);
+			window.granitdb.scrollIntoView = selector => { const el = document.querySelector(selector); if (el) el.scrollIntoView({ block: 'nearest' }); };
 			window.granitdb.focus = selector => { const el = document.querySelector(selector); if (el) el.focus(); };
 			// Grille de saisie : place le focus dans la cellule (ligne, colonne) de la grille.
 			window.granitdb.focusCell = (gridId, row, col) => { const el = document.querySelector('#' + gridId + ' [data-cell="' + row + ':' + col + '"]'); if (el) el.focus(); };

@@ -151,7 +151,7 @@
                 @if (overall.SensitiveUndescribed > 0)
                 {
                     <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2 sensitive-warning">
-                        @overall.SensitiveUndescribed colonne(s) sensible(s) sans description : à documenter en priorité.
+                        @overall.SensitiveUndescribed <Term Key="colonne-sensible">colonne(s) sensible(s)</Term> sans description : à documenter en priorité.
                     </MudAlert>
                 }
             </MudPaper>
@@ -391,7 +391,7 @@
                                 </MudList>
                             }
 
-                            <MudText Typo="Typo.subtitle2" Class="mt-3">Relations</MudText>
+                            <MudText Typo="Typo.subtitle2" Class="mt-3">Relations (<Term Key="cle-etrangere">clés étrangères</Term> et relations saisies ; <Term Key="cardinalite">cardinalité</Term> entre parenthèses)</MudText>
                             <MudList T="string" Dense="true">
                                 @foreach (var relation in table.Relations)
                                 {
@@ -1123,7 +1123,7 @@
             await LoadTablesAsync();
             await LoadGovernanceAsync();
             Changed();
-            Notifier.Show($"Synchronisé : {summary.TablesAdded} table(s) ajoutée(s), {summary.TablesRemoved} supprimée(s), {summary.ColumnsAdded} colonne(s) ajoutée(s), {summary.IndexesAdded} index ajouté(s).");
+            Notifier.Show("Synchronisé : " + Phrases.SyncSummary(summary));
         }
         catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
