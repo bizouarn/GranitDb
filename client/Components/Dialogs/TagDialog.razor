@@ -1,3 +1,4 @@
+@inherits SaveDialogBase
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @inject Client Api
@@ -66,7 +67,6 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     /// <summary>Les bases proposées pour choisir des tables.</summary>
     [Parameter] public DatabaseView[] Databases { get; set; } = [];
@@ -78,8 +78,7 @@
     [Parameter] public TagInfo? Existing { get; set; }
 
     private string _name = "", _search = "", _databaseId = "";
-    private string? _color, _error;
-    private bool _busy;
+    private string? _color;
     private TableInfo[] _tables = [];
     private readonly HashSet<string> _selected = [];
 
@@ -97,7 +96,7 @@
     private bool NameTaken => Existing == null && !string.IsNullOrWhiteSpace(_name) &&
                               Tags.Any(t => string.Equals(t.Name, _name.Trim(), StringComparison.CurrentCultureIgnoreCase));
 
-    private bool CanSave => !string.IsNullOrWhiteSpace(_name) && !NameTaken && (Existing == null || _selected.Count > 0);
+    protected override bool CanSave => !string.IsNullOrWhiteSpace(_name) && !NameTaken && (Existing == null || _selected.Count > 0);
 
     private async Task LoadTablesAsync(string databaseId)
     {
@@ -120,25 +119,11 @@
 
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task SaveAsync()
+    private Task SaveAsync() => SubmitAsync(async () =>
     {
-        if (_busy || !CanSave) return;
-        _busy = true;
-        _error = null;
-        try
-        {
-            var name = _name.Trim();
-            if (Existing == null) await Api.CreateTagAsync(name, _color);
-            foreach (var id in _selected) await Api.AttachTagAsync(name, "table", id);
-            MudDialog.Close(DialogResult.Ok(name));
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+        var name = _name.Trim();
+        if (Existing == null) await Api.CreateTagAsync(name, _color);
+        foreach (var id in _selected) await Api.AttachTagAsync(name, "table", id);
+        return name;
+    });
 }

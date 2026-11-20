@@ -1,3 +1,4 @@
+@inherits SaveDialogBase
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @inject Client Api
@@ -120,7 +121,6 @@
         public string? Target { get; set; }
     }
 
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     /// <summary>Les tables de la base (avec colonnes et relations).</summary>
     [Parameter, EditorRequired] public TableInfo[] Tables { get; set; } = [];
@@ -137,8 +137,6 @@
     private string? _sourceTable, _targetTable;
     private string _sourceFilter = "", _targetFilter = "", _description = "", _type = "One-to-Many";
     private readonly List<PairRow> _pairs = [new()];
-    private string? _error;
-    private bool _busy;
 
     private TableInfo? SourceTable => Tables.FirstOrDefault(t => t.Id == _sourceTable);
     private TableInfo? TargetTable => Tables.FirstOrDefault(t => t.Id == _targetTable);
@@ -201,7 +199,7 @@
         }
     }
 
-    private bool CanSave => Complete && !Problems.Any();
+    protected override bool CanSave => Complete && !Problems.Any();
 
     private string ColumnName(TableInfo table, string? id) => table.Columns.FirstOrDefault(c => c.Id == id)?.Name ?? "?";
 
@@ -228,29 +226,15 @@
 
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task SaveAsync()
+    private Task SaveAsync() => SubmitAsync(async () =>
     {
-        if (_busy || !CanSave) return;
-        _busy = true;
-        _error = null;
-        try
-        {
-            var text = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim();
-            var extras = _pairs.Skip(1).Select(p => new RelationColumnPair { FirstId = p.Target!, SecondId = p.Source! }).ToList();
-            var first = _pairs[0];
-            if (Existing == null)
-                await Api.CreateRelationAsync(first.Target!, first.Source!, _type, text, extras);
-            else
-                await Api.UpdateRelationAsync(Existing.Id, first.Target!, first.Source!, _type, text, Existing.MetaInfo, extras);
-            MudDialog.Close(DialogResult.Ok(true));
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+        var text = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim();
+        var extras = _pairs.Skip(1).Select(p => new RelationColumnPair { FirstId = p.Target!, SecondId = p.Source! }).ToList();
+        var first = _pairs[0];
+        if (Existing == null)
+            await Api.CreateRelationAsync(first.Target!, first.Source!, _type, text, extras);
+        else
+            await Api.UpdateRelationAsync(Existing.Id, first.Target!, first.Source!, _type, text, Existing.MetaInfo, extras);
+        return true;
+    });
 }

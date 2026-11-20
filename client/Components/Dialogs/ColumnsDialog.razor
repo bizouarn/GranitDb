@@ -1,3 +1,4 @@
+@inherits SaveDialogBase
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @inject Client Api
@@ -35,15 +36,12 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     /// <summary>La table, avec ses colonnes.</summary>
     [Parameter, EditorRequired] public TableInfo Table { get; set; } = new();
 
     private readonly List<ColumnRow> _rows = [];
     private readonly IReadOnlyList<GridColumn<ColumnRow>> _columns = ColumnRow.Grid();
-    private string? _error;
-    private bool _busy;
 
     protected override void OnInitialized()
     {
@@ -61,7 +59,7 @@
 
     private int ProblemCount => GridValidation.Problems(_columns, _rows, ColumnRow.IsBlank).Count;
 
-    private bool CanSave => ProblemCount == 0 && (Added.Any() || Described.Any());
+    protected override bool CanSave => ProblemCount == 0 && (Added.Any() || Described.Any());
 
     private string Preview
     {
@@ -80,34 +78,20 @@
 
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task SaveAsync()
+    private Task SaveAsync() => SubmitAsync(async () =>
     {
-        if (_busy || !CanSave) return;
-        _busy = true;
-        _error = null;
-        try
-        {
-            if (Added.Any())
-                await Api.AddManualColumnsAsync(Table.Id, Added.Select(r => new ManualColumnInput
-                {
-                    Name = r.Name.Trim(), DataType = r.DataType.Trim(), IsPrimaryKey = r.IsPrimaryKey, IsNullable = r.IsNullable,
-                    IsSensitive = r.IsSensitive, Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim()
-                }));
-            foreach (var row in Described.ToList())
+        if (Added.Any())
+            await Api.AddManualColumnsAsync(Table.Id, Added.Select(r => new ManualColumnInput
             {
-                await Api.UpdateDocumentationAsync("ColumnInfo", row.Id!, row.Description.Trim(), row.MetaInfo);
-                row.OriginalDescription = row.Description;
-            }
+                Name = r.Name.Trim(), DataType = r.DataType.Trim(), IsPrimaryKey = r.IsPrimaryKey, IsNullable = r.IsNullable,
+                IsSensitive = r.IsSensitive, Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim()
+            }));
+        foreach (var row in Described.ToList())
+        {
+            await Api.UpdateDocumentationAsync("ColumnInfo", row.Id!, row.Description.Trim(), row.MetaInfo);
+            row.OriginalDescription = row.Description;
+        }
 
-            MudDialog.Close(DialogResult.Ok(true));
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+        return true;
+    });
 }

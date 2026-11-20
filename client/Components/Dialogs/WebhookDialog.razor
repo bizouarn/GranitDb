@@ -1,3 +1,4 @@
+@inherits SaveDialogBase
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @inject Client Api
@@ -61,21 +62,19 @@
         ("sync.failed", "Synchronisation en échec", "une synchronisation planifiée n'a pas pu relire la source")
     ];
 
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public WebhookView? Existing { get; set; }
 
     [Parameter, EditorRequired] public DatabaseView[] Databases { get; set; } = [];
 
     private WebhookForm _form = new();
-    private string? _secret, _error;
-    private bool _busy;
+    private string? _secret;
 
     private bool UrlLooksValid => string.IsNullOrWhiteSpace(_form.Url) ||
                                   _form.Url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                                   _form.Url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
-    private bool CanSave => !string.IsNullOrWhiteSpace(_form.Url) && UrlLooksValid && _form.Events.Count > 0;
+    protected override bool CanSave => !string.IsNullOrWhiteSpace(_form.Url) && UrlLooksValid && _form.Events.Count > 0;
 
     protected override void OnInitialized()
     {
@@ -95,25 +94,11 @@
 
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task SaveAsync()
+    private Task SaveAsync() => SubmitAsync(async () =>
     {
-        if (_busy || !CanSave) return;
-        _busy = true;
-        _error = null;
-        try
-        {
-            // Secret : absent = inchangé (modification) ; saisi = remplacé.
-            _form.Secret = string.IsNullOrEmpty(_secret) ? null : _secret;
-            await Api.SaveWebhookAsync(Existing?.Id, _form);
-            MudDialog.Close(DialogResult.Ok(true));
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+        // Secret : absent = inchangé (modification) ; saisi = remplacé.
+        _form.Secret = string.IsNullOrEmpty(_secret) ? null : _secret;
+        await Api.SaveWebhookAsync(Existing?.Id, _form);
+        return true;
+    });
 }

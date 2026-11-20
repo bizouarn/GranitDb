@@ -43,6 +43,21 @@ public class DatabaseImportService(
                ?? throw new InvalidSourceException($"Type de base non pris en charge : {type}");
     }
 
+    /// <summary>
+    ///     Synchronise le schéma dans une transaction (tout ou rien) puis laisse <paramref name="configure" /> fixer ce qui est propre à
+    ///     la source (description, fichier ou connexion) avant d'enregistrer la base.
+    /// </summary>
+    private Task<ImportResult> SyncInTransactionAsync(string id, SourceSchema schema, string? name, Action<DatabaseInfo> configure,
+        CancellationToken ct) =>
+        repository.InTransactionAsync(async repo =>
+        {
+            var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, name, ct);
+            var database = sync.Database;
+            configure(database);
+            await repo.UpdateAsync(id, database, ct);
+            return new ImportResult(database, sync);
+        }, ct);
+
     /// <summary>Importe un fichier SQLite envoyé par l'utilisateur et crée la base documentée.</summary>
     public async Task<ImportResult> ImportSqliteAsync(Stream content, string fileName, string? name,
         string? description, bool keepFile, CancellationToken ct = default)
@@ -59,14 +74,10 @@ public class DatabaseImportService(
             try
             {
                 // Tout ou rien : une erreur ou une annulation ne laisse pas de base à moitié importée.
-                var imported = await repository.InTransactionAsync(async repo =>
+                var imported = await SyncInTransactionAsync(id, schema, displayName, database =>
                 {
-                    var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, displayName, ct);
-                    var database = sync.Database;
                     database.Description = string.IsNullOrWhiteSpace(description) ? null : description;
                     database.SourcePath = keepFile ? kept = Keep(temp) : null;
-                    await repo.UpdateAsync(id, database, ct);
-                    return new ImportResult(database, sync);
                 }, ct);
                 NotifyImported(imported);
                 return imported;
@@ -100,14 +111,8 @@ public class DatabaseImportService(
             ImportResult result;
             try
             {
-                result = await repository.InTransactionAsync(async repo =>
-                {
-                    var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, ct: ct);
-                    var updated = sync.Database;
-                    updated.SourcePath = keepFile ? kept = Keep(temp) : null;
-                    await repo.UpdateAsync(id, updated, ct);
-                    return new ImportResult(updated, sync);
-                }, ct);
+                result = await SyncInTransactionAsync(id, schema, null, updated =>
+                    updated.SourcePath = keepFile ? kept = Keep(temp) : null, ct);
             }
             catch
             {
@@ -153,14 +158,10 @@ public class DatabaseImportService(
         var full = Path.GetFullPath(path);
         var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(full, ct);
         var id = Guid.NewGuid().ToString();
-        var imported = await repository.InTransactionAsync(async repo =>
+        var imported = await SyncInTransactionAsync(id, schema, name, database =>
         {
-            var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, name, ct);
-            var database = sync.Database;
             database.Description = string.IsNullOrWhiteSpace(description) ? null : description;
             database.SourcePath = full;
-            await repo.UpdateAsync(id, database, ct);
-            return new ImportResult(database, sync);
         }, ct);
         NotifyImported(imported);
         return imported;
@@ -333,16 +334,12 @@ public class DatabaseImportService(
         var (schema, secret) = await ReadForImportAsync(input, ct);
         var id = Guid.NewGuid().ToString();
         var name = string.IsNullOrWhiteSpace(input.Name) ? schema.DatabaseName : input.Name.Trim();
-        var imported = await repository.InTransactionAsync(async repo =>
+        var imported = await SyncInTransactionAsync(id, schema, name, database =>
         {
-            var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, name, ct);
-            var database = sync.Database;
             database.Description = string.IsNullOrWhiteSpace(input.Description) ? null : input.Description.Trim();
             database.SourcePath = null;
             database.SourceSecret = secret;
             database.SourceLabel = input.Label;
-            await repo.UpdateAsync(id, database, ct);
-            return new ImportResult(database, sync);
         }, ct);
         NotifyImported(imported);
         return imported;
@@ -359,14 +356,10 @@ public class DatabaseImportService(
             throw new InvalidSourceException($"Cette base est de type {existing.Type}, pas {input.ServerEngine.Type}.");
 
         var (schema, secret) = await ReadForImportAsync(input, ct);
-        var replaced = await repository.InTransactionAsync(async repo =>
+        var replaced = await SyncInTransactionAsync(id, schema, null, database =>
         {
-            var sync = await SchemaSynchronizer.SyncAsync(repo, id, schema, ct: ct);
-            var database = sync.Database;
             database.SourceSecret = secret;
             database.SourceLabel = input.Label;
-            await repo.UpdateAsync(id, database, ct);
-            return new ImportResult(database, sync);
         }, ct);
         NotifySchemaChange(replaced.Sync);
         return replaced;

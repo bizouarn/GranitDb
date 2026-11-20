@@ -1,3 +1,4 @@
+@inherits SaveDialogBase
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @inject Client Api
@@ -57,7 +58,6 @@
 </MudDialog>
 
 @code {
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter, EditorRequired] public string DatabaseId { get; set; } = "";
 
@@ -70,8 +70,6 @@
     [Parameter] public string? InitialDomainId { get; set; }
 
     private string _name = "", _type = "Table", _description = "", _domainId = "";
-    private string? _error;
-    private bool _busy;
     private readonly List<ColumnRow> _rows = [];
     private readonly IReadOnlyList<GridColumn<ColumnRow>> _columns = ColumnRow.Grid();
 
@@ -93,7 +91,7 @@
 
     private int ProblemCount => GridValidation.Problems(_columns, _rows, ColumnRow.IsBlank).Count;
 
-    private bool CanSave => !string.IsNullOrWhiteSpace(_name) && NameProblem == null && Filled.Any() && ProblemCount == 0;
+    protected override bool CanSave => !string.IsNullOrWhiteSpace(_name) && NameProblem == null && Filled.Any() && ProblemCount == 0;
 
     private string Preview
     {
@@ -112,33 +110,19 @@
 
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task SaveAsync()
+    private Task SaveAsync() => SubmitAsync(async () =>
     {
-        if (_busy || !CanSave) return;
-        _busy = true;
-        _error = null;
-        try
+        var created = await Api.CreateManualTableAsync(new ManualTableInput
         {
-            var created = await Api.CreateManualTableAsync(new ManualTableInput
+            DatabaseId = DatabaseId, Name = _name.Trim(), TableType = _type,
+            Description = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+            DomainId = string.IsNullOrEmpty(_domainId) ? null : _domainId,
+            Columns = Filled.Select(r => new ManualColumnInput
             {
-                DatabaseId = DatabaseId, Name = _name.Trim(), TableType = _type,
-                Description = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
-                DomainId = string.IsNullOrEmpty(_domainId) ? null : _domainId,
-                Columns = Filled.Select(r => new ManualColumnInput
-                {
-                    Name = r.Name.Trim(), DataType = r.DataType.Trim(), IsPrimaryKey = r.IsPrimaryKey, IsNullable = r.IsNullable,
-                    IsSensitive = r.IsSensitive, Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim()
-                }).ToList()
-            });
-            MudDialog.Close(DialogResult.Ok(created.Id));
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+                Name = r.Name.Trim(), DataType = r.DataType.Trim(), IsPrimaryKey = r.IsPrimaryKey, IsNullable = r.IsNullable,
+                IsSensitive = r.IsSensitive, Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim()
+            }).ToList()
+        });
+        return created.Id;
+    });
 }

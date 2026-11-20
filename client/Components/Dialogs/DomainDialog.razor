@@ -1,3 +1,4 @@
+@inherits SaveDialogBase
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @inject Client Api
@@ -123,7 +124,6 @@
 @code {
     private const int Limit = 40;
 
-    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter, EditorRequired] public string DatabaseId { get; set; } = "";
 
@@ -140,9 +140,8 @@
     [Parameter] public IEnumerable<string>? InitialTables { get; set; }
 
     private string _name = "", _search = "";
-    private string? _color, _error;
+    private string? _color;
     private readonly HashSet<string> _members = [];
-    private bool _busy;
 
     /// <summary>À la création : ne dessiner d'office que les clés étrangères détectées (les relations indirectes sont masquées).</summary>
     private bool _onlyForeignKeys = true;
@@ -225,45 +224,31 @@
     private bool NameTaken => !string.IsNullOrWhiteSpace(_name) &&
                               Domains.Any(d => d.Id != Existing?.Id && string.Equals(d.Name, _name.Trim(), StringComparison.CurrentCultureIgnoreCase));
 
-    private bool CanSave => !string.IsNullOrWhiteSpace(_name) && !NameTaken;
+    protected override bool CanSave => !string.IsNullOrWhiteSpace(_name) && !NameTaken;
 
     private void Cancel() => MudDialog.Cancel();
 
-    private async Task SaveAsync()
+    private Task SaveAsync() => SubmitAsync(async () =>
     {
-        if (_busy || !CanSave) return;
-        _busy = true;
-        _error = null;
-        try
+        var name = _name.Trim();
+        string id;
+        HashSet<string> before;
+        if (Existing == null)
         {
-            var name = _name.Trim();
-            string id;
-            HashSet<string> before;
-            if (Existing == null)
-            {
-                id = (await Api.CreateDomainAsync(DatabaseId, name, _color)).Id;
-                before = [];
-            }
-            else
-            {
-                id = Existing.Id;
-                before = Existing.Tables.Select(t => t.TableId).ToHashSet();
-                if (name != Existing.Name || _color != Existing.Color) await Api.UpdateDomainAsync(Existing, name, _color);
-            }
+            id = (await Api.CreateDomainAsync(DatabaseId, name, _color)).Id;
+            before = [];
+        }
+        else
+        {
+            id = Existing.Id;
+            before = Existing.Tables.Select(t => t.TableId).ToHashSet();
+            if (name != Existing.Name || _color != Existing.Color) await Api.UpdateDomainAsync(Existing, name, _color);
+        }
 
-            foreach (var table in _members.Where(t => !before.Contains(t))) await Api.AddTableToDomainAsync(id, table);
-            foreach (var table in before.Where(t => !_members.Contains(t))) await Api.RemoveTableFromDomainAsync(id, table);
-            // Domaine neuf : ne tracer d'office que les clés étrangères détectées (les relations indirectes sont masquées).
-            if (Existing == null && _onlyForeignKeys && IndirectCount > 0) await Api.HideIndirectRelationsAsync(id);
-            MudDialog.Close(DialogResult.Ok(id));
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+        foreach (var table in _members.Where(t => !before.Contains(t))) await Api.AddTableToDomainAsync(id, table);
+        foreach (var table in before.Where(t => !_members.Contains(t))) await Api.RemoveTableFromDomainAsync(id, table);
+        // Domaine neuf : ne tracer d'office que les clés étrangères détectées (les relations indirectes sont masquées).
+        if (Existing == null && _onlyForeignKeys && IndirectCount > 0) await Api.HideIndirectRelationsAsync(id);
+        return id;
+    });
 }
