@@ -201,7 +201,7 @@ table.grid tr:hover td{background:#f8fafb}
 <div class="layout">
   <nav class="side">
     <div class="side-head"><a href="#/" id="dbname"></a><small id="dbtype"></small><a class="print-link" href="#/print">Version imprimable (PDF)</a></div>
-    <div class="search"><input id="q" type="search" placeholder="Rechercher une table ou une colonne…" aria-label="Rechercher"></div>
+    <div class="search"><input id="q" type="search" placeholder="Rechercher une table, une colonne ou un domaine…" aria-label="Rechercher"></div>
     <div class="tree" id="tree"></div>
   </nav>
   <main class="content" id="main"></main>
@@ -646,9 +646,15 @@ q.addEventListener('input', function(){
   var term = q.value.trim().toLowerCase();
   if (!term) { buildTree(); mark(); return; }
   tree.textContent = '';
+  var doms = D.domains.filter(function(d){
+    return d.name.toLowerCase().indexOf(term) >= 0 || (d.description || '').toLowerCase().indexOf(term) >= 0;
+  });
+  var inDomain = {};
+  doms.forEach(function(d){ d.tables.forEach(function(id){ inDomain[id] = true; }); });
   var hits = D.tables.filter(function(t){
-    return t.name.toLowerCase().indexOf(term) >= 0 || t.columns.some(function(c){ return c.name.toLowerCase().indexOf(term) >= 0; });
+    return inDomain[t.id] || t.name.toLowerCase().indexOf(term) >= 0 || t.columns.some(function(c){ return c.name.toLowerCase().indexOf(term) >= 0; });
   }).slice(0, 200);
+  if (doms.length) tree.appendChild(group('Domaines', doms.length, doms.map(function(d){ return link('#/domain/' + d.id, d.name); }), true));
   tree.appendChild(group('Résultats', hits.length, hits.map(leaf), true));
   mark();
 });
