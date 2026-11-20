@@ -1,6 +1,5 @@
 using GranitDB.API.Exceptions;
 using Microsoft.Data.Sqlite;
-using Microsoft.Data.SqlClient;
 
 namespace GranitDB.API.Connectors;
 
@@ -83,6 +82,25 @@ internal static class ProfileQuery
                $"(SELECT {countBig}(*) FROM {parent})";
     }
 
+    /// <summary>
+    ///     Lit la ligne de comptes d'un paquet (nombre de lignes, puis non nuls et distincts de chaque colonne) et ajoute un résultat
+    ///     par colonne ; rend le nombre de lignes de la table.
+    /// </summary>
+    public static long ReadBatch(System.Data.Common.DbDataReader reader, IReadOnlyList<ProfiledColumn> batch,
+        Func<ProfiledColumn, bool> distinctAllowed, List<ColumnProfileResult> results)
+    {
+        var rows = reader.GetInt64(0);
+        var at = 1;
+        foreach (var column in batch)
+        {
+            var nonNull = reader.GetInt64(at++);
+            long? distinct = distinctAllowed(column) ? reader.GetInt64(at++) : null;
+            results.Add(new ColumnProfileResult(column.Name, rows - nonNull, distinct));
+        }
+
+        return rows;
+    }
+
     public static InclusionResult ReadInclusion(System.Data.Common.DbDataReader reader) =>
         new(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2));
 }
@@ -144,13 +162,7 @@ public class SqliteColumnProfiler : IColumnProfiler
                 cmd.CommandText = ProfileQuery.Build(Quote(table), batch, Quote, _ => true, "COUNT");
                 await using var reader = await cmd.ExecuteReaderAsync(timeout.Token);
                 await reader.ReadAsync(timeout.Token);
-                rows = reader.GetInt64(0);
-                var at = 1;
-                foreach (var column in batch)
-                {
-                    var nonNull = reader.GetInt64(at++);
-                    results.Add(new ColumnProfileResult(column.Name, rows - nonNull, reader.GetInt64(at++)));
-                }
+                rows = ProfileQuery.ReadBatch(reader, batch, _ => true, results);
             }
 
             return new TableProfileResult(rows, results);
@@ -162,83 +174,6 @@ public class SqliteColumnProfiler : IColumnProfiler
         catch (SqliteException e)
         {
             throw new InvalidSourceException($"Profilage de {table} impossible : {e.Message}", e);
-        }
-    }
-}
-
-public class SqlServerColumnProfiler : IColumnProfiler
-{
-    public async Task<InclusionResult> CheckInclusionAsync(string source, InclusionCheck check, int timeoutSeconds, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(source)) throw new InvalidSourceException("Chaîne de connexion SQL Server manquante.");
-        try
-        {
-            await using var db = new SqlConnection(source);
-            await db.OpenAsync(ct);
-            await using var cmd = db.CreateCommand();
-            cmd.CommandTimeout = Math.Max(1, timeoutSeconds);
-            cmd.CommandText = ProfileQuery.BuildInclusion(TableReference(check.ChildTable), check.ChildColumn,
-                TableReference(check.ParentTable), check.ParentColumn, Quote, "COUNT_BIG");
-            await using var reader = await cmd.ExecuteReaderAsync(ct);
-            await reader.ReadAsync(ct);
-            return ProfileQuery.ReadInclusion(reader);
-        }
-        catch (SqlException e)
-        {
-            throw new InvalidSourceException($"Vérification de {check.ChildTable}.{check.ChildColumn} impossible : {Short(e.Message)}", e);
-        }
-    }
-
-    public string Type => SqlServerSchemaConnector.TypeName;
-
-    // COUNT(DISTINCT) n'existe pas pour ces types.
-    private static readonly HashSet<string> NoDistinct = new(StringComparer.OrdinalIgnoreCase)
-        { "text", "ntext", "image", "xml", "geography", "geometry", "hierarchyid", "sql_variant" };
-
-    private static string Quote(string name) => "[" + name.Replace("]", "]]") + "]";
-
-    private static string Short(string message) => message.Length <= 300 ? message : message[..300] + "…";
-
-    /// <summary>Un nom de table tel que le connecteur le donne : <c>table</c> (schéma dbo) ou <c>schéma.table</c>.</summary>
-    public static string TableReference(string name)
-    {
-        var dot = name.IndexOf('.');
-        return dot > 0 ? $"{Quote(name[..dot])}.{Quote(name[(dot + 1)..])}" : $"[dbo].{Quote(name)}";
-    }
-
-    public async Task<TableProfileResult> ProfileAsync(string source, string table, IReadOnlyList<ProfiledColumn> columns,
-        int timeoutSeconds, CancellationToken ct = default)
-    {
-        if (string.IsNullOrWhiteSpace(source)) throw new InvalidSourceException("Chaîne de connexion SQL Server manquante.");
-        try
-        {
-            await using var db = new SqlConnection(source);
-            await db.OpenAsync(ct);
-            long rows = 0;
-            var results = new List<ColumnProfileResult>();
-            foreach (var batch in ProfileQuery.Batches(columns))
-            {
-                await using var cmd = db.CreateCommand();
-                cmd.CommandTimeout = Math.Max(1, timeoutSeconds);
-                cmd.CommandText = ProfileQuery.Build(TableReference(table), batch, Quote, c => !NoDistinct.Contains(c.DataType), "COUNT_BIG");
-                await using var reader = await cmd.ExecuteReaderAsync(ct);
-                await reader.ReadAsync(ct);
-                rows = reader.GetInt64(0);
-                var at = 1;
-                foreach (var column in batch)
-                {
-                    var nonNull = reader.GetInt64(at++);
-                    long? distinct = NoDistinct.Contains(column.DataType) ? null : reader.GetInt64(at++);
-                    results.Add(new ColumnProfileResult(column.Name, rows - nonNull, distinct));
-                }
-            }
-
-            return new TableProfileResult(rows, results);
-        }
-        catch (SqlException e)
-        {
-            // Le message du moteur (droit de lecture refusé, table absente…) dit mieux ce qui manque qu'un texte de connexion.
-            throw new InvalidSourceException($"Profilage de {table} impossible : {Short(e.Message)}", e);
         }
     }
 }

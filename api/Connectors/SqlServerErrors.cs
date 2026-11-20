@@ -21,12 +21,12 @@ public static class SqlServerErrors
         if (e.Message.Contains("certificate", StringComparison.OrdinalIgnoreCase) ||
             e.Message.Contains("chaîne de certificats", StringComparison.OrdinalIgnoreCase) ||
             e.Message.Contains("SSL", StringComparison.Ordinal))
-            return "Le certificat du serveur n'est pas approuvé : installez-le, ou cochez « Faire confiance au certificat » (déconseillé en production).";
+            return SchemaReading.CertificateNotTrusted;
         if (numbers.Overlaps([-2, -1, 2, 53, 258, 10060, 10061, 11001]) ||
             e.Message.Contains("network-related", StringComparison.OrdinalIgnoreCase) ||
             e.Message.Contains("réseau", StringComparison.OrdinalIgnoreCase) ||
             e.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase))
-            return "Serveur injoignable ou sans réponse : vérifiez le nom, le port, le pare-feu et que le serveur accepte les connexions TCP.";
+            return SchemaReading.Unreachable;
         // Le message du pilote peut citer le serveur ou la base : il reste dans les journaux, pas dans la réponse.
         return $"Connexion SQL Server impossible (erreur {e.Number}) : consultez le journal de l'API pour le détail.";
     }

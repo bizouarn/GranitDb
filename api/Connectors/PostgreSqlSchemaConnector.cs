@@ -71,8 +71,7 @@ public class PostgreSqlSchemaConnector : ISchemaConnector
                     r.IsDBNull(5) ? null : r.GetString(5), t.Columns.Count));
             }
 
-            var foreignKeys = new List<SourceForeignKey>();
-            var rows = new List<(string Key, string Table, string Column, string RefTable, string RefColumn)>();
+            var rows = new List<(string Table, string Constraint, string Column, string RefTable, string RefColumn)>();
             await foreach (var r in Rows(db, $"""
                 SELECT con.oid::text, n.nspname, c.relname, a.attname, rn.nspname, rc.relname, ra.attname
                 FROM pg_constraint con
@@ -86,17 +85,9 @@ public class PostgreSqlSchemaConnector : ISchemaConnector
                 WHERE con.contype = 'f' AND {UserSchemas}
                 ORDER BY con.oid, k.ord
                 """, ct))
-                rows.Add((r.GetString(0), Qualify(r.GetString(1), r.GetString(2)), r.GetString(3),
+                rows.Add((Qualify(r.GetString(1), r.GetString(2)), r.GetString(0), r.GetString(3),
                     Qualify(r.GetString(4), r.GetString(5)), r.GetString(6)));
-            foreach (var key in rows.GroupBy(x => x.Key))
-            {
-                var pairs = key.ToList();
-                // Une clé composite : toutes ses paires portent la même contrainte, dans l'ordre de la clé.
-                var constraint = pairs.Count > 1 ? $"{pairs[0].Table}#{key.Key}" : null;
-                foreach (var p in pairs) foreignKeys.Add(new SourceForeignKey(p.Table, p.Column, p.RefTable, p.RefColumn, constraint));
-            }
 
-            var indexes = new List<SourceIndex>();
             var current = new List<(string Table, string Name, bool Unique, string Column)>();
             await foreach (var r in Rows(db, $"""
                 SELECT n.nspname, tc.relname, ic.relname, i.indisunique, CASE WHEN k.attnum = 0 THEN NULL ELSE a.attname END
@@ -111,11 +102,8 @@ public class PostgreSqlSchemaConnector : ISchemaConnector
                 """, ct))
                 current.Add((Qualify(r.GetString(0), r.GetString(1)), r.GetString(2), r.GetBoolean(3),
                     r.IsDBNull(4) ? "<expression>" : r.GetString(4)));
-            foreach (var index in current.GroupBy(x => (x.Table, x.Name)))
-                indexes.Add(new SourceIndex(index.Key.Table, index.Key.Name, index.First().Unique, index.Select(x => x.Column).ToList()));
 
-            return new SourceSchema(databaseName, TypeName,
-                tables.Select(t => new SourceTable(t.Key, t.Value.Type, t.Value.Columns)).ToList(), foreignKeys, indexes);
+            return SchemaReading.Build(databaseName, TypeName, tables, SchemaReading.GroupForeignKeys(rows), SchemaReading.GroupIndexes(current));
         }
         catch (NpgsqlException e)
         {
@@ -123,13 +111,8 @@ public class PostgreSqlSchemaConnector : ISchemaConnector
         }
     }
 
-    private static async IAsyncEnumerable<NpgsqlDataReader> Rows(NpgsqlConnection db, string sql,
-        [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
-    {
-        await using var cmd = new NpgsqlCommand(sql, db);
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct)) yield return reader;
-    }
+    private static IAsyncEnumerable<System.Data.Common.DbDataReader> Rows(NpgsqlConnection db, string sql, CancellationToken ct) =>
+        SchemaReading.Rows(db, sql, ct);
 
     /// <summary>Traduit une erreur de connexion ou de lecture PostgreSQL en consigne ; le détail du pilote reste dans les journaux.</summary>
     public static string Describe(NpgsqlException e)
@@ -143,11 +126,10 @@ public class PostgreSqlSchemaConnector : ISchemaConnector
                 "57P03" or "53300" => "Le serveur n'accepte pas de connexion pour le moment (démarrage ou trop de connexions).",
                 _ => $"Lecture PostgreSQL impossible (code {pg.SqlState}) : consultez le journal de l'API pour le détail."
             };
-        if (e.Message.Contains("SSL", StringComparison.OrdinalIgnoreCase) || e.Message.Contains("certificate", StringComparison.OrdinalIgnoreCase))
-            return "Le certificat du serveur n'est pas approuvé : installez-le, ou cochez « Faire confiance au certificat » (déconseillé en production).";
+        if (SchemaReading.MentionsCertificate(e.Message)) return SchemaReading.CertificateNotTrusted;
         if (e.InnerException is System.Net.Sockets.SocketException || e.Message.Contains("connect", StringComparison.OrdinalIgnoreCase) ||
             e.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase))
-            return "Serveur injoignable ou sans réponse : vérifiez le nom, le port, le pare-feu et que le serveur accepte les connexions TCP.";
+            return SchemaReading.Unreachable;
         return "Connexion PostgreSQL impossible : consultez le journal de l'API pour le détail.";
     }
 }
