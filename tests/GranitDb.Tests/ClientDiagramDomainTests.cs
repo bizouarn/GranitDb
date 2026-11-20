@@ -464,4 +464,86 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         Assert.Contains("customers {", mermaid); // table frontière
         Assert.DoesNotContain("tags {", mermaid);
     }
+
+    // --- Jalon 11 : relations indirectes, plan d'origine, édition du domaine, liste dans la barre latérale ---
+
+    private static void OpenRelationsPanel(IRenderedComponent<Diagram> page) =>
+        page.Find("#domain-relations .mud-expand-panel-header").Click();
+
+    [BunitFact]
+    public void Indirect_relations_are_hidden_in_one_click_and_the_count_says_how_many()
+    {
+        var page = Open();
+        SelectDomain(page, "Ventes");
+        OpenRelationsPanel(page);
+
+        // Les deux relations du domaine (avec ses voisines) ne sont pas des clés étrangères détectées : elles sont indirectes.
+        Assert.Contains("(2)", page.Find("button.hide-indirect").TextContent);
+        Assert.Empty(page.FindAll("button.reset-dataedo")); // pas de documentation d'origine connue
+        page.Find("button.hide-indirect").Click();
+
+        page.WaitForAssertion(() => Assert.True(_api.Requests.Any(r => r.Method == HttpMethod.Put && r.RequestUri!.AbsolutePath == "/api/v1/DomainInfo/d1/settings")));
+        var body = JsonDocument.Parse(_api.Bodies[_api.Requests.FindIndex(r => r.Method == HttpMethod.Put && r.RequestUri!.AbsolutePath == "/api/v1/DomainInfo/d1/settings")]).RootElement;
+        Assert.True(body.GetProperty("hideIndirectRelations").GetBoolean());
+    }
+
+    [BunitFact]
+    public void A_domain_from_a_documentation_can_be_reset_to_its_original_plan()
+    {
+        _domains = """[{"id":"d1","databaseId":"db","name":"Ventes","showNeighbors":true,"hasDocumentationOrigin":true,"hiddenRelations":["r1"],"tables":[{"tableId":"t2","x":300,"y":50}]}]""";
+        var page = Open();
+        SelectDomain(page, "Ventes");
+        OpenRelationsPanel(page);
+
+        page.Find("button.reset-dataedo").Click();
+
+        page.WaitForAssertion(() => Assert.True(_api.Requests.Any(r => r.Method == HttpMethod.Put && r.RequestUri!.AbsolutePath == "/api/v1/DomainInfo/d1/settings")));
+        var body = JsonDocument.Parse(_api.Bodies[_api.Requests.FindIndex(r => r.Method == HttpMethod.Put && r.RequestUri!.AbsolutePath == "/api/v1/DomainInfo/d1/settings")]).RootElement;
+        Assert.True(body.GetProperty("resetToDocumentation").GetBoolean());
+    }
+
+    [BunitFact]
+    public void The_tables_of_a_domain_are_edited_from_the_diagram_in_the_same_dialog_as_the_manage_screen()
+    {
+        var dialogs = _ctx.Render<MudBlazor.MudDialogProvider>();
+        var page = Open();
+        Assert.Empty(page.FindAll("button.edit-domain")); // pas dans la vue « toutes les tables »
+        SelectDomain(page, "Ventes");
+
+        page.Find("button.edit-domain").Click();
+
+        dialogs.WaitForAssertion(() => Assert.NotEmpty(dialogs.FindAll(".domain-dialog")));
+        Assert.Contains("Ventes", dialogs.Find("input.domain-dialog-name").GetAttribute("value"));
+        Assert.Contains("table dans ce domaine", dialogs.Find(".domain-dialog-preview").TextContent);
+        Assert.NotEmpty(dialogs.FindAll("button.domain-dialog-add-linked")); // customers et invoices sont liées à orders
+    }
+
+    [BunitFact]
+    public async Task The_diagram_publishes_its_table_list_for_the_sidebar_and_stops_repeating_it_once_the_sidebar_shows_it()
+    {
+        var panels = _ctx.Services.GetRequiredService<DiagramPanelState>();
+        var page = Open();
+
+        Assert.NotNull(panels.Current);
+        Assert.Equal(4, panels.Current!.Tables.Count);
+        Assert.Equal(4, panels.Current.Shown.Count);
+        Assert.NotNull(panels.Current.SelectAll); // vue libre : « Toutes » / « Aucune »
+        Assert.NotEmpty(page.FindAll(".table-picker")); // sans barre latérale, la page garde sa liste
+
+        await page.InvokeAsync(() => panels.Current.Toggle("t3", false));
+        page.WaitForAssertion(() => Assert.Equal(3, page.FindAll("g.er-node").Count));
+        Assert.DoesNotContain("t3", panels.Current!.Shown);
+
+        panels.AddHost();
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll(".table-picker")));
+        Assert.NotEmpty(page.FindAll(".picker-in-sidebar"));
+
+        SelectDomain(page, "Ventes");
+        Assert.Equal("Ventes", panels.Current!.DomainName);
+        Assert.Null(panels.Current.SelectAll); // dans un domaine, on coche pour ranger
+        Assert.Equal(["t2"], panels.Current.Shown.ToArray());
+
+        page.Instance.Dispose();
+        Assert.Null(panels.Current); // quitter la page vide la barre latérale
+    }
 }

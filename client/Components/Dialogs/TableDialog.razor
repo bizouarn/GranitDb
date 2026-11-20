@@ -1,0 +1,144 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject Client Api
+
+@* Fenêtre « Nouvelle table » : documenter une table qui n'existe pas dans la source (fichier plat, service, table prévue). Les
+   colonnes se saisissent dans une grille ; la table est marquée « saisie à la main » et la synchronisation ne la supprime pas. *@
+<MudDialog>
+    <DialogContent>
+        <div class="table-dialog">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                    Pour une table qui n'existe pas dans la source. La synchronisation la conserve ; si la source reçoit un jour une table du même nom, c'est la source qui l'emporte.
+                </MudText>
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                    <label class="native-select" style="flex: 1"><span class="native-select-label">Nom de la table</span>
+                        <input class="table-dialog-name" type="text" maxlength="255" @bind="_name" @bind:event="oninput" /></label>
+                    <label class="native-select"><span class="native-select-label">Type</span>
+                        <select class="table-dialog-type" @bind="_type">
+                            <option value="Table">Table</option>
+                            <option value="View">Vue</option>
+                            <option value="Virtual">Virtuelle</option>
+                        </select></label>
+                    @if (Domains.Length > 0)
+                    {
+                        <label class="native-select"><span class="native-select-label">Domaine</span>
+                            <select class="table-dialog-domain" @bind="_domainId">
+                                <option value="">(aucun)</option>
+                                @foreach (var domain in Domains)
+                                {
+                                    <option value="@domain.Id">@domain.Name</option>
+                                }
+                            </select></label>
+                    }
+                </MudStack>
+                @if (NameProblem != null)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="table-dialog-problem">@NameProblem</MudAlert>
+                }
+                <label class="native-select"><span class="native-select-label">Description</span>
+                    <textarea class="table-dialog-description" rows="2" maxlength="4000" @bind="_description" @bind:event="oninput"></textarea></label>
+
+                <MudText Typo="Typo.subtitle2">Colonnes</MudText>
+                <EditableGrid TRow="ColumnRow" Rows="_rows" Columns="_columns" IsBlank="ColumnRow.IsBlank" Label="Colonnes de la table" OnChanged="Changed" />
+
+                <MudAlert Severity="Severity.Info" Dense="true" Class="table-dialog-preview" role="status">@Preview</MudAlert>
+                @if (_error != null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="table-dialog-error">@_error</MudAlert>
+                }
+            </MudStack>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy" Class="table-dialog-cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="table-dialog-save">Créer la table</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter, EditorRequired] public string DatabaseId { get; set; } = "";
+
+    /// <summary>Les tables de la base, pour refuser un nom déjà pris.</summary>
+    [Parameter] public TableInfo[] Tables { get; set; } = [];
+
+    [Parameter] public DomainView[] Domains { get; set; } = [];
+
+    /// <summary>Domaine proposé d'office (celui qu'on regarde).</summary>
+    [Parameter] public string? InitialDomainId { get; set; }
+
+    private string _name = "", _type = "Table", _description = "", _domainId = "";
+    private string? _error;
+    private bool _busy;
+    private readonly List<ColumnRow> _rows = [];
+    private readonly IReadOnlyList<GridColumn<ColumnRow>> _columns = ColumnRow.Grid();
+
+    protected override void OnInitialized() => _domainId = InitialDomainId ?? "";
+
+    private IEnumerable<ColumnRow> Filled => _rows.Where(r => !ColumnRow.IsBlank(r));
+
+    private string? NameProblem
+    {
+        get
+        {
+            var name = _name.Trim();
+            if (name.Length == 0) return null;
+            return Tables.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase))
+                ? $"Une table nommée {name} existe déjà dans cette base."
+                : null;
+        }
+    }
+
+    private int ProblemCount => GridValidation.Problems(_columns, _rows, ColumnRow.IsBlank).Count;
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_name) && NameProblem == null && Filled.Any() && ProblemCount == 0;
+
+    private string Preview
+    {
+        get
+        {
+            var count = Filled.Count();
+            var keys = Filled.Count(r => r.IsPrimaryKey);
+            var problems = ProblemCount;
+            var name = string.IsNullOrWhiteSpace(_name) ? "La table" : _name.Trim();
+            return $"{name} : {count} colonne{(count > 1 ? "s" : "")}{(keys > 0 ? $", dont {keys} dans la clé primaire" : "")}" +
+                   (problems > 0 ? $" — {problems} problème{(problems > 1 ? "s" : "")} à corriger" : count == 0 ? " — saisissez au moins une colonne" : "") + ".";
+        }
+    }
+
+    private void Changed() => StateHasChanged();
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanSave) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var created = await Api.CreateManualTableAsync(new ManualTableInput
+            {
+                DatabaseId = DatabaseId, Name = _name.Trim(), TableType = _type,
+                Description = string.IsNullOrWhiteSpace(_description) ? null : _description.Trim(),
+                DomainId = string.IsNullOrEmpty(_domainId) ? null : _domainId,
+                Columns = Filled.Select(r => new ManualColumnInput
+                {
+                    Name = r.Name.Trim(), DataType = r.DataType.Trim(), IsPrimaryKey = r.IsPrimaryKey, IsNullable = r.IsNullable,
+                    IsSensitive = r.IsSensitive, Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim()
+                }).ToList()
+            });
+            MudDialog.Close(DialogResult.Ok(created.Id));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

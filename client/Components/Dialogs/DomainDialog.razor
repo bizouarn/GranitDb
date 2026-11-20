@@ -58,6 +58,11 @@
                                 <div class="domain-dialog-row" data-member="@table.Name">
                                     <span>@table.Name</span>
                                     <MudSpacer />
+                                    @if (RelatedTo(current.Id).Count > 0)
+                                    {
+                                        <MudButton Size="Size.Small" OnClick="() => AddRelated(current.Id)" Class="domain-dialog-add-related" aria-label="@($"Ajouter les tables liées à {table.Name}")"
+                                                   title="Ajouter les tables reliées à celle-ci par une relation">+ liées</MudButton>
+                                    }
                                     <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => _members.Remove(current.Id)" Class="domain-dialog-remove" aria-label="@($"Retirer {table.Name}")">Retirer</MudButton>
                                 </div>
                             }
@@ -68,14 +73,37 @@
                         </div>
                         @if (Members.Count > 0)
                         {
-                            <MudButton Size="Size.Small" OnClick="_members.Clear" Class="domain-dialog-clear">Tout retirer</MudButton>
+                            <MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap">
+                                @if (AllRelated.Count > 0)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="AddAllRelated" Class="domain-dialog-add-linked"
+                                               title="Ajoute les tables reliées par une relation à l'une des tables du domaine">Ajouter les @AllRelated.Count table(s) liée(s)</MudButton>
+                                }
+                                <MudButton Size="Size.Small" OnClick="_members.Clear" Class="domain-dialog-clear">Tout retirer</MudButton>
+                            </MudStack>
                         }
                     </div>
                 </div>
 
                 <MudAlert Severity="Severity.Info" Dense="true" Class="domain-dialog-preview" role="status">
                     @Members.Count table@(Members.Count > 1 ? "s" : "") dans ce domaine, @RelationCount relation@(RelationCount > 1 ? "s" : "") entre elles@(RelationCount > 0 ? " (le diagramme les dessinera ; vous pourrez en masquer)" : "").
+                    @if (Existing != null && NewRelationCount != 0)
+                    {
+                        <text> Ce changement en fait @(NewRelationCount > 0 ? "apparaître" : "disparaître") @Math.Abs(NewRelationCount).</text>
+                    }
+                    @if (Existing == null && IndirectCount > 0 && _onlyForeignKeys)
+                    {
+                        <text> @IndirectCount relation@(IndirectCount > 1 ? "s" : "") indirecte@(IndirectCount > 1 ? "s" : "") ne @(IndirectCount > 1 ? "seront" : "sera") pas dessinée@(IndirectCount > 1 ? "s" : "").</text>
+                    }
                 </MudAlert>
+
+                @if (Existing == null && IndirectCount > 0)
+                {
+                    <label class="domain-dialog-fk-only">
+                        <input type="checkbox" checked="@_onlyForeignKeys" @onchange="e => _onlyForeignKeys = (bool)e.Value!" />
+                        Ne dessiner que les clés étrangères détectées (masquer @IndirectCount relation@(IndirectCount > 1 ? "s" : "") manuelle@(IndirectCount > 1 ? "s" : "") ou déduite@(IndirectCount > 1 ? "s" : "") des noms)
+                    </label>
+                }
 
                 @if (_error != null)
                 {
@@ -116,6 +144,9 @@
     private readonly HashSet<string> _members = [];
     private bool _busy;
 
+    /// <summary>À la création : ne dessiner d'office que les clés étrangères détectées (les relations indirectes sont masquées).</summary>
+    private bool _onlyForeignKeys = true;
+
     protected override void OnInitialized()
     {
         if (Existing != null)
@@ -148,16 +179,47 @@
         _search = "";
     }
 
+    private Dictionary<string, string>? _tableOf;
+
+    private Dictionary<string, string> TableOf => _tableOf ??= Tables.SelectMany(t => t.Columns.Select(c => (Column: c.Id, Table: t.Id))).ToDictionary(x => x.Column, x => x.Table);
+
+    /// <summary>Relations (comptées par relation, pas par paire de colonnes) dont les deux extrémités sont dans <paramref name="members" />.</summary>
+    private List<RelationInfo> RelationsAmong(ISet<string> members) =>
+        Tables.Where(t => members.Contains(t.Id)).SelectMany(t => t.Relations).DistinctBy(r => r.Id)
+            .Where(r => TableOf.TryGetValue(r.FirstId, out var a) && TableOf.TryGetValue(r.SecondId, out var b) && members.Contains(a) && members.Contains(b))
+            .ToList();
+
     /// <summary>Relations dont les deux extrémités sont dans des tables du domaine.</summary>
-    private int RelationCount
+    private int RelationCount => RelationsAmong(_members).Count;
+
+    /// <summary>Relations indirectes parmi elles : ni clé étrangère détectée (relations manuelles ou déduites des noms).</summary>
+    private int IndirectCount => RelationsAmong(_members).Count(r => !r.IsForeignKey);
+
+    /// <summary>Relations en plus (ou en moins) par rapport aux tables enregistrées du domaine.</summary>
+    private int NewRelationCount => Existing == null ? 0 : RelationCount - RelationsAmong(Existing.Tables.Select(t => t.TableId).ToHashSet()).Count;
+
+    /// <summary>Tables hors du domaine reliées par une relation à la table donnée.</summary>
+    private HashSet<string> RelatedTo(string tableId)
     {
-        get
-        {
-            var tableOf = Tables.SelectMany(t => t.Columns.Select(c => (Column: c.Id, Table: t.Id))).ToDictionary(x => x.Column, x => x.Table);
-            return Tables.Where(t => _members.Contains(t.Id)).SelectMany(t => t.Relations).DistinctBy(r => r.Id)
-                .Count(r => tableOf.TryGetValue(r.FirstId, out var a) && tableOf.TryGetValue(r.SecondId, out var b) &&
-                            _members.Contains(a) && _members.Contains(b));
-        }
+        var related = new HashSet<string>();
+        var table = Tables.FirstOrDefault(t => t.Id == tableId);
+        if (table == null) return related;
+        foreach (var r in table.Relations)
+            foreach (var column in new[] { r.FirstId, r.SecondId })
+                if (TableOf.TryGetValue(column, out var other) && other != tableId && !_members.Contains(other)) related.Add(other);
+        return related;
+    }
+
+    private HashSet<string> AllRelated => _members.SelectMany(RelatedTo).ToHashSet();
+
+    private void AddRelated(string tableId)
+    {
+        foreach (var id in RelatedTo(tableId)) _members.Add(id);
+    }
+
+    private void AddAllRelated()
+    {
+        foreach (var id in AllRelated) _members.Add(id);
     }
 
     private bool NameTaken => !string.IsNullOrWhiteSpace(_name) &&
@@ -191,6 +253,8 @@
 
             foreach (var table in _members.Where(t => !before.Contains(t))) await Api.AddTableToDomainAsync(id, table);
             foreach (var table in before.Where(t => !_members.Contains(t))) await Api.RemoveTableFromDomainAsync(id, table);
+            // Domaine neuf : ne tracer d'office que les clés étrangères détectées (les relations indirectes sont masquées).
+            if (Existing == null && _onlyForeignKeys && IndirectCount > 0) await Api.HideIndirectRelationsAsync(id);
             MudDialog.Close(DialogResult.Ok(id));
         }
         catch (ApiException e)

@@ -3053,7 +3053,93 @@
         }
       }
     },
+    "/api/v1/TableInfo/manual": {
+      "post": {
+        "tags": [
+          "TableInfo"
+        ],
+        "operationId": "TableInfo_CreateManual",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualTableInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualTableInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualTableInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/TableInfo/{id}/columns": {
+      "post": {
+        "tags": [
+          "TableInfo"
+        ],
+        "operationId": "TableInfo_AddColumns",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualColumnsInput"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualColumnsInput"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualColumnsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TableInfo"
+                }
+              }
+            }
+          }
+        }
+      },
       "get": {
         "tags": [
           "TableInfo"
@@ -4720,6 +4806,10 @@
           },
           "showNeighbors": {
             "type": "boolean"
+          },
+          "documentationHidden": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -4784,6 +4874,14 @@
               "type": "string"
             },
             "nullable": true
+          },
+          "hideIndirectRelations": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "resetToDocumentation": {
+            "type": "boolean",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -4839,6 +4937,9 @@
             "items": {
               "type": "string"
             }
+          },
+          "hasDocumentationOrigin": {
+            "type": "boolean"
           },
           "tables": {
             "type": "array",
@@ -5008,6 +5109,101 @@
             "nullable": true
           },
           "description": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ManualColumnInput": {
+        "required": [
+          "dataType",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "dataType": {
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "isNullable": {
+            "type": "boolean"
+          },
+          "isPrimaryKey": {
+            "type": "boolean"
+          },
+          "isSensitive": {
+            "type": "boolean"
+          },
+          "description": {
+            "maxLength": 4000,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ManualColumnsInput": {
+        "required": [
+          "columns"
+        ],
+        "type": "object",
+        "properties": {
+          "columns": {
+            "maxItems": 500,
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManualColumnInput"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "ManualTableInput": {
+        "required": [
+          "databaseId",
+          "name"
+        ],
+        "type": "object",
+        "properties": {
+          "databaseId": {
+            "maxLength": 36,
+            "minLength": 1,
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "type": "string"
+          },
+          "tableType": {
+            "pattern": "^(Table|View|Virtual)$",
+            "type": "string"
+          },
+          "description": {
+            "maxLength": 4000,
+            "minLength": 0,
+            "type": "string",
+            "nullable": true
+          },
+          "columns": {
+            "maxItems": 500,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManualColumnInput"
+            }
+          },
+          "domainId": {
+            "maxLength": 36,
+            "minLength": 0,
             "type": "string",
             "nullable": true
           }
@@ -5678,6 +5874,9 @@
           },
           "tableType": {
             "type": "string"
+          },
+          "isManual": {
+            "type": "boolean"
           },
           "relations": {
             "type": "array",

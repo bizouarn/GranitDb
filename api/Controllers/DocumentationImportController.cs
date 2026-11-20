@@ -273,15 +273,22 @@ public class DocumentationImportController(ICatalogRepository repository) : Cont
                 }
             }
 
+            // Le plan d'origine : toutes les relations du domaine qu'il ne trace pas (celles déjà masquées comprises).
+            var origin = new List<string>();
             foreach (var r in relations)
             {
-                if (drawn.Contains((r.FirstId, r.SecondId)) || already.Contains((domain.Id, r.Id))) continue;
+                if (drawn.Contains((r.FirstId, r.SecondId))) continue;
                 if (!tableOfColumn.TryGetValue(r.FirstId, out var a) || !tableOfColumn.TryGetValue(r.SecondId, out var b) ||
                     !members.Contains(a) || !members.Contains(b)) continue;
+                origin.Add(r.Id);
+                if (already.Contains((domain.Id, r.Id))) continue;
                 await repo.CreateAsync(new DomainHiddenRelationInfo { DomainId = domain.Id, RelationId = r.Id }, ct);
                 already.Add((domain.Id, r.Id));
                 count++;
             }
+
+            domain.DocumentationHidden = System.Text.Json.JsonSerializer.Serialize(origin);
+            await repo.UpdateAsync(domain.Id, domain, ct);
         }
 
         return count;

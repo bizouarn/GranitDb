@@ -664,6 +664,29 @@ public static class CatalogMigrations
                     MetaInfo NVARCHAR(MAX) NULL)
                 """,
                 Index("IX_DescriptionSuggestions_DatabaseId", "DescriptionSuggestions", "DatabaseId")
+            ]),
+
+        // Domaines : relations que la documentation d'origine (import Dataedo) ne trace pas (liste JSON d'identifiants de
+        // relations), pour « Réinitialiser comme dans Dataedo ». NULL : la documentation d'origine n'est pas connue.
+        new(17, "Domaines : plan de la documentation d'origine",
+            Sqlite:
+            [
+                """ALTER TABLE "Domains" ADD COLUMN "DocumentationHidden" TEXT"""
+            ],
+            SqlServer:
+            [
+                "IF COL_LENGTH('dbo.Domains', 'DocumentationHidden') IS NULL ALTER TABLE dbo.Domains ADD DocumentationHidden NVARCHAR(MAX) NULL"
+            ]),
+
+        // Tables saisies à la main : jamais supprimées par la synchronisation.
+        new(18, "Tables saisies à la main",
+            Sqlite:
+            [
+                """ALTER TABLE "Tables" ADD COLUMN "IsManual" INTEGER NOT NULL DEFAULT 0"""
+            ],
+            SqlServer:
+            [
+                "IF COL_LENGTH('dbo.Tables', 'IsManual') IS NULL ALTER TABLE dbo.Tables ADD IsManual BIT NOT NULL CONSTRAINT DF_Tables_IsManual DEFAULT 0"
             ])
     ];
 

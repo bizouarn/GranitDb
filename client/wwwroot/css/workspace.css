@@ -596,3 +596,33 @@
     min-width: 3rem;
     text-align: right;
 }
+
+/* Fenêtres de saisie : listes à deux colonnes du domaine. */
+.domain-dialog-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.domain-dialog-list { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
+.domain-dialog-scroll { max-height: 14rem; overflow-y: auto; border: 1px solid var(--mud-palette-lines-default); border-radius: 4px; }
+.domain-dialog-row { display: flex; align-items: center; gap: .5rem; padding: .1rem .5rem; }
+.domain-dialog-row + .domain-dialog-row { border-top: 1px solid var(--mud-palette-lines-default); }
+@media (max-width: 700px) { .domain-dialog-lists { grid-template-columns: 1fr; } }
+
+/* Grille de saisie commune (EditableGrid) : un tableau, replié en cartes empilées sur téléphone. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.egrid-wrap { overflow-x: auto; }
+.egrid { width: 100%; border-collapse: collapse; }
+.egrid th { text-align: left; font-weight: 500; font-size: .8rem; padding: .25rem .4rem; color: var(--mud-palette-text-secondary); }
+.egrid td { padding: .15rem .3rem; vertical-align: top; }
+.egrid-input { width: 100%; min-width: 4rem; padding: .3rem .4rem; border: 1px solid var(--mud-palette-lines-inputs); border-radius: 4px; background: transparent; color: inherit; font: inherit; }
+.egrid-input[type=checkbox] { width: auto; min-width: 0; }
+.egrid-input:focus-visible { outline: 2px solid var(--mud-palette-primary); outline-offset: 1px; }
+.egrid-cell-error .egrid-input { border-color: var(--mud-palette-error); }
+.egrid-error { color: var(--mud-palette-error); font-size: .75rem; }
+.egrid-row-new .egrid-input { border-style: dashed; }
+.egrid-paste { margin-top: .5rem; }
+.egrid-paste-text { width: 100%; font: inherit; }
+@media (max-width: 600px) {
+    .egrid thead { display: none; }
+    .egrid, .egrid tbody, .egrid tr, .egrid td { display: block; width: 100%; }
+    .egrid tr { border: 1px solid var(--mud-palette-lines-default); border-radius: 6px; margin-bottom: .5rem; padding: .25rem; }
+    .egrid td::before { content: attr(data-label); display: block; font-size: .75rem; color: var(--mud-palette-text-secondary); }
+    .egrid td.egrid-actions::before { content: none; }
+}

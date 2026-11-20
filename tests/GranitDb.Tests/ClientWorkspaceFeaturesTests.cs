@@ -220,7 +220,8 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
 
         page.Find("[data-tag='legacy'] button.delete-tag").Click();
         Assert.False(WasSent(HttpMethod.Delete, "/api/v1/TagInfo/g2"));
-        page.Find("[data-tag='legacy'] button.confirm-delete").Click();
+        Dialogs!.WaitForAssertion(() => Assert.Contains("toutes les bases", Dialogs!.Find(".confirm-dialog-consequence").TextContent));
+        Dialogs!.Find("button.confirm-dialog-confirm").Click();
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Delete, "/api/v1/TagInfo/g2")));
     }
 
@@ -239,7 +240,9 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
         Assert.False(body.TryGetProperty("showNeighbors", out var neighbours) && neighbours.ValueKind == System.Text.Json.JsonValueKind.True);
 
         page.Find("[data-domain='Ventes'] button.delete-domain").Click();
-        page.Find("[data-domain='Ventes'] button.confirm-delete").Click();
+        Dialogs!.WaitForAssertion(() => Assert.Contains("1 table(s)", Dialogs!.Find(".confirm-dialog-consequence").TextContent));
+        Assert.False(WasSent(HttpMethod.Delete, "/api/v1/DomainInfo/g1"));
+        Dialogs!.Find("button.confirm-dialog-confirm").Click();
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Delete, "/api/v1/DomainInfo/g1")));
     }
 

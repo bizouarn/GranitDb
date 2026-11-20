@@ -34,7 +34,11 @@
     else
     {
         <MudPaper Class="pa-4 mb-4" Outlined="true" id="manage-tags">
-            <MudText Typo="Typo.h6">Étiquettes (@_tags.Length)</MudText>
+            <MudStack Row="true" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.h6">Étiquettes (@_tags.Length)</MudText>
+                <MudSpacer />
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="NewTagAsync" Class="new-tag">Nouvelle étiquette</MudButton>
+            </MudStack>
             @if (_tags.Length == 0)
             {
                 <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">Aucune étiquette : posez-en une depuis une base, une table ou une colonne.</MudText>
@@ -52,15 +56,8 @@
                     {
                         <MudButton Size="Size.Small" OnClick="() => SetTagColorAsync(current, null)">Sans couleur</MudButton>
                     }
-                    @if (_confirm == tag.Id)
-                    {
-                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" OnClick="() => DeleteTagAsync(current)" Class="confirm-delete">Retirer partout</MudButton>
-                        <MudButton Size="Size.Small" OnClick="() => _confirm = null">Annuler</MudButton>
-                    }
-                    else
-                    {
-                        <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => _confirm = current.Id" Class="delete-tag">Supprimer</MudButton>
-                    }
+                    <MudButton Size="Size.Small" OnClick="() => ApplyTagAsync(current)" Class="apply-tag" title="Poser cette étiquette sur plusieurs tables d'une base">Poser sur des tables</MudButton>
+                    <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => DeleteTagAsync(current)" Class="delete-tag">Supprimer</MudButton>
                 </div>
             }
         </MudPaper>
@@ -94,15 +91,7 @@
                             <MudButton Size="Size.Small" OnClick="() => SetDomainColorAsync(current, null)">Sans couleur</MudButton>
                         }
                         <MudButton Size="Size.Small" OnClick="() => EditDomainAsync(current)" Class="edit-tables">Modifier le domaine</MudButton>
-                        @if (_confirm == domain.Id)
-                        {
-                            <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Filled" OnClick="() => DeleteDomainAsync(current)" Class="confirm-delete">Supprimer le domaine</MudButton>
-                            <MudButton Size="Size.Small" OnClick="() => _confirm = null">Annuler</MudButton>
-                        }
-                        else
-                        {
-                            <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => _confirm = current.Id" Class="delete-domain">Supprimer</MudButton>
-                        }
+                        <MudButton Size="Size.Small" Color="Color.Error" OnClick="() => DeleteDomainAsync(current)" Class="delete-domain">Supprimer</MudButton>
                     </div>
                 }
                 @if (domains.Length > 0)
@@ -158,6 +147,25 @@
         }
     }
 
+    /// <summary>Fenêtre « Étiquette » : création (nom, couleur) et pose sur plusieurs tables d'une base à la fois.</summary>
+    private async Task NewTagAsync()
+    {
+        var parameters = new DialogParameters<TagDialog> { { x => x.Databases, _databases }, { x => x.Tags, _tags } };
+        if (await Dialogs.ShowDataAsync<TagDialog, string>("Nouvelle étiquette", parameters, MaxWidth.Medium) is not { } name) return;
+        await LoadAsync();
+        Workspace.NotifyCatalogChanged(null, this);
+        Notifier.Show($"Étiquette {name} créée.");
+    }
+
+    private async Task ApplyTagAsync(TagInfo tag)
+    {
+        var parameters = new DialogParameters<TagDialog> { { x => x.Databases, _databases }, { x => x.Tags, _tags }, { x => x.Existing, tag } };
+        if (await Dialogs.ShowDataAsync<TagDialog, string>($"Poser l'étiquette {tag.Name}", parameters, MaxWidth.Medium) == null) return;
+        await LoadAsync();
+        Workspace.NotifyCatalogChanged(null, this);
+        Notifier.Show($"Étiquette {tag.Name} posée.");
+    }
+
     private Func<string?, Task> RenameTagHandler(TagInfo tag) => text => RenameTagAsync(tag, text);
 
     private Func<string?, Task> RenameDomainHandler(DomainView domain) => text => RenameDomainAsync(domain, text);
@@ -166,11 +174,16 @@
 
     private Task SetTagColorAsync(TagInfo tag, string? color) => RunAsync(() => Api.UpdateTagAsync(tag, tag.Name, color));
 
-    private Task DeleteTagAsync(TagInfo tag) => RunAsync(async () =>
+    private async Task DeleteTagAsync(TagInfo tag)
     {
-        await Api.DeleteTagAsync(tag.Id);
-        Notifier.Show($"Étiquette {tag.Name} supprimée de tous les éléments.");
-    });
+        if (!await Dialogs.ConfirmAsync("Supprimer une étiquette", $"Supprimer l'étiquette {tag.Name} ?", "Supprimer l'étiquette",
+                "Elle sera retirée de toutes les bases, tables et colonnes qui la portent. Cela ne peut pas être annulé.")) return;
+        await RunAsync(async () =>
+        {
+            await Api.DeleteTagAsync(tag.Id);
+            Notifier.Show($"Étiquette {tag.Name} supprimée de tous les éléments.");
+        });
+    }
 
     private Task RenameDomainAsync(DomainView domain, string? name) =>
         RunOrThrowAsync(() => Api.UpdateDomainAsync(domain, name ?? "", domain.Color), domain.DatabaseId);
@@ -178,11 +191,17 @@
     private Task SetDomainColorAsync(DomainView domain, string? color) =>
         RunAsync(() => Api.UpdateDomainAsync(domain, domain.Name, color), domain.DatabaseId);
 
-    private Task DeleteDomainAsync(DomainView domain) => RunAsync(async () =>
+    private async Task DeleteDomainAsync(DomainView domain)
     {
-        await Api.DeleteDomainAsync(domain.Id);
-        Notifier.Show($"Domaine {domain.Name} supprimé (ses tables sont intactes).");
-    }, domain.DatabaseId);
+        var count = domain.Tables.Count;
+        if (!await Dialogs.ConfirmAsync("Supprimer un domaine", $"Supprimer le domaine {domain.Name} ?", "Supprimer le domaine",
+                $"Les {count} table(s) rangées dans ce domaine sont conservées ; sa couleur, ses places dans le diagramme et ses relations masquées sont perdues.")) return;
+        await RunAsync(async () =>
+        {
+            await Api.DeleteDomainAsync(domain.Id);
+            Notifier.Show($"Domaine {domain.Name} supprimé (ses tables sont intactes).");
+        }, domain.DatabaseId);
+    }
 
     /// <summary>Fenêtre de modification d'un domaine : nom, couleur et tables, comme à la création.</summary>
     private async Task EditDomainAsync(DomainView domain)

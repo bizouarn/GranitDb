@@ -65,9 +65,11 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
         {
             if (existingTables.TryGetValue(source.Name, out var table))
             {
-                if (table.TableType != source.TableType)
+                // La source gagne : une table saisie à la main qu'elle possède désormais devient une table ordinaire.
+                if (table.TableType != source.TableType || table.IsManual)
                 {
                     table.TableType = source.TableType;
+                    table.IsManual = false;
                     await repository.UpdateAsync(table.Id, table, ct);
                 }
             }
@@ -131,7 +133,10 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
         }
 
         // Relations automatiques : on les recrée, les relations saisies à la main sont conservées.
-        var obsoleteColumns = existingColumns.Where(c => !keptColumnIds.Contains(c.Id)).ToList();
+        // Les colonnes d'une table saisie à la main (absente de la source) ne sont pas obsolètes.
+        var manualTableIds = existingTables.Values.Where(t => t.IsManual && !sourceTableNames.Contains(t.Name))
+            .Select(t => t.Id).ToHashSet();
+        var obsoleteColumns = existingColumns.Where(c => !keptColumnIds.Contains(c.Id) && !manualTableIds.Contains(c.TableId)).ToList();
         var obsoleteColumnIds = obsoleteColumns.Select(c => c.Id).ToHashSet();
         var allColumnIds = keptColumnIds.Union(obsoleteColumnIds).ToHashSet();
         // Une relation détectée dont on a corrigé le type (ex : One-to-One) ou la description les garde : on les
@@ -218,7 +223,7 @@ public class SchemaSynchronizer(ICatalogRepository catalog)
         // Suppression de ce qui a disparu de la source
         foreach (var column in obsoleteColumns)
             await repository.DeleteAsync<ColumnInfo>(column.Id, ct);
-        foreach (var table in existingTables.Values.Where(t => !sourceTableNames.Contains(t.Name)))
+        foreach (var table in existingTables.Values.Where(t => !sourceTableNames.Contains(t.Name) && !t.IsManual))
         {
             await repository.DeleteAsync<TableInfo>(table.Id, ct);
             tablesRemoved++;

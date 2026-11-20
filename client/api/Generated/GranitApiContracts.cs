@@ -538,6 +538,16 @@ namespace GranitDb.Client.Models
         System.Threading.Tasks.Task<TableProfileView> ProfileAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>Created</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<TableInfo> CreateManualAsync(ManualTableInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
+        /// <returns>OK</returns>
+        /// <exception cref="GranitApiException">A server side error occurred.</exception>
+        System.Threading.Tasks.Task<TableInfo> AddColumnsAsync(string id, ManualColumnsInput? body = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
+
+        /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
         System.Threading.Tasks.Task<System.Collections.Generic.List<ColumnInfo>> GetColumnsAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken));
@@ -1325,6 +1335,9 @@ namespace GranitDb.Client.Models
         [System.Text.Json.Serialization.JsonPropertyName("showNeighbors")]
         public bool ShowNeighbors { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("documentationHidden")]
+        public string? DocumentationHidden { get; set; } = default!;
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -1372,6 +1385,12 @@ namespace GranitDb.Client.Models
         [System.Text.Json.Serialization.JsonPropertyName("hiddenRelations")]
         public System.Collections.Generic.List<string>? HiddenRelations { get; set; } = default!;
 
+        [System.Text.Json.Serialization.JsonPropertyName("hideIndirectRelations")]
+        public bool? HideIndirectRelations { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("resetToDocumentation")]
+        public bool? ResetToDocumentation { get; set; } = default!;
+
     }
 
     [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -1416,6 +1435,9 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("hiddenRelations")]
         public System.Collections.Generic.List<string> HiddenRelations { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("hasDocumentationOrigin")]
+        public bool HasDocumentationOrigin { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("tables")]
         public System.Collections.Generic.List<DomainTableView> Tables { get; set; } = default!;
@@ -1560,6 +1582,79 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("description")]
         public string? Description { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ManualColumnInput
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("name")]
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(255, MinimumLength = 1)]
+        public string Name { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("dataType")]
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(100, MinimumLength = 1)]
+        public string DataType { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("isNullable")]
+        public bool IsNullable { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("isPrimaryKey")]
+        public bool IsPrimaryKey { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("isSensitive")]
+        public bool IsSensitive { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("description")]
+        [System.ComponentModel.DataAnnotations.StringLength(4000)]
+        public string? Description { get; set; } = default!;
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ManualColumnsInput
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("columns")]
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.MinLength(1)]
+        [System.ComponentModel.DataAnnotations.MaxLength(500)]
+        public System.Collections.Generic.List<ManualColumnInput> Columns { get; set; } = new System.Collections.Generic.List<ManualColumnInput>();
+
+    }
+
+    [System.CodeDom.Compiler.GeneratedCode("NJsonSchema", "14.6.3.0 (NJsonSchema v11.5.2.0 (Newtonsoft.Json v13.0.0.0))")]
+    public partial class ManualTableInput
+    {
+
+        [System.Text.Json.Serialization.JsonPropertyName("databaseId")]
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(36, MinimumLength = 1)]
+        public string DatabaseId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("name")]
+        [System.ComponentModel.DataAnnotations.Required]
+        [System.ComponentModel.DataAnnotations.StringLength(255, MinimumLength = 1)]
+        public string Name { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("tableType")]
+        [System.ComponentModel.DataAnnotations.RegularExpression(@"^(Table|View|Virtual)$")]
+        public string TableType { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("description")]
+        [System.ComponentModel.DataAnnotations.StringLength(4000)]
+        public string? Description { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("columns")]
+        [System.ComponentModel.DataAnnotations.MaxLength(500)]
+        public System.Collections.Generic.List<ManualColumnInput> Columns { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("domainId")]
+        [System.ComponentModel.DataAnnotations.StringLength(36)]
+        public string? DomainId { get; set; } = default!;
 
     }
 
@@ -2109,6 +2204,9 @@ namespace GranitDb.Client.Models
 
         [System.Text.Json.Serialization.JsonPropertyName("tableType")]
         public string TableType { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("isManual")]
+        public bool IsManual { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("relations")]
         public System.Collections.Generic.List<RelationInfo> Relations { get; set; } = default!;

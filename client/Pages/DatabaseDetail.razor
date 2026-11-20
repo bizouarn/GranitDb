@@ -52,6 +52,11 @@
                 <MudButton Variant="Variant.Outlined" OnClick="PreviewSyncAsync" Disabled="_syncing"
                            StartIcon="@Icons.Material.Filled.Sync">Resynchroniser</MudButton>
             }
+            @if (!Single && Auth.CanEdit)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="NewTableAsync" StartIcon="@Icons.Material.Filled.AddBox" Class="new-table"
+                           title="Documenter une table qui n'existe pas dans la source (fichier plat, service, table prévue)">Nouvelle table</MudButton>
+            }
             @if (!Single && CanProfile)
             {
                 <MudButton Variant="Variant.Outlined" OnClick="ProfileDatabaseAsync" Disabled="_profilingDatabase"
@@ -244,6 +249,10 @@
                                 {
                                     <MudChip T="string" Size="Size.Small" Color="Color.Info">@table.TableType</MudChip>
                                 }
+                                @if (table.IsManual)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="table-manual" title="Saisie à la main : la synchronisation la conserve">saisie à la main</MudChip>
+                                }
                                 <MudText Typo="Typo.caption" Style="color: var(--mud-palette-text-secondary)">@table.Columns.Count colonnes</MudText>
                                 @if (CompletenessOf(table.Id) is { } done)
                                 {
@@ -276,6 +285,15 @@
                                 <TagEditor Tags="TagsOf(TagKind.Table, table.Id)" OnAdd="name => AddTagAsync(name, TagKind.Table, table.Id)"
                                            OnRemove="RemoveTagAsync" />
                             </div>
+
+                            @if (Auth.CanEdit)
+                            {
+                                <div class="mb-2">
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => EditColumnsAsync(table))" StartIcon="@Icons.Material.Filled.TableRows" Class="edit-columns">
+                                        @(table.IsManual ? "Ajouter / modifier des colonnes" : "Décrire les colonnes en lot")
+                                    </MudButton>
+                                </div>
+                            }
 
                             @if (table.TableType == "Table" && (CanProfile || _profiles.ContainsKey(table.Id)))
                             {
@@ -927,6 +945,33 @@
             Changed();
             await InvokeAsync(StateHasChanged);
         });
+    }
+
+    // --- Tables saisies à la main et colonnes en grille ---
+
+    /// <summary>Fenêtre « Nouvelle table » : une table qui n'existe pas dans la source, avec ses colonnes en grille.</summary>
+    private async Task NewTableAsync()
+    {
+        var parameters = new DialogParameters<TableDialog>
+        {
+            { x => x.DatabaseId, Id }, { x => x.Tables, _tables }, { x => x.Domains, _domains }
+        };
+        var created = await Dialogs.ShowDataAsync<TableDialog, string>("Nouvelle table", parameters, MaxWidth.Large);
+        if (created == null) return;
+        await LoadTablesAsync();
+        _open.Add(created);
+        Changed();
+        Notifier.Show("Table ajoutée (saisie à la main : la synchronisation la conserve).");
+    }
+
+    /// <summary>Fenêtre « Ajouter / modifier des colonnes » : descriptions en lot, et colonnes à la suite pour une table saisie à la main.</summary>
+    private async Task EditColumnsAsync(TableInfo table)
+    {
+        var parameters = new DialogParameters<ColumnsDialog> { { x => x.Table, table } };
+        if (!await Dialogs.ShowFormAsync("Colonnes de " + table.Name, parameters, MaxWidth.Large)) return;
+        await LoadTablesAsync();
+        Changed();
+        Notifier.Show("Colonnes enregistrées.");
     }
 
     // --- Relations ---

@@ -27,6 +27,20 @@ public static class DialogHelper
         return result is { Canceled: false };
     }
 
+    /// <summary>
+    ///     Confirmation commune : dit ce qui sera perdu, et demande de retaper un nom pour ce qui ne s'annule pas. Vrai si l'utilisateur confirme.
+    /// </summary>
+    public static Task<bool> ConfirmAsync(this IDialogService dialogs, string title, string message, string confirmText,
+        string? consequence = null, string? requireTyped = null)
+    {
+        var parameters = new DialogParameters<ConfirmDialog>
+        {
+            { x => x.Message, message }, { x => x.Consequence, consequence }, { x => x.ConfirmText, confirmText },
+            { x => x.RequireTyped, requireTyped }
+        };
+        return dialogs.ShowFormAsync(title, parameters);
+    }
+
     /// <summary>Comme <see cref="ShowFormAsync{T}" />, mais renvoie la valeur que la fenêtre a fournie en se fermant (null si annulée).</summary>
     public static async Task<TData?> ShowDataAsync<T, TData>(this IDialogService dialogs, string title, DialogParameters<T> parameters,
         MaxWidth width = MaxWidth.Small) where T : Microsoft.AspNetCore.Components.IComponent where TData : class

@@ -1,0 +1,113 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject Client Api
+
+@* Fenêtre « Ajouter / modifier des colonnes » : les colonnes d'une table dans une grille. Les descriptions (et le marquage sensible)
+   se complètent en lot ; les colonnes d'une table saisie à la main peuvent en plus être ajoutées. Tout s'enregistre d'un coup. *@
+<MudDialog>
+    <DialogContent>
+        <div class="columns-dialog">
+            <MudStack Spacing="3">
+                <MudText Typo="Typo.body2" Style="color: var(--mud-palette-text-secondary)">
+                    @if (Table.IsManual)
+                    {
+                        <text>Table saisie à la main : ajoutez des colonnes à la suite (Tab passe de cellule en cellule, Entrée descend) ou collez-les depuis un tableur.</text>
+                    }
+                    else
+                    {
+                        <text>Complétez les descriptions des colonnes de @Table.Name en lot. Leur nom et leur type viennent de la source : ils ne se modifient pas ici.</text>
+                    }
+                </MudText>
+                <EditableGrid TRow="ColumnRow" Rows="_rows" Columns="_columns" IsBlank="ColumnRow.IsBlank" AllowAdd="@Table.IsManual"
+                              Label="@($"Colonnes de {Table.Name}")" OnChanged="Changed" />
+                <MudAlert Severity="Severity.Info" Dense="true" Class="columns-dialog-preview" role="status">@Preview</MudAlert>
+                @if (_error != null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="columns-dialog-error">@_error</MudAlert>
+                }
+            </MudStack>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy" Class="columns-dialog-cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="columns-dialog-save">Enregistrer</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>La table, avec ses colonnes.</summary>
+    [Parameter, EditorRequired] public TableInfo Table { get; set; } = new();
+
+    private readonly List<ColumnRow> _rows = [];
+    private readonly IReadOnlyList<GridColumn<ColumnRow>> _columns = ColumnRow.Grid();
+    private string? _error;
+    private bool _busy;
+
+    protected override void OnInitialized()
+    {
+        foreach (var c in Table.Columns.OrderBy(c => c.Position))
+            _rows.Add(new ColumnRow
+            {
+                Id = c.Id, Name = c.Name, DataType = c.DataType, IsPrimaryKey = c.IsPrimaryKey, IsNullable = c.IsNullable,
+                IsSensitive = c.IsSensitive, Description = c.Description ?? "", OriginalDescription = c.Description ?? "", MetaInfo = c.MetaInfo, FromSource = !Table.IsManual
+            });
+    }
+
+    private IEnumerable<ColumnRow> Added => _rows.Where(r => r.Id == null && !ColumnRow.IsBlank(r));
+
+    private IEnumerable<ColumnRow> Described => _rows.Where(r => r.Id != null && (r.Description.Trim() != r.OriginalDescription.Trim()));
+
+    private int ProblemCount => GridValidation.Problems(_columns, _rows, ColumnRow.IsBlank).Count;
+
+    private bool CanSave => ProblemCount == 0 && (Added.Any() || Described.Any());
+
+    private string Preview
+    {
+        get
+        {
+            var added = Added.Count();
+            var described = Described.Count();
+            if (ProblemCount > 0) return $"{ProblemCount} problème{(ProblemCount > 1 ? "s" : "")} à corriger avant d'enregistrer.";
+            if (added + described == 0) return "Aucun changement.";
+            return $"{(added > 0 ? $"{added} colonne{(added > 1 ? "s" : "")} à ajouter" : "")}{(added > 0 && described > 0 ? ", " : "")}" +
+                   $"{(described > 0 ? $"{described} description{(described > 1 ? "s" : "")} à enregistrer" : "")}.";
+        }
+    }
+
+    private void Changed() => StateHasChanged();
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanSave) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (Added.Any())
+                await Api.AddManualColumnsAsync(Table.Id, Added.Select(r => new ManualColumnInput
+                {
+                    Name = r.Name.Trim(), DataType = r.DataType.Trim(), IsPrimaryKey = r.IsPrimaryKey, IsNullable = r.IsNullable,
+                    IsSensitive = r.IsSensitive, Description = string.IsNullOrWhiteSpace(r.Description) ? null : r.Description.Trim()
+                }));
+            foreach (var row in Described.ToList())
+            {
+                await Api.UpdateDocumentationAsync("ColumnInfo", row.Id!, row.Description.Trim(), row.MetaInfo);
+                row.OriginalDescription = row.Description;
+            }
+
+            MudDialog.Close(DialogResult.Ok(true));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

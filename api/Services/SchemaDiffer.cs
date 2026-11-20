@@ -93,7 +93,7 @@ public static class SchemaDiffer
                     Documented(gone.Description, gone.MetaInfo, gone.Id, gone.IsSensitive)));
         }
 
-        foreach (var table in tables.Values.Where(t => !sourceTables.ContainsKey(t.Name)).OrderBy(t => t.Name, StringComparer.Ordinal))
+        foreach (var table in tables.Values.Where(t => !sourceTables.ContainsKey(t.Name) && !t.IsManual).OrderBy(t => t.Name, StringComparer.Ordinal))
         {
             var doc = Documented(table.Description, table.MetaInfo, table.Id) ||
                       columnsByTable[table.Id].Any(c => Documented(c.Description, c.MetaInfo, c.Id, c.IsSensitive));

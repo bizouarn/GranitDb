@@ -48,6 +48,12 @@ public partial class RelationInfo
         ExtraColumns = [];
     }
 
+    /// <summary>Marque des relations créées par la synchronisation à partir des clés étrangères de la source.</summary>
+    public const string AutoMarker = "auto:fk";
+
+    /// <summary>Clé étrangère détectée dans la source (par opposition à une relation manuelle ou déduite des noms).</summary>
+    public bool IsForeignKey => MetaInfo == AutoMarker;
+
     /// <summary>Toutes les paires (référencée, qui référence), la première d'abord.</summary>
     public IEnumerable<(string First, string Second)> Pairs() =>
         new[] { (FirstId, SecondId) }.Concat(ExtraColumns.Select(p => (p.FirstId, p.SecondId)));

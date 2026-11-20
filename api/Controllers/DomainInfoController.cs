@@ -23,6 +23,10 @@ public class DomainView
     public string? MetaInfo { get; set; }
     public bool ShowNeighbors { get; set; }
     public List<string> HiddenRelations { get; set; } = [];
+
+    /// <summary>Vrai quand le plan de la documentation d'origine (import Dataedo) est connu : « Réinitialiser » est possible.</summary>
+    public bool HasDocumentationOrigin { get; set; }
+
     public List<DomainTableView> Tables { get; set; } = [];
 }
 
@@ -33,6 +37,15 @@ public class DomainSettingsInput
 
     /// <summary>Remplace la liste des relations masquées (identifiants de relations).</summary>
     public List<string>? HiddenRelations { get; set; }
+
+    /// <summary>
+    ///     Masque en plus les relations indirectes : celles qui touchent une table du domaine et ne sont pas une clé
+    ///     étrangère détectée (relations manuelles ou déduites des noms). Appliqué après <see cref="HiddenRelations" />.
+    /// </summary>
+    public bool? HideIndirectRelations { get; set; }
+
+    /// <summary>Remet les relations masquées comme dans la documentation d'origine ; 400 si elle n'est pas connue.</summary>
+    public bool? ResetToDocumentation { get; set; }
 }
 
 /// <summary>Place d'une table dans le diagramme d'un domaine.</summary>
@@ -106,17 +119,40 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
                 await repo.UpdateAsync(id, domain, ct);
             }
 
-            if (input.HiddenRelations != null)
+            var currentHidden = await repo.FindAsync<DomainHiddenRelationInfo>(nameof(DomainHiddenRelationInfo.DomainId), id, ct);
+            HashSet<string>? wanted = null;
+            var validate = true;
+            if (input.ResetToDocumentation == true)
             {
-                var wanted = input.HiddenRelations.Where(r => !string.IsNullOrWhiteSpace(r)).ToHashSet();
-                var current = await repo.FindAsync<DomainHiddenRelationInfo>(nameof(DomainHiddenRelationInfo.DomainId), id, ct);
+                if (domain.DocumentationHidden == null)
+                    throw new GranitExceptions("La documentation d'origine de ce domaine n'est pas connue.");
+                var origin = System.Text.Json.JsonSerializer.Deserialize<List<string>>(domain.DocumentationHidden) ?? [];
+                // Une relation supprimée depuis l'import n'est plus à masquer.
+                var existing = (await repo.GetRelationsOfDatabaseAsync(domain.DatabaseId, ct)).Select(r => r.Id).ToHashSet();
+                wanted = origin.Where(existing.Contains).ToHashSet();
+                validate = false;
+            }
+            else if (input.HiddenRelations != null)
+            {
+                wanted = input.HiddenRelations.Where(r => !string.IsNullOrWhiteSpace(r)).ToHashSet();
+            }
+
+            if (input.HideIndirectRelations == true)
+            {
+                wanted ??= currentHidden.Select(h => h.RelationId).ToHashSet();
+                wanted.UnionWith(await IndirectRelationsAsync(repo, domain, ct));
+            }
+
+            if (wanted != null)
+            {
+                var current = currentHidden;
                 foreach (var old in current.Where(h => !wanted.Contains(h.RelationId)))
                     await repo.DeleteAsync<DomainHiddenRelationInfo>(old.Id, ct);
                 var kept = current.Select(h => h.RelationId).ToHashSet();
                 foreach (var relationId in wanted.Where(r => !kept.Contains(r)))
                 {
-                    var relation = await repo.GetAsync<RelationInfo>(relationId, ct);
-                    if (relation == null) throw new GranitExceptions($"La relation {relationId} n'existe pas.");
+                    if (validate && await repo.GetAsync<RelationInfo>(relationId, ct) == null)
+                        throw new GranitExceptions($"La relation {relationId} n'existe pas.");
                     await repo.CreateAsync(new DomainHiddenRelationInfo { DomainId = id, RelationId = relationId }, ct);
                 }
             }
@@ -194,6 +230,29 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
         });
     }
 
+    /// <summary>
+    ///     Relations indirectes d'un domaine : elles touchent une table du domaine (les deux avec les voisines
+    ///     masquées) et ne sont pas une clé étrangère détectée.
+    /// </summary>
+    private static async Task<List<string>> IndirectRelationsAsync(ICatalogRepository repo, DomainInfo domain, CancellationToken ct)
+    {
+        var members = (await repo.FindAsync<DomainTableInfo>(nameof(DomainTableInfo.DomainId), domain.Id, ct))
+            .Select(l => l.TableId).ToHashSet();
+        var tableOf = (await repo.GetAllAsync<ColumnInfo>([new CatalogFilter("DatabaseId", domain.DatabaseId)], ct))
+            .ToDictionary(c => c.Id, c => c.TableId);
+        var result = new List<string>();
+        foreach (var r in await repo.GetRelationsOfDatabaseAsync(domain.DatabaseId, ct))
+        {
+            if (r.MetaInfo == RelationInfo.AutoMarker) continue;
+            if (!tableOf.TryGetValue(r.FirstId, out var a) || !tableOf.TryGetValue(r.SecondId, out var b)) continue;
+            var inside = members.Contains(a) && members.Contains(b);
+            var touching = members.Contains(a) || members.Contains(b);
+            if (inside || (domain.ShowNeighbors && touching)) result.Add(r.Id);
+        }
+
+        return result;
+    }
+
     /// <summary>Exécute <paramref name="work" /> dans une transaction sur le domaine <paramref name="id" /> ; 404 s'il n'existe pas.</summary>
     private Task<IActionResult> InDomainAsync(string id, CancellationToken ct,
         Func<ICatalogRepository, DomainInfo, Task<IActionResult>> work)
@@ -218,6 +277,7 @@ public class DomainInfoController(ICatalogRepository repository) : BaseDbInfoCon
         {
             Id = domain.Id, DatabaseId = domain.DatabaseId, Name = domain.Name, Color = domain.Color,
             Description = domain.Description, MetaInfo = domain.MetaInfo, ShowNeighbors = domain.ShowNeighbors,
+            HasDocumentationOrigin = domain.DocumentationHidden != null,
             HiddenRelations = hidden.Select(h => h.RelationId).OrderBy(r => r, StringComparer.Ordinal).ToList(),
             Tables = links.OrderBy(l => l.TableId, StringComparer.Ordinal)
                 .Select(l => new DomainTableView(l.TableId, l.X, l.Y)).ToList()

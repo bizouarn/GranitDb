@@ -211,3 +211,48 @@ public class TagInput : InfoInput<TagInfo>
         entity.Color = Color;
     }
 }
+
+/// <summary>Une colonne saisie à la main (ligne de la grille de saisie).</summary>
+public class ManualColumnInput
+{
+    [Required, StringLength(255, MinimumLength = 1)]
+    public string Name { get; set; } = "";
+
+    [Required, StringLength(100, MinimumLength = 1)]
+    public string DataType { get; set; } = "";
+
+    public bool IsNullable { get; set; } = true;
+
+    public bool IsPrimaryKey { get; set; }
+
+    public bool IsSensitive { get; set; }
+
+    [StringLength(4000)] public string? Description { get; set; }
+}
+
+/// <summary>Une table qui n'existe pas dans la source, saisie à la main avec ses colonnes (création atomique).</summary>
+public class ManualTableInput
+{
+    [Required, StringLength(36, MinimumLength = 1)]
+    public string DatabaseId { get; set; } = "";
+
+    [Required, StringLength(255, MinimumLength = 1)]
+    public string Name { get; set; } = "";
+
+    [RegularExpression("^(Table|View|Virtual)$", ErrorMessage = "TableType doit valoir Table, View ou Virtual.")]
+    public string TableType { get; set; } = "Table";
+
+    [StringLength(4000)] public string? Description { get; set; }
+
+    [MaxLength(500)] public List<ManualColumnInput> Columns { get; set; } = [];
+
+    /// <summary>Domaine dans lequel ranger la table (facultatif).</summary>
+    [StringLength(36)] public string? DomainId { get; set; }
+}
+
+/// <summary>Colonnes à ajouter à une table saisie à la main (ajout en lot atomique).</summary>
+public class ManualColumnsInput
+{
+    [Required, MinLength(1), MaxLength(500)]
+    public List<ManualColumnInput> Columns { get; set; } = [];
+}

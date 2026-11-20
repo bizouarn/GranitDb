@@ -39,8 +39,9 @@ public class ImpactController(ICatalogRepository repository) : ControllerBase
                 depth);
         }
 
-        var edges = relations.Where(r => columns.ContainsKey(r.FirstId) && columns.ContainsKey(r.SecondId))
-            .Select(r => (r.FirstId, r.SecondId)).ToList();
+        // Une relation multi-colonnes compte pour chacune de ses paires.
+        var edges = relations.SelectMany(r => r.Pairs())
+            .Where(p => columns.ContainsKey(p.First) && columns.ContainsKey(p.Second)).Distinct().ToList();
         return Ok(new ImpactResult(Node(id, 0),
             ImpactAnalyzer.Dependents(id, edges).Select(s => Node(s.Key, s.Depth)).ToList(),
             ImpactAnalyzer.Dependencies(id, edges).Select(s => Node(s.Key, s.Depth)).ToList()));
@@ -60,9 +61,9 @@ public class ImpactController(ICatalogRepository repository) : ControllerBase
         }
 
         // Une relation entre deux colonnes devient une arête entre leurs tables ; les auto-références sont ignorées.
-        var edges = relations
-            .Where(r => columns.ContainsKey(r.FirstId) && columns.ContainsKey(r.SecondId))
-            .Select(r => (columns[r.FirstId].TableId, columns[r.SecondId].TableId))
+        var edges = relations.SelectMany(r => r.Pairs())
+            .Where(p => columns.ContainsKey(p.First) && columns.ContainsKey(p.Second))
+            .Select(p => (columns[p.First].TableId, columns[p.Second].TableId))
             .Where(e => e.Item1 != e.Item2 && tables.ContainsKey(e.Item1) && tables.ContainsKey(e.Item2))
             .Distinct().ToList();
         return Ok(new ImpactResult(Node(id, 0),

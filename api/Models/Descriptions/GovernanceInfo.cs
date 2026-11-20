@@ -16,6 +16,12 @@ public class DomainInfo : InfoBase
 
     /// <summary>Le diagramme montre aussi, en pointillés, les tables d'autres domaines reliées à celles du domaine.</summary>
     public bool ShowNeighbors { get; set; }
+
+    /// <summary>
+    ///     Identifiants (JSON) des relations que la documentation d'origine (import Dataedo) ne trace pas dans ce domaine ;
+    ///     null quand elle n'est pas connue. Sert à « Réinitialiser comme dans Dataedo ».
+    /// </summary>
+    public string? DocumentationHidden { get; set; }
 }
 
 /// <summary>Relation que le diagramme d'un domaine ne dessine pas (le choix est propre au domaine).</summary>

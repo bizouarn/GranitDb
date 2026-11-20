@@ -6,6 +6,7 @@
 @inject CatalogCache Cache
 @inject WorkspaceState Workspace
 @inject AuthState Auth
+@inject DiagramPanelState DiagramPanel
 @inject Notifier Notifier
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
@@ -36,6 +37,34 @@
     @if (_loadError != null)
     {
         <MudAlert Severity="Severity.Warning" Dense="true" Class="ma-2">@_loadError</MudAlert>
+    }
+
+    @* La page du diagramme y publie sa liste de tables : on la coche ici, sans quitter le dessin. *@
+    @if (DiagramPanel.Current is { } panel)
+    {
+        <div class="explorer-section diagram-panel" role="group" aria-label="Tables du diagramme">
+            <div class="section-title">@(panel.DomainName == null ? "Tables affichées" : $"Tables du domaine {panel.DomainName}") (@panel.Shown.Count / @panel.Tables.Count)</div>
+            <input class="diagram-panel-filter" type="search" placeholder="Filtrer les tables" aria-label="Filtrer les tables du diagramme"
+                   value="@_panelFilter" @oninput="e => _panelFilter = e.Value?.ToString() ?? string.Empty" />
+            @if (panel.SelectAll != null && panel.SelectNone != null)
+            {
+                <div class="diagram-panel-actions">
+                    <button type="button" class="diagram-panel-all" @onclick="panel.SelectAll">Toutes</button>
+                    <button type="button" class="diagram-panel-none" @onclick="panel.SelectNone">Aucune</button>
+                </div>
+            }
+            <div class="diagram-panel-list">
+                @foreach (var item in PanelTables(panel))
+                {
+                    var id = item.Id;
+                    <label class="diagram-panel-item" data-panel-table="@item.Name" draggable="true"
+                           @ondragstart="() => panel.DragStart?.Invoke(id)" @ondragend="() => panel.DragEnd?.Invoke()">
+                        <input type="checkbox" checked="@panel.Shown.Contains(id)" @onchange="e => panel.Toggle(id, (bool)e.Value!)" />
+                        <span>@item.Name</span>
+                    </label>
+                }
+            </div>
+        </div>
     }
 
     @if (Workspace.Favorites.Count > 0 && !Filtering)
@@ -223,8 +252,20 @@
 
     private bool Filtering => _filter is { Length: >= 2 } && !string.IsNullOrWhiteSpace(_filter);
 
+    private string _panelFilter = "";
+
+    private const int PanelLimit = 200;
+
+    private IEnumerable<(string Id, string Name)> PanelTables(GranitDb.Client.Workspace.DiagramPanel panel) =>
+        panel.Tables.Where(t => string.IsNullOrWhiteSpace(_panelFilter) || t.Name.Contains(_panelFilter.Trim(), StringComparison.OrdinalIgnoreCase))
+            .Take(PanelLimit);
+
+    private void OnPanelChanged() => _ = InvokeAsync(StateHasChanged);
+
     protected override async Task OnInitializedAsync()
     {
+        DiagramPanel.Changed += OnPanelChanged;
+        DiagramPanel.AddHost();
         Workspace.Changed += OnWorkspaceChanged;
         Workspace.CatalogChanged += OnCatalogChanged;
         await LoadDatabasesAsync();
@@ -233,6 +274,8 @@
 
     public void Dispose()
     {
+        DiagramPanel.Changed -= OnPanelChanged;
+        DiagramPanel.RemoveHost();
         Workspace.Changed -= OnWorkspaceChanged;
         Workspace.CatalogChanged -= OnCatalogChanged;
     }

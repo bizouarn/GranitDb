@@ -1,0 +1,144 @@
+@using GranitDb.Client.api
+@using GranitDb.Client.Models
+@inject Client Api
+
+@* Fenêtre « Étiquette » : créer une étiquette (nom, couleur) et la poser d'un coup sur plusieurs tables d'une base. Avec une étiquette
+   existante, ne sert qu'à la poser sur d'autres tables. *@
+<MudDialog>
+    <DialogContent>
+        <div class="tag-dialog">
+            <MudStack Spacing="3">
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End">
+                    <label class="native-select" style="flex: 1"><span class="native-select-label">Nom de l'étiquette</span>
+                        <input class="tag-dialog-name" type="text" maxlength="50" disabled="@(Existing != null)" @bind="_name" @bind:event="oninput" /></label>
+                    <label class="native-select"><span class="native-select-label">Couleur</span>
+                        <input class="tag-dialog-color color-input" type="color" aria-label="Couleur de l'étiquette" disabled="@(Existing != null)"
+                               value="@(_color ?? "#757575")" @onchange="e => _color = e.Value?.ToString()" /></label>
+                </MudStack>
+                @if (NameTaken)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="tag-dialog-problem">Une étiquette porte déjà ce nom.</MudAlert>
+                }
+
+                <MudText Typo="Typo.subtitle2">Poser sur des tables (facultatif)</MudText>
+                <NativeSelect Label="Base" Value="@_databaseId" ValueChanged="LoadTablesAsync" Class="tag-dialog-database">
+                    <option value="">(aucune)</option>
+                    @foreach (var db in Databases)
+                    {
+                        <option value="@db.Id">@db.Name</option>
+                    }
+                </NativeSelect>
+                @if (_tables.Length > 0)
+                {
+                    <input class="tag-dialog-search" type="search" placeholder="Nom ou préfixe de table…" aria-label="Rechercher une table"
+                           @bind="_search" @bind:event="oninput" />
+                    <div class="domain-dialog-scroll">
+                        @foreach (var table in Visible.Take(60))
+                        {
+                            var id = table.Id;
+                            <label class="domain-dialog-row" data-tag-table="@table.Name">
+                                <input type="checkbox" checked="@_selected.Contains(id)" @onchange="e => Toggle(id, (bool)e.Value!)" />
+                                <span>@table.Name</span>
+                            </label>
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(_search) && Visible.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="SelectFound" Class="tag-dialog-select-found">Cocher les @Visible.Count table(s) trouvée(s)</MudButton>
+                    }
+                }
+                <MudAlert Severity="Severity.Info" Dense="true" Class="tag-dialog-preview" role="status">
+                    @(Existing == null ? "Créer l'étiquette" : "Poser l'étiquette")@(_selected.Count > 0 ? $" et la poser sur {_selected.Count} table{(_selected.Count > 1 ? "s" : "")}" : "").
+                </MudAlert>
+                @if (_error != null)
+                {
+                    <MudAlert Severity="Severity.Error" Dense="true" Class="tag-dialog-error">@_error</MudAlert>
+                }
+            </MudStack>
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Disabled="_busy" Class="tag-dialog-cancel">Annuler</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || !CanSave)" Class="tag-dialog-save">
+            @(Existing == null ? "Créer l'étiquette" : "Poser")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = null!;
+
+    /// <summary>Les bases proposées pour choisir des tables.</summary>
+    [Parameter] public DatabaseView[] Databases { get; set; } = [];
+
+    /// <summary>Les étiquettes existantes, pour refuser un nom déjà pris.</summary>
+    [Parameter] public TagInfo[] Tags { get; set; } = [];
+
+    /// <summary>Étiquette existante à poser sur des tables ; absente : une nouvelle étiquette.</summary>
+    [Parameter] public TagInfo? Existing { get; set; }
+
+    private string _name = "", _search = "", _databaseId = "";
+    private string? _color, _error;
+    private bool _busy;
+    private TableInfo[] _tables = [];
+    private readonly HashSet<string> _selected = [];
+
+    protected override void OnInitialized()
+    {
+        if (Existing == null) return;
+        _name = Existing.Name;
+        _color = Existing.Color;
+    }
+
+    private List<TableInfo> Visible => _tables
+        .Where(t => string.IsNullOrWhiteSpace(_search) || t.Name.Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase))
+        .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).ToList();
+
+    private bool NameTaken => Existing == null && !string.IsNullOrWhiteSpace(_name) &&
+                              Tags.Any(t => string.Equals(t.Name, _name.Trim(), StringComparison.CurrentCultureIgnoreCase));
+
+    private bool CanSave => !string.IsNullOrWhiteSpace(_name) && !NameTaken && (Existing == null || _selected.Count > 0);
+
+    private async Task LoadTablesAsync(string databaseId)
+    {
+        _databaseId = databaseId;
+        _selected.Clear();
+        _search = "";
+        _tables = string.IsNullOrEmpty(databaseId) ? [] : await Api.GetTableSummariesAsync(databaseId);
+    }
+
+    private void Toggle(string id, bool on)
+    {
+        if (on) _selected.Add(id);
+        else _selected.Remove(id);
+    }
+
+    private void SelectFound()
+    {
+        foreach (var table in Visible) _selected.Add(table.Id);
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanSave) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var name = _name.Trim();
+            if (Existing == null) await Api.CreateTagAsync(name, _color);
+            foreach (var id in _selected) await Api.AttachTagAsync(name, "table", id);
+            MudDialog.Close(DialogResult.Ok(name));
+        }
+        catch (ApiException e)
+        {
+            _error = e.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

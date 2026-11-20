@@ -1,5 +1,6 @@
 using GranitDB.API.Controllers.Base;
 using GranitDB.API.Data;
+using GranitDB.API.Exceptions;
 using GranitDB.API.Models;
 using GranitDB.API.Models.Descriptions;
 using GranitDB.API.Models.Inputs;
@@ -105,6 +106,86 @@ public class TableInfoController(ICatalogRepository repository, ColumnProfilingS
     {
         var profile = await profiling.ProfileTableAsync(id, ct);
         return profile == null ? NotFound() : Ok(profile);
+    }
+
+    /// <summary>
+    ///     Documente une table qui n'existe pas dans la source (fichier plat, service, table prévue) : la table et ses colonnes
+    ///     sont créées d'un coup (tout ou rien) et la synchronisation ne la supprime pas. Un nom déjà pris est refusé.
+    /// </summary>
+    [HttpPost("manual")]
+    public async Task<IActionResult> CreateManual([FromBody] ManualTableInput input, CancellationToken ct)
+    {
+        var name = input.Name.Trim();
+        var created = await Repository.InTransactionAsync(async repo =>
+        {
+            if (await repo.GetAsync<DatabaseInfo>(input.DatabaseId, ct) == null)
+                throw new GranitExceptions("La base n'existe pas.");
+            var existing = await repo.FindAsync<TableInfo>(nameof(TableInfo.DatabaseId), input.DatabaseId, ct);
+            if (existing.Any(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase)))
+                throw new GranitExceptions($"Une table nommée {name} existe déjà dans cette base.");
+            ValidateColumns(input.Columns, []);
+            var table = await repo.CreateAsync(new TableInfo
+            {
+                Name = name, DatabaseId = input.DatabaseId, TableType = input.TableType, IsManual = true,
+                Description = input.Description
+            }, ct);
+            await AddColumnsAsync(repo, table, input.Columns, 0, ct);
+            if (!string.IsNullOrEmpty(input.DomainId))
+            {
+                var domain = await repo.GetAsync<DomainInfo>(input.DomainId, ct);
+                if (domain == null || domain.DatabaseId != input.DatabaseId)
+                    throw new GranitExceptions("Le domaine n'existe pas dans cette base.");
+                await repo.CreateAsync(new DomainTableInfo { DomainId = domain.Id, TableId = table.Id }, ct);
+            }
+
+            return table;
+        }, ct);
+        await FillAsync([created], ct);
+        return CreatedAtAction(nameof(GetT), new { id = created.Id }, created);
+    }
+
+    /// <summary>Ajoute des colonnes à une table saisie à la main (une table venue de la source reçoit ses colonnes d'elle).</summary>
+    [HttpPost("{id}/columns")]
+    public async Task<IActionResult> AddColumns(string id, [FromBody] ManualColumnsInput input, CancellationToken ct)
+    {
+        var table = await Repository.InTransactionAsync<TableInfo?>(async repo =>
+        {
+            var t = await repo.GetAsync<TableInfo>(id, ct);
+            if (t == null) return null;
+            if (!t.IsManual)
+                throw new GranitExceptions("Les colonnes de cette table viennent de la source : on ne les saisit pas à la main.");
+            var existing = await repo.FindAsync<ColumnInfo>(nameof(ColumnInfo.TableId), id, ct);
+            ValidateColumns(input.Columns, existing.Select(c => c.Name));
+            await AddColumnsAsync(repo, t, input.Columns, existing.Count == 0 ? 0 : existing.Max(c => c.Position) + 1, ct);
+            return t;
+        }, ct);
+        if (table == null) return NotFound();
+        await FillAsync([table], ct);
+        return Ok(table);
+    }
+
+    private static void ValidateColumns(IEnumerable<ManualColumnInput> columns, IEnumerable<string> already)
+    {
+        var seen = already.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var column in columns)
+        {
+            var name = column.Name.Trim();
+            if (name.Length == 0) throw new GranitExceptions("Une colonne n'a pas de nom.");
+            if (!seen.Add(name)) throw new GranitExceptions($"La colonne {name} est saisie deux fois (ou existe déjà).");
+        }
+    }
+
+    private static async Task AddColumnsAsync(ICatalogRepository repo, TableInfo table, IEnumerable<ManualColumnInput> columns,
+        int firstPosition, CancellationToken ct)
+    {
+        var position = firstPosition;
+        foreach (var column in columns)
+            await repo.CreateAsync(new ColumnInfo
+            {
+                DatabaseId = table.DatabaseId, TableId = table.Id, Name = column.Name.Trim(), DataType = column.DataType.Trim(),
+                IsNullable = column.IsNullable && !column.IsPrimaryKey, IsPrimaryKey = column.IsPrimaryKey,
+                IsSensitive = column.IsSensitive, Description = column.Description, Position = position++
+            }, ct);
     }
 
     /// <summary>Colonnes d'une table, dans l'ordre de la table.</summary>

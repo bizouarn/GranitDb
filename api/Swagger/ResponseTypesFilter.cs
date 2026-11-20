@@ -16,6 +16,8 @@ public sealed class ResponseTypesFilter : IOperationFilter
 {
     private static readonly Dictionary<string, (Type Type, string Status)> Declared = new()
     {
+        ["TableInfo_CreateManual"] = (typeof(TableInfo), "201"),
+        ["TableInfo_AddColumns"] = (typeof(TableInfo), "200"),
         ["TableInfo_GetProfile"] = (typeof(TableProfileView), "200"),
         ["TableInfo_Profile"] = (typeof(TableProfileView), "200"),
         ["DatabaseInfo_Profile"] = (typeof(ProfileRunView), "200"),

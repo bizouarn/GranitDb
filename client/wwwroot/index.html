@@ -105,6 +105,8 @@
 			};
 			window.granitdb.unregisterShortcuts = () => { if (handler) document.removeEventListener("keydown", handler); handler = null; };
 			window.granitdb.focus = selector => { const el = document.querySelector(selector); if (el) el.focus(); };
+			// Grille de saisie : place le focus dans la cellule (ligne, colonne) de la grille.
+			window.granitdb.focusCell = (gridId, row, col) => { const el = document.querySelector('#' + gridId + ' [data-cell="' + row + ':' + col + '"]'); if (el) el.focus(); };
 			// where : next, prev, first, last ou parent (par rapport à l'élément de l'arbre qui a le focus).
 			window.granitdb.moveTreeFocus = where => {
 				const items = Array.from(document.querySelectorAll(".explorer [role=treeitem]")).filter(el => el.offsetParent !== null);

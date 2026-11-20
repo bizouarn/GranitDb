@@ -217,6 +217,10 @@ public class Client(HttpClient http)
 
     public async Task<TagInfo[]> GetTagsAsync() => (await OptionalAsync(() => _api.Tags.GetAllAsync(), []))!.ToArray();
 
+    /// <summary>Crée une étiquette (nom unique) avec sa couleur.</summary>
+    public Task<TagInfo> CreateTagAsync(string name, string? color) =>
+        CallAsync(() => _api.Tags.CreateAsync(new TagInput { Name = name, Color = color }));
+
     public Task UpdateTagAsync(TagInfo tag, string name, string? color) =>
         SendAsync(() => _api.Tags.UpdateAsync(tag.Id, new TagInput { Id = tag.Id, Name = name, Color = color }));
 
@@ -316,6 +320,23 @@ public class Client(HttpClient http)
     public Task SaveDomainSettingsAsync(string domainId, bool? showNeighbors = null, IEnumerable<string>? hiddenRelations = null) =>
         SendAsync(() => _api.Domains.SettingsAsync(domainId,
             new DomainSettingsInput { ShowNeighbors = showNeighbors, HiddenRelations = hiddenRelations?.ToList() }));
+
+    /// <summary>Masque aussi les relations indirectes (hors clés étrangères détectées) du domaine.</summary>
+    public Task HideIndirectRelationsAsync(string domainId) =>
+        SendAsync(() => _api.Domains.SettingsAsync(domainId, new DomainSettingsInput { HideIndirectRelations = true }));
+
+    /// <summary>Remet les relations masquées du domaine comme dans la documentation d'origine (Dataedo).</summary>
+    public Task ResetDomainToDocumentationAsync(string domainId) =>
+        SendAsync(() => _api.Domains.SettingsAsync(domainId, new DomainSettingsInput { ResetToDocumentation = true }));
+
+    // --- Tables saisies à la main ---
+
+    /// <summary>Crée d'un coup une table qui n'existe pas dans la source, avec ses colonnes (et son domaine).</summary>
+    public Task<TableInfo> CreateManualTableAsync(ManualTableInput input) => CallAsync(() => _api.Tables.CreateManualAsync(input));
+
+    /// <summary>Ajoute des colonnes à une table saisie à la main.</summary>
+    public Task<TableInfo> AddManualColumnsAsync(string tableId, IEnumerable<ManualColumnInput> columns) =>
+        CallAsync(() => _api.Tables.AddColumnsAsync(tableId, new ManualColumnsInput { Columns = columns.ToList() }));
 
     /// <summary>Mémorise la place de plusieurs tables du domaine.</summary>
     public Task SaveLayoutAsync(string domainId, IEnumerable<(string TableId, double X, double Y)> places) =>

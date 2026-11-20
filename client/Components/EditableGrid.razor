@@ -1,0 +1,182 @@
+@typeparam TRow where TRow : class, new()
+@inject IJSRuntime JS
+
+@* Grille de saisie commune : une ligne par élément, une colonne par champ, une ligne vide en fin de tableau, validation par
+   cellule, suppression d'une ligne, collage depuis un tableur. Tab passe d'une cellule à l'autre, Entrée descend à la ligne
+   suivante. Repliée en cartes empilées sur téléphone (voir workspace.css). *@
+<div class="egrid-wrap" id="@_id">
+    <table class="egrid" role="grid" aria-label="@Label">
+        <thead>
+            <tr role="row">
+                @foreach (var column in Columns)
+                {
+                    <th role="columnheader" scope="col" style="@(column.Width == null ? null : $"width: {column.Width}")">@column.Header</th>
+                }
+                <th role="columnheader" scope="col"><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @for (var i = 0; i < Rows.Count; i++)
+            {
+                var index = i;
+                var row = Rows[i];
+                var blank = IsBlank(row);
+                var last = i == Rows.Count - 1 && blank;
+                <tr role="row" class="@($"egrid-row{(last ? " egrid-row-new" : "")}")" data-row="@(i + 1)">
+                    @for (var c = 0; c < Columns.Count; c++)
+                    {
+                        var col = c;
+                        var column = Columns[c];
+                        var message = blank ? null : column.Validate?.Invoke(row, Rows);
+                        var readOnly = column.ReadOnly?.Invoke(row) ?? false;
+                        <td role="gridcell" data-label="@column.Header" class="@(message != null ? "egrid-cell-error" : null)">
+                            @switch (column.Kind)
+                            {
+                                case GridKind.Check:
+                                    <input type="checkbox" class="egrid-input" data-cell="@($"{i}:{c}")" checked="@(column.Get(row) == "true")" disabled="@readOnly"
+                                           aria-label="@($"{column.Header}, ligne {i + 1}")"
+                                           @onchange="e => EditAsync(row, column, ((bool?)e.Value) == true ? GridTrue : GridFalse)" />
+                                    break;
+                                case GridKind.Choice:
+                                    <select class="egrid-input" data-cell="@($"{i}:{c}")" disabled="@readOnly" aria-label="@($"{column.Header}, ligne {i + 1}")"
+                                            @onchange="e => EditAsync(row, column, e.Value?.ToString())">
+                                        @foreach (var choice in column.Choices ?? [])
+                                        {
+                                            <option value="@choice" selected="@(choice == column.Get(row))">@choice</option>
+                                        }
+                                    </select>
+                                    break;
+                                default:
+                                    <input type="text" class="egrid-input" data-cell="@($"{i}:{c}")" value="@column.Get(row)" readonly="@readOnly"
+                                           placeholder="@column.Placeholder" aria-label="@($"{column.Header}, ligne {i + 1}")"
+                                           aria-invalid="@(message != null ? "true" : null)"
+                                           @oninput="e => EditAsync(row, column, e.Value?.ToString())"
+                                           @onkeydown="e => OnKeyAsync(e, index, col)" />
+                                    break;
+                            }
+                            @if (message != null)
+                            {
+                                <div class="egrid-error" role="alert">@message</div>
+                            }
+                        </td>
+                    }
+                    <td role="gridcell" class="egrid-actions">
+                        @if (!last && AllowAdd)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="egrid-remove" OnClick="() => RemoveAsync(row)"
+                                           aria-label="@($"Supprimer la ligne {i + 1}")" Title="Supprimer la ligne" />
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (AllowPaste && AllowAdd)
+    {
+        <details class="egrid-paste">
+            <summary>Coller des lignes depuis un tableur</summary>
+            <MudText Typo="Typo.caption">
+                Une ligne par élément, les cellules séparées par une tabulation, dans l'ordre : @string.Join(", ", Columns.Select(c => c.Header)).
+            </MudText>
+            <textarea class="egrid-paste-text" rows="4" aria-label="Lignes à coller" @bind="_paste" @bind:event="oninput"></textarea>
+            @if (PastedRows.Count > 0)
+            {
+                <div class="egrid-paste-preview" role="status">
+                    @PastedRows.Count ligne@(PastedRows.Count > 1 ? "s" : "") reconnue@(PastedRows.Count > 1 ? "s" : "")@(PasteProblems > 0 ? $", dont {PasteProblems} avec un problème (visible après l'ajout)" : "").
+                </div>
+                <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="egrid-paste-add" OnClick="AddPastedAsync">Ajouter @PastedRows.Count ligne@(PastedRows.Count > 1 ? "s" : "")</MudButton>
+            }
+        </details>
+    }
+</div>
+
+@code {
+    private const string GridTrue = "true";
+    private const string GridFalse = "false";
+    private static int _counter;
+    private readonly string _id = $"egrid-{Interlocked.Increment(ref _counter)}";
+    private string _paste = "";
+
+    /// <summary>Les lignes ; la dernière est toujours une ligne vide pour en ajouter (la grille l'ajoute si elle manque).</summary>
+    [Parameter, EditorRequired] public List<TRow> Rows { get; set; } = [];
+
+    [Parameter, EditorRequired] public IReadOnlyList<GridColumn<TRow>> Columns { get; set; } = [];
+
+    /// <summary>Une ligne vide est ignorée (ni validée, ni enregistrée).</summary>
+    [Parameter, EditorRequired] public Func<TRow, bool> IsBlank { get; set; } = _ => false;
+
+    [Parameter] public string Label { get; set; } = "Grille de saisie";
+
+    [Parameter] public bool AllowPaste { get; set; } = true;
+
+    /// <summary>Faux : on ne modifie que les lignes données (pas de ligne vide en fin de tableau, ni de suppression, ni de collage).</summary>
+    [Parameter] public bool AllowAdd { get; set; } = true;
+
+    /// <summary>Une cellule ou une ligne a changé (pour que la fenêtre mette à jour ce qui en dépend).</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    protected override void OnParametersSet() => EnsureTrailingBlank();
+
+    private void EnsureTrailingBlank()
+    {
+        if (AllowAdd && (Rows.Count == 0 || !IsBlank(Rows[^1]))) Rows.Add(new TRow());
+    }
+
+    private List<string[]> PastedRows => GridValidation.ParsePaste(_paste);
+
+    private int PasteProblems
+    {
+        get
+        {
+            var rows = PastedRows.Select(ToRow).ToList();
+            return GridValidation.Problems(Columns, rows, IsBlank).Select(p => p.Row).Distinct().Count();
+        }
+    }
+
+    private TRow ToRow(string[] cells)
+    {
+        var row = new TRow();
+        for (var c = 0; c < Columns.Count && c < cells.Length; c++)
+            Columns[c].Set(row, Columns[c].Kind == GridKind.Check ? (GridValidation.IsYes(cells[c]) ? GridTrue : GridFalse) : cells[c]);
+        return row;
+    }
+
+    private async Task AddPastedAsync()
+    {
+        var added = PastedRows.Select(ToRow).ToList();
+        if (added.Count == 0) return;
+        if (Rows.Count > 0 && IsBlank(Rows[^1])) Rows.RemoveAt(Rows.Count - 1);
+        Rows.AddRange(added);
+        EnsureTrailingBlank();
+        _paste = "";
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task EditAsync(TRow row, GridColumn<TRow> column, string? value)
+    {
+        column.Set(row, value);
+        EnsureTrailingBlank();
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(TRow row)
+    {
+        Rows.Remove(row);
+        EnsureTrailingBlank();
+        await OnChanged.InvokeAsync();
+    }
+
+    /// <summary>Entrée passe à la même colonne, ligne suivante (la ligne vide de fin est créée dès la première frappe).</summary>
+    private async Task OnKeyAsync(KeyboardEventArgs e, int row, int column)
+    {
+        if (e.Key != "Enter" || row + 1 >= Rows.Count) return;
+        try
+        {
+            await JS.InvokeVoidAsync("granitdb.focusCell", _id, row + 1, column);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+        }
+    }
+}
