@@ -29,11 +29,7 @@
                             GranitDb lit uniquement le <strong>schéma</strong> (tables, colonnes, clés, index), jamais les données.
                             Pour un fichier SQLite, fermez cette fenêtre et déposez-le sur la page des bases.
                         </MudText>
-                        <NativeSelect Label="Type de base" Value="@_form.Engine" ValueChanged="SetEngine" Class="field-engine">
-                            <option value="@ServerEngines.SqlServer">Microsoft SQL Server</option>
-                            <option value="@ServerEngines.PostgreSql">PostgreSQL</option>
-                            <option value="@ServerEngines.MySql">MySQL / MariaDB</option>
-                        </NativeSelect>
+                        <EngineSelect Value="@_form.Engine" ValueChanged="SetEngine" />
                         <MudText Typo="Typo.body2">@RightHint</MudText>
                     </MudStack>
                     break;
@@ -45,67 +41,28 @@
                                 La connexion est enregistrée chiffrée sur le serveur de l'API et n'est jamais renvoyée.
                                 Si l'API tourne dans Docker, <code>localhost</code> désigne le conteneur : saisissez <code>host.docker.internal</code>.
                             </MudText>
-                            <MudGrid>
-                                <MudItem xs="12" sm="8">
-                                    <MudTextField T="string" @bind-Value="_form.Server" Label="Serveur" Placeholder="@ServerPlaceholder" Immediate="true"
-                                                  Class="field-server" Required="true" AutoFocus="true" />
-                                </MudItem>
-                                <MudItem xs="12" sm="4">
-                                    <MudNumericField T="int?" @bind-Value="_form.Port" Label="@($"Port ({ServerEngines.DefaultPort(_form.Engine)} par défaut)")"
-                                                     Min="1" Max="65535" Class="field-port" HideSpinButtons="true" />
-                                </MudItem>
-                                <MudItem xs="12">
-                                    <MudTextField T="string" @bind-Value="_form.Database" Label="Base de données" Immediate="true" Class="field-database" Required="true" />
-                                </MudItem>
-                                <MudItem xs="12" sm="4">
-                                    <NativeSelect Label="Authentification" Value="@_form.AuthMode" ValueChanged="@(v => _form.AuthMode = v)" Class="field-auth">
-                                        <option value="Sql">Identifiant et mot de passe</option>
-                                        @if (ServerEngines.SupportsIntegrated(_form.Engine))
-                                        {
-                                            <option value="Integrated">Compte Windows de l'API</option>
-                                        }
-                                    </NativeSelect>
-                                </MudItem>
-                                @if (_form.AuthMode == "Sql")
-                                {
-                                    <MudItem xs="12" sm="4">
-                                        <MudTextField T="string" @bind-Value="_form.User" Label="Identifiant" Immediate="true" Class="field-user" autocomplete="off" />
-                                    </MudItem>
-                                    <MudItem xs="12" sm="4">
-                                        <MudTextField T="string" @bind-Value="_form.Password" Label="Mot de passe" InputType="InputType.Password" Immediate="true"
-                                                      Class="field-password" autocomplete="new-password" />
-                                    </MudItem>
-                                }
-                            </MudGrid>
-                            <MudCheckBox T="bool" @bind-Value="_form.Encrypt" Label="Chiffrer la connexion (recommandé)" Class="field-encrypt" />
-                            <MudCheckBox T="bool" @bind-Value="_form.TrustServerCertificate" Label="Faire confiance au certificat du serveur (déconseillé en production)" Class="field-trust" />
-                            @if (!_form.Encrypt)
-                            {
-                                <MudAlert Severity="Severity.Warning" Dense="true" Class="unencrypted-warning">
-                                    Sans chiffrement, l'identifiant et le mot de passe circulent en clair sur le réseau.
-                                </MudAlert>
-                            }
+                            <ServerConnectionFields Form="_form" AutoFocus="true" OnChanged="@(() => { })" />
                         </MudStack>
                     </form>
                     break;
 
                 case Step.Content:
                     <MudStack Spacing="2" Class="wizard-content">
-                        <MudAlert Severity="Severity.Success" Dense="true" Class="connection-test">@_test!.Message</MudAlert>
-                        @if (_test.Schemas.Count > 0 && ServerEngines.SupportsSchemas(_form.Engine))
+                        <MudAlert Severity="Severity.Success" Dense="true" Class="connection-test">@_schemas.Test!.Message</MudAlert>
+                        @if (_schemas.Applies(_form.Engine))
                         {
                             <fieldset class="wizard-schemas" id="schemas">
                                 <legend class="native-select-label">Schémas à documenter</legend>
-                                @foreach (var schema in _test.Schemas)
+                                @foreach (var schema in _schemas.Test.Schemas)
                                 {
                                     var current = schema;
                                     <div>
-                                        <MudCheckBox T="bool" Value="@_selected.Contains(current.Name)" ValueChanged="@(on => ToggleSchema(current.Name, on))"
+                                        <MudCheckBox T="bool" Value="@_schemas.IsSelected(current.Name)" ValueChanged="@(on => _schemas.Toggle(current.Name, on))"
                                                      Label="@($"{current.Name} ({current.Tables})")" Dense="true" Size="Size.Small" />
                                     </div>
                                 }
                             </fieldset>
-                            @if (_selected.Count == 0)
+                            @if (_schemas.SelectedCount == 0)
                             {
                                 <MudText Typo="Typo.caption" Color="Color.Warning" Class="wizard-schema-hint">Cochez au moins un schéma à documenter.</MudText>
                             }
@@ -170,9 +127,8 @@
     [Parameter] public DatabaseView? Existing { get; set; }
 
     private readonly ServerConnectionInput _form = new();
-    private readonly HashSet<string> _selected = [];
+    private readonly SchemaChoice _schemas = new();
     private List<StepInfo> _steps = [];
-    private ConnectionTestResult? _test;
     private int _step;
     private bool _busy;
     private string? _error;
@@ -192,24 +148,11 @@
 
     private string StepClass(int index) => index == _step ? "wizard-step current" : index < _step ? "wizard-step done" : "wizard-step";
 
-    private string ServerPlaceholder => _form.Engine switch
-    {
-        ServerEngines.PostgreSql => "pg.exemple.fr",
-        ServerEngines.MySql => "mysql.exemple.fr",
-        _ => "srv-sql.exemple.fr ou localhost\\SQLEXPRESS"
-    };
+    private MarkupString RightHint => new(ServerEngines.RightHint(_form.Engine));
 
-    private MarkupString RightHint => new(_form.Engine switch
-    {
-        ServerEngines.PostgreSql => "Un compte qui peut se connecter à la base et a <code>USAGE</code> sur les schémas suffit.",
-        ServerEngines.MySql => "Un compte qui peut lire la base (<code>SELECT</code>) suffit ; seules les métadonnées sont consultées.",
-        _ => "Un compte qui a seulement l'autorisation <code>VIEW DEFINITION</code> suffit."
-    });
+    private bool ConnectionReady => _form.IsReady();
 
-    private bool ConnectionReady => !string.IsNullOrWhiteSpace(_form.Server) && !string.IsNullOrWhiteSpace(_form.Database)
-                                    && (_form.AuthMode != "Sql" || (!string.IsNullOrWhiteSpace(_form.User) && !string.IsNullOrEmpty(_form.Password)));
-
-    private bool SchemasChosen => _test is not { Schemas.Count: > 0 } || !ServerEngines.SupportsSchemas(_form.Engine) || _selected.Count > 0;
+    private bool SchemasChosen => !_schemas.Applies(_form.Engine) || _schemas.SelectedCount > 0;
 
     /// <summary>Le bouton « Suivant » reste grisé tant que l'étape est incomplète (jamais d'erreur seulement après l'envoi).</summary>
     private bool CanContinue => _steps[_step].Key switch
@@ -223,7 +166,7 @@
     {
         get
         {
-            var chosen = ChosenSchemas();
+            var chosen = _schemas.Chosen(_form.Engine);
             var scope = chosen == null ? "tous les schémas" : chosen.Count == 1 ? $"le schéma {chosen[0]}" : $"{chosen.Count} schémas";
             var name = string.IsNullOrWhiteSpace(_form.Name) ? _form.Database : _form.Name;
             return IsEdit
@@ -234,22 +177,9 @@
 
     private void SetEngine(string engine)
     {
-        _form.Engine = engine;
-        if (!ServerEngines.SupportsIntegrated(engine)) _form.AuthMode = "Sql";
-        _test = null;
+        _form.SetEngine(engine);
+        _schemas.Set(null);
         _error = null;
-    }
-
-    private List<string>? ChosenSchemas()
-    {
-        if (_test is not { Ok: true } || _test.Schemas.Count == 0 || !ServerEngines.SupportsSchemas(_form.Engine)) return null;
-        return _selected.Count == _test.Schemas.Count ? null : _selected.ToList();
-    }
-
-    private void ToggleSchema(string name, bool on)
-    {
-        if (on) _selected.Add(name);
-        else _selected.Remove(name);
     }
 
     private void Cancel() => MudDialog.Cancel();
@@ -275,27 +205,19 @@
         try
         {
             var result = await Api.TestServerAsync(_form);
-            if (!result.Ok)
-            {
-                _test = null;
-                _error = result.Message;
-                return false;
-            }
-
-            _test = result;
-            _selected.Clear();
-            foreach (var schema in result.Schemas) _selected.Add(schema.Name);
-            return true;
+            _schemas.Set(result.Ok ? result : null);
+            if (!result.Ok) _error = result.Message;
+            return result.Ok;
         }
         catch (ApiException ex)
         {
-            _test = null;
+            _schemas.Set(null);
             _error = ex.Message;
             return false;
         }
         catch (HttpRequestException)
         {
-            _test = null;
+            _schemas.Set(null);
             _error = "L'API est injoignable.";
             return false;
         }
@@ -312,12 +234,10 @@
         _error = null;
         try
         {
-            _form.Schemas = ChosenSchemas();
+            _form.Schemas = _schemas.Chosen(_form.Engine);
             var result = Existing == null ? await Api.ImportServerAsync(_form) : await Api.UpdateServerConnectionAsync(Existing.Id, _form);
             Workspace.NotifyCatalogChanged(Existing?.Id, this);
-            Notifier.Show(Existing == null
-                ? $"Base {result.Database.Name} importée : {result.Sync.TablesAdded} table(s), {result.Sync.ColumnsAdded} colonne(s)."
-                : $"Connexion enregistrée et base resynchronisée : {result.Sync.TablesAdded} table(s) ajoutée(s), {result.Sync.TablesRemoved} supprimée(s).");
+            Notifier.Show(Phrases.ServerSaved(result, Existing != null));
             _form.Password = null; // le mot de passe ne reste pas dans la page
             MudDialog.Close(DialogResult.Ok(result.Database.Id));
         }

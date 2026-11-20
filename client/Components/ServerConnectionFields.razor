@@ -1,0 +1,68 @@
+@using GranitDb.Client.Models
+@* Les champs d'une connexion à un serveur (serveur, port, base, authentification, chiffrement) : partagés par la page de
+   connexion et l'assistant d'import, qui ne diffèrent que par ce qui les entoure. *@
+<MudGrid>
+    <MudItem xs="12" sm="8">
+        <MudTextField T="string" @bind-Value="Form.Server" @bind-Value:after="ChangedAsync" Label="Serveur"
+                      Placeholder="@ServerEngines.ServerPlaceholder(Form.Engine)" Immediate="true" Class="field-server" Required="true"
+                      AutoFocus="AutoFocus" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudNumericField T="int?" @bind-Value="Form.Port" @bind-Value:after="ChangedAsync" Min="1" Max="65535" Class="field-port"
+                         Label="@($"Port ({ServerEngines.DefaultPort(Form.Engine)} par défaut)")" HideSpinButtons="true" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudTextField T="string" @bind-Value="Form.Database" @bind-Value:after="ChangedAsync" Label="Base de données" Immediate="true"
+                      Class="field-database" Required="true" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <NativeSelect Label="Authentification" Value="@Form.AuthMode" ValueChanged="AuthChangedAsync" Class="field-auth">
+            <option value="Sql">Identifiant et mot de passe</option>
+            @if (ServerEngines.SupportsIntegrated(Form.Engine))
+            {
+                <option value="Integrated">Compte Windows de l'API</option>
+            }
+        </NativeSelect>
+    </MudItem>
+    @if (Form.AuthMode == "Sql")
+    {
+        <MudItem xs="12" sm="4">
+            <MudTextField T="string" @bind-Value="Form.User" @bind-Value:after="ChangedAsync" Label="Identifiant" Immediate="true"
+                          Class="field-user" autocomplete="off" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudTextField T="string" @bind-Value="Form.Password" @bind-Value:after="ChangedAsync" Label="Mot de passe"
+                          InputType="InputType.Password" Immediate="true" Class="field-password" autocomplete="new-password" />
+        </MudItem>
+    }
+</MudGrid>
+<MudCheckBox T="bool" @bind-Value="Form.Encrypt" @bind-Value:after="ChangedAsync" Label="Chiffrer la connexion (recommandé)" Class="field-encrypt" />
+<MudCheckBox T="bool" @bind-Value="Form.TrustServerCertificate" @bind-Value:after="ChangedAsync"
+             Label="Faire confiance au certificat du serveur (déconseillé en production)" Class="field-trust" />
+@if (!Form.Encrypt)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="unencrypted-warning">
+        Sans chiffrement, l'identifiant et le mot de passe circulent en clair sur le réseau.
+    </MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired] public ServerConnectionInput Form { get; set; } = null!;
+
+    [Parameter] public bool AutoFocus { get; set; }
+
+    /// <summary>Un champ a changé : la page ou l'assistant qui l'entoure met à jour ce qui en dépend (boutons, résultat du test).</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    /// <summary>Le mode d'authentification a changé (le test précédent ne vaut plus).</summary>
+    [Parameter] public EventCallback OnAuthChanged { get; set; }
+
+    private Task ChangedAsync() => OnChanged.InvokeAsync();
+
+    private async Task AuthChangedAsync(string mode)
+    {
+        Form.AuthMode = mode;
+        await OnAuthChanged.InvokeAsync();
+        await OnChanged.InvokeAsync();
+    }
+}

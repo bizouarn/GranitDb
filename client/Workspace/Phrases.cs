@@ -49,4 +49,9 @@ public static class Phrases
             text += $" Elle s'appuie elle-même sur {dependencies} {(dependencies == 1 ? "autre élément" : "autres éléments")}.";
         return text;
     }
+
+    /// <summary>Le message après l'import d'une base serveur, ou après le remplacement de sa connexion.</summary>
+    public static string ServerSaved(GranitDb.Client.Models.ImportView result, bool isEdit) => isEdit
+        ? $"Connexion enregistrée et base resynchronisée : {result.Sync.TablesAdded} table(s) ajoutée(s), {result.Sync.TablesRemoved} supprimée(s)."
+        : $"Base {result.Database.Name} importée : {result.Sync.TablesAdded} table(s), {result.Sync.ColumnsAdded} colonne(s).";
 }

@@ -1,0 +1,13 @@
+@using GranitDb.Client.Models
+@* Le choix du type de base (moteur client/serveur). *@
+<NativeSelect Label="Type de base" Value="@Value" ValueChanged="ValueChanged" Class="field-engine">
+    <option value="@ServerEngines.SqlServer">Microsoft SQL Server</option>
+    <option value="@ServerEngines.PostgreSql">PostgreSQL</option>
+    <option value="@ServerEngines.MySql">MySQL / MariaDB</option>
+</NativeSelect>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+}

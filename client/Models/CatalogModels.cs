@@ -115,10 +115,73 @@ public static class ServerEngines
 
     /// <summary>Le moteur range les tables dans des schémas qu'on peut choisir (MySQL : la base est l'unité).</summary>
     public static bool SupportsSchemas(string? engine) => engine != MySql;
+
+    public static string ServerPlaceholder(string? engine) => engine switch
+    {
+        PostgreSql => "pg.exemple.fr",
+        MySql => "mysql.exemple.fr",
+        _ => "srv-sql.exemple.fr ou localhost\\SQLEXPRESS"
+    };
+
+    /// <summary>Le droit minimal du compte, selon le moteur (lecture des métadonnées seulement), en HTML.</summary>
+    public static string RightHint(string? engine) => engine switch
+    {
+        PostgreSql => "Un compte qui peut se connecter à la base et a <code>USAGE</code> sur les schémas suffit.",
+        MySql => "Un compte qui peut lire la base (<code>SELECT</code>) suffit ; seules les métadonnées sont consultées.",
+        _ => "Un compte qui a seulement l'autorisation <code>VIEW DEFINITION</code> suffit."
+    };
+}
+
+/// <summary>Les schémas qu'une connexion testée propose, et ceux que la personne a cochés.</summary>
+public sealed class SchemaChoice
+{
+    private readonly HashSet<string> _selected = [];
+
+    public ConnectionTestResult? Test { get; private set; }
+
+    public int SelectedCount => _selected.Count;
+
+    public bool IsSelected(string name) => _selected.Contains(name);
+
+    /// <summary>Retient le résultat d'un test (ou l'oublie : <c>null</c>) ; tous les schémas sont cochés au départ.</summary>
+    public void Set(ConnectionTestResult? test)
+    {
+        Test = test;
+        _selected.Clear();
+        if (test != null)
+            foreach (var schema in test.Schemas) _selected.Add(schema.Name);
+    }
+
+    public void Toggle(string name, bool on)
+    {
+        if (on) _selected.Add(name);
+        else _selected.Remove(name);
+    }
+
+    /// <summary>Le moteur propose des schémas à choisir pour ce test.</summary>
+    public bool Applies(string? engine) => Test is { Ok: true, Schemas.Count: > 0 } && ServerEngines.SupportsSchemas(engine);
+
+    /// <summary>Les schémas cochés ; <c>null</c> (tous) quand rien n'a été restreint.</summary>
+    public List<string>? Chosen(string? engine)
+    {
+        if (!Applies(engine)) return null;
+        return _selected.Count == Test!.Schemas.Count ? null : _selected.ToList();
+    }
 }
 
 public partial class ServerConnectionInput
 {
+    /// <summary>Les champs obligatoires sont remplis (le serveur de l'API valide le reste).</summary>
+    public bool IsReady() => !string.IsNullOrWhiteSpace(Server) && !string.IsNullOrWhiteSpace(Database)
+                             && (AuthMode != "Sql" || (!string.IsNullOrWhiteSpace(User) && !string.IsNullOrEmpty(Password)));
+
+    /// <summary>Changer de moteur remet le formulaire à ce que ce moteur permet (pas d'authentification Windows hors SQL Server).</summary>
+    public void SetEngine(string engine)
+    {
+        Engine = engine;
+        if (!ServerEngines.SupportsIntegrated(engine)) AuthMode = "Sql";
+    }
+
     public ServerConnectionInput()
     {
         Engine = ServerEngines.SqlServer;

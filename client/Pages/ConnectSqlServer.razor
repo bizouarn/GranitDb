@@ -48,51 +48,11 @@
                 @if (EditId == null)
                 {
                     <MudItem xs="12">
-                        <NativeSelect Label="Type de base" Value="@_form.Engine" ValueChanged="SetEngine" Class="field-engine">
-                            <option value="@ServerEngines.SqlServer">Microsoft SQL Server</option>
-                            <option value="@ServerEngines.PostgreSql">PostgreSQL</option>
-                            <option value="@ServerEngines.MySql">MySQL / MariaDB</option>
-                        </NativeSelect>
-                    </MudItem>
-                }
-                <MudItem xs="12" sm="8">
-                    <MudTextField T="string" @bind-Value="_form.Server" Label="Serveur" Placeholder="@ServerPlaceholder"
-                                  Immediate="true" Class="field-server" Required="true" />
-                </MudItem>
-                <MudItem xs="12" sm="4">
-                    <MudNumericField T="int?" @bind-Value="_form.Port" Label="@($"Port (facultatif, {ServerEngines.DefaultPort(_form.Engine)} par défaut)")" Min="1" Max="65535" Class="field-port" HideSpinButtons="true" />
-                </MudItem>
-                <MudItem xs="12">
-                    <MudTextField T="string" @bind-Value="_form.Database" Label="Base de données" Immediate="true" Class="field-database" Required="true" />
-                </MudItem>
-                <MudItem xs="12" sm="4">
-                    <NativeSelect Label="Authentification" Value="@_form.AuthMode" ValueChanged="@(v => { _form.AuthMode = v; _test = null; })" Class="field-auth">
-                        <option value="Sql">Identifiant et mot de passe</option>
-                        @if (ServerEngines.SupportsIntegrated(_form.Engine))
-                        {
-                            <option value="Integrated">Compte Windows de l'API</option>
-                        }
-                    </NativeSelect>
-                </MudItem>
-                @if (_form.AuthMode == "Sql")
-                {
-                    <MudItem xs="12" sm="4">
-                        <MudTextField T="string" @bind-Value="_form.User" Label="Identifiant" Immediate="true" Class="field-user" autocomplete="off" />
-                    </MudItem>
-                    <MudItem xs="12" sm="4">
-                        <MudTextField T="string" @bind-Value="_form.Password" Label="Mot de passe" InputType="InputType.Password" Immediate="true"
-                                      Class="field-password" autocomplete="new-password" />
+                        <EngineSelect Value="@_form.Engine" ValueChanged="SetEngine" />
                     </MudItem>
                 }
                 <MudItem xs="12">
-                    <MudCheckBox T="bool" @bind-Value="_form.Encrypt" Label="Chiffrer la connexion (recommandé)" Class="field-encrypt" />
-                    <MudCheckBox T="bool" @bind-Value="_form.TrustServerCertificate" Label="Faire confiance au certificat du serveur (déconseillé en production)" Class="field-trust" />
-                    @if (!_form.Encrypt)
-                    {
-                        <MudAlert Severity="Severity.Warning" Dense="true" Class="unencrypted-warning">
-                            Sans chiffrement, l'identifiant et le mot de passe circulent en clair sur le réseau.
-                        </MudAlert>
-                    }
+                    <ServerConnectionFields Form="_form" OnChanged="@(() => { })" OnAuthChanged="@(() => _schemas.Set(null))" />
                 </MudItem>
                 @if (EditId == null)
                 {
@@ -122,18 +82,18 @@
             <MudAlert Severity="Severity.Error" Class="mt-3 connection-error">@_error</MudAlert>
         }
 
-        @if (_test != null)
+        @if (_schemas.Test is { } test)
         {
-            <MudAlert Severity="@(_test.Ok ? Severity.Success : Severity.Error)" Class="mt-3 connection-test">@_test.Message</MudAlert>
-            @if (_test.Ok && _test.Schemas.Count > 0 && ServerEngines.SupportsSchemas(_form.Engine))
+            <MudAlert Severity="@(test.Ok ? Severity.Success : Severity.Error)" Class="mt-3 connection-test">@test.Message</MudAlert>
+            @if (_schemas.Applies(_form.Engine))
             {
                 <MudPaper Class="pa-3 mt-3" Outlined="true" id="schemas">
                     <MudText Typo="Typo.subtitle2">Schémas à documenter</MudText>
-                    @foreach (var schema in _test.Schemas)
+                    @foreach (var schema in test.Schemas)
                     {
                         var current = schema;
                         <div>
-                            <MudCheckBox T="bool" Value="@_selected.Contains(schema.Name)" ValueChanged="@(on => ToggleSchema(current.Name, on))"
+                            <MudCheckBox T="bool" Value="@_schemas.IsSelected(schema.Name)" ValueChanged="@(on => _schemas.Toggle(current.Name, on))"
                                          Label="@($"{schema.Name} ({schema.Tables})")" Dense="true" Size="Size.Small" />
                         </div>
                     }
@@ -147,8 +107,7 @@
     private readonly ServerConnectionInput _form = new();
     private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false };
     private DatabaseView? _existing;
-    private ConnectionTestResult? _test;
-    private readonly HashSet<string> _selected = [];
+    private readonly SchemaChoice _schemas = new();
     private bool _loading = true;
     private bool _busy;
     private string? _error;
@@ -158,34 +117,16 @@
 
     private string Title => EditId == null ? $"Connecter un serveur {ServerEngines.DisplayName(_form.Engine)}" : $"Modifier la connexion de {_existing?.Name ?? "la base"}";
 
-    private string ServerPlaceholder => _form.Engine switch
-    {
-        ServerEngines.PostgreSql => "pg.exemple.fr",
-        ServerEngines.MySql => "mysql.exemple.fr",
-        _ => "srv-sql.exemple.fr ou localhost\\SQLEXPRESS"
-    };
+    private MarkupString RightHint => new(ServerEngines.RightHint(_form.Engine));
 
-    /// <summary>Le droit minimal du compte, selon le moteur (lecture des métadonnées seulement).</summary>
-    private MarkupString RightHint => new(_form.Engine switch
-    {
-        ServerEngines.PostgreSql => "Un compte qui peut se connecter à la base et a <code>USAGE</code> sur les schémas suffit.",
-        ServerEngines.MySql => "Un compte qui peut lire la base (<code>SELECT</code>) suffit ; seules les métadonnées sont consultées.",
-        _ => "Un compte qui a seulement l'autorisation <code>VIEW DEFINITION</code> suffit."
-    });
-
-    /// <summary>Changer de moteur remet le formulaire à ce que ce moteur permet (pas d'authentification Windows hors SQL Server).</summary>
     private void SetEngine(string engine)
     {
-        _form.Engine = engine;
-        if (!ServerEngines.SupportsIntegrated(engine)) _form.AuthMode = "Sql";
-        _test = null;
+        _form.SetEngine(engine);
+        _schemas.Set(null);
         _error = null;
     }
 
-
-    /// <summary>Les champs obligatoires sont remplis (le serveur de l'API valide le reste).</summary>
-    private bool Ready => !string.IsNullOrWhiteSpace(_form.Server) && !string.IsNullOrWhiteSpace(_form.Database)
-                          && (_form.AuthMode != "Sql" || (!string.IsNullOrWhiteSpace(_form.User) && !string.IsNullOrEmpty(_form.Password)));
+    private bool Ready => _form.IsReady();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -199,37 +140,22 @@
         _loading = false;
     }
 
-    /// <summary>Les schémas cochés ; <c>null</c> (tous) quand rien n'a été restreint.</summary>
-    private List<string>? ChosenSchemas()
-    {
-        if (_test is not { Ok: true } || _test.Schemas.Count == 0 || !ServerEngines.SupportsSchemas(_form.Engine)) return null;
-        return _selected.Count == _test.Schemas.Count ? null : _selected.ToList();
-    }
-
-    private void ToggleSchema(string name, bool on)
-    {
-        if (on) _selected.Add(name);
-        else _selected.Remove(name);
-    }
-
     private async Task TestAsync()
     {
         _busy = true;
         _error = null;
         try
         {
-            _test = await Api.TestServerAsync(_form);
-            _selected.Clear();
-            foreach (var schema in _test.Schemas) _selected.Add(schema.Name);
+            _schemas.Set(await Api.TestServerAsync(_form));
         }
         catch (ApiException ex)
         {
-            _test = null;
+            _schemas.Set(null);
             _error = ex.Message;
         }
         catch (HttpRequestException)
         {
-            _test = null;
+            _schemas.Set(null);
             _error = "L'API est injoignable.";
         }
         finally
@@ -240,7 +166,7 @@
 
     private async Task SaveAsync()
     {
-        if (_test is { Ok: true } && _selected.Count == 0 && ServerEngines.SupportsSchemas(_form.Engine))
+        if (_schemas.Applies(_form.Engine) && _schemas.SelectedCount == 0)
         {
             _error = "Cochez au moins un schéma à documenter.";
             return;
@@ -250,12 +176,10 @@
         _error = null;
         try
         {
-            _form.Schemas = ChosenSchemas();
+            _form.Schemas = _schemas.Chosen(_form.Engine);
             var result = EditId == null ? await Api.ImportServerAsync(_form) : await Api.UpdateServerConnectionAsync(EditId, _form);
             Workspace.NotifyCatalogChanged(EditId, this);
-            Notifier.Show(EditId == null
-                ? $"Base {result.Database.Name} importée : {result.Sync.TablesAdded} table(s), {result.Sync.ColumnsAdded} colonne(s)."
-                : $"Connexion enregistrée et base resynchronisée : {result.Sync.TablesAdded} table(s) ajoutée(s), {result.Sync.TablesRemoved} supprimée(s).");
+            Notifier.Show(Phrases.ServerSaved(result, EditId != null));
             _form.Password = null; // le mot de passe ne reste pas dans la page
             Navigation.NavigateTo($"/databases/{result.Database.Id}");
         }
