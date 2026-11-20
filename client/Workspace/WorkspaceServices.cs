@@ -11,7 +11,6 @@ public static class WorkspaceServices
         services.AddScoped<Notifier>();
         services.AddScoped<CatalogCache>();
         services.AddScoped<AuthState>();
-        services.AddScoped<DiagramPanelState>();
         return services;
     }
 }

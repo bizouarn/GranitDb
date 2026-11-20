@@ -519,31 +519,14 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     }
 
     [BunitFact]
-    public async Task The_diagram_publishes_its_table_list_for_the_sidebar_and_stops_repeating_it_once_the_sidebar_shows_it()
+    public void The_diagram_page_keeps_its_own_table_picker_and_nothing_is_added_to_the_sidebar()
     {
-        var panels = _ctx.Services.GetRequiredService<DiagramPanelState>();
         var page = Open();
 
-        Assert.NotNull(panels.Current);
-        Assert.Equal(4, panels.Current!.Tables.Count);
-        Assert.Equal(4, panels.Current.Shown.Count);
-        Assert.NotNull(panels.Current.SelectAll); // vue libre : « Toutes » / « Aucune »
-        Assert.NotEmpty(page.FindAll(".table-picker")); // sans barre latérale, la page garde sa liste
-
-        await page.InvokeAsync(() => panels.Current.Toggle("t3", false));
-        page.WaitForAssertion(() => Assert.Equal(3, page.FindAll("g.er-node").Count));
-        Assert.DoesNotContain("t3", panels.Current!.Shown);
-
-        panels.AddHost();
-        page.WaitForAssertion(() => Assert.Empty(page.FindAll(".table-picker")));
-        Assert.NotEmpty(page.FindAll(".picker-in-sidebar"));
+        Assert.NotEmpty(page.FindAll(".table-picker"));
+        Assert.Empty(page.FindAll(".picker-in-sidebar"));
 
         SelectDomain(page, "Ventes");
-        Assert.Equal("Ventes", panels.Current!.DomainName);
-        Assert.Null(panels.Current.SelectAll); // dans un domaine, on coche pour ranger
-        Assert.Equal(["t2"], panels.Current.Shown.ToArray());
-
-        page.Instance.Dispose();
-        Assert.Null(panels.Current); // quitter la page vide la barre latérale
+        Assert.NotEmpty(page.FindAll(".table-picker"));
     }
 }

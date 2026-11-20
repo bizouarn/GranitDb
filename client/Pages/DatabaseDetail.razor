@@ -53,28 +53,29 @@
                 <MudButton Variant="Variant.Outlined" OnClick="PreviewSyncAsync" Disabled="_syncing"
                            StartIcon="@Icons.Material.Filled.Sync">Resynchroniser</MudButton>
             }
-            @if (!Single && Auth.CanEdit)
-            {
-                <MudButton Variant="Variant.Outlined" OnClick="NewTableAsync" StartIcon="@Icons.Material.Filled.AddBox" Class="new-table"
-                           title="Documenter une table qui n'existe pas dans la source (fichier plat, service, table prévue)">Nouvelle table</MudButton>
-            }
-            @if (!Single && CanProfile)
-            {
-                <MudButton Variant="Variant.Outlined" OnClick="ProfileDatabaseAsync" Disabled="_profilingDatabase"
-                           StartIcon="@Icons.Material.Filled.QueryStats" Class="profile-database"
-                           title="Compte les lignes, les nuls et les valeurs distinctes de chaque colonne, à la source (aucune valeur n'est lue ni gardée)">Profiler les colonnes</MudButton>
-            }
-            @if (!Single && Auth.CanEdit)
-            {
-                <MudButton Variant="Variant.Outlined" Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/documentation")"
-                           StartIcon="@Icons.Material.Filled.AutoAwesome" Class="documentation-assistant"
-                           title="Propositions de descriptions (modèle d'IA local) et de colonnes sensibles, à relire avant d'être enregistrées">Assistant de documentation</MudButton>
-            }
             @if (!Single && (Auth.CanEdit || CanProfile))
             {
-                <MudButton Variant="Variant.Outlined" Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/relations")"
-                           StartIcon="@Icons.Material.Filled.AccountTree" Class="relation-suggestions"
-                           title="Relations que le schéma ne déclare pas, détectées par le nom des colonnes et vérifiées par des comptes">Relations suggérées</MudButton>
+                @* Les outils de documentation dans un seul menu, comme l'export. *@
+                <MudMenu Label="Documenter" StartIcon="@Icons.Material.Filled.EditNote" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+                         Variant="Variant.Outlined" Dense="true" Class="document-menu" aria-label="Outils de documentation">
+                    @if (Auth.CanEdit)
+                    {
+                        <MudMenuItem OnClick="NewTableAsync" Class="new-table" Icon="@Icons.Material.Filled.AddBox"
+                                     title="Documenter une table qui n'existe pas dans la source (fichier plat, service, table prévue)">Nouvelle table</MudMenuItem>
+                        <MudMenuItem Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/documentation")" Class="documentation-assistant"
+                                     Icon="@Icons.Material.Filled.AutoAwesome"
+                                     title="Propositions de descriptions (modèle d'IA local) et de colonnes sensibles, à relire avant d'être enregistrées">Assistant de documentation</MudMenuItem>
+                    }
+                    <MudMenuItem Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/relations")" Class="relation-suggestions"
+                                 Icon="@Icons.Material.Filled.AccountTree"
+                                 title="Relations que le schéma ne déclare pas, détectées par le nom des colonnes et vérifiées par des comptes">Relations suggérées</MudMenuItem>
+                    @if (CanProfile)
+                    {
+                        <MudMenuItem OnClick="ProfileDatabaseAsync" Disabled="_profilingDatabase" Class="profile-database"
+                                     Icon="@Icons.Material.Filled.QueryStats"
+                                     title="Compte les lignes, les nuls et les valeurs distinctes de chaque colonne, à la source (aucune valeur n'est lue ni gardée)">Profiler les colonnes</MudMenuItem>
+                    }
+                </MudMenu>
             }
             @if (_database.Type == "Sqlite" && !Single && Auth.CanEdit)
             {

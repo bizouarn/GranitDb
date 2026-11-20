@@ -11,8 +11,6 @@
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
 @inject IDialogService Dialogs
-@inject DiagramPanelState Panels
-@implements IDisposable
 
 <PageTitle>Diagramme — @(_database?.Name ?? "Base")</PageTitle>
 
@@ -134,20 +132,6 @@
                             Cochez pour ajouter une table au domaine. Les tables en pointillés sont d'autres domaines, liées à celui-ci.
                         </Muted>
                     }
-                    @if (Panels.SidebarHosts)
-                    {
-                        @* La liste à cocher est dans la barre latérale (explorateur) : on ne la répète pas ici. *@
-                        <Muted Typo="Typo.caption" Class="picker-in-sidebar">
-                            La liste des tables à afficher est dans la barre latérale, sous le filtre de l'explorateur.
-                        </Muted>
-                        @if (CurrentDomain == null)
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="ShowNeighbors" Class="mt-1"
-                                       Disabled="@(_impact == null)" title="Garde la sélection et les tables liées">Voisines</MudButton>
-                        }
-                    }
-                    else
-                    {
                     <MudTextField @bind-Value="_filter" Label="Filtrer" Immediate="true" Clearable="true" Dense="true" Class="mb-2" />
                     @if (CurrentDomain == null)
                     {
@@ -173,7 +157,6 @@
                             <MudText Typo="Typo.caption">… @(Filtered.Count() - PickerLimit) autres : affinez le filtre.</MudText>
                         }
                     </div>
-                    }
                 </MudPaper>
             </MudItem>
 
@@ -377,39 +360,6 @@
 
     private bool IsShown(string tableId) => CurrentDomain == null ? _visible.Contains(tableId) : Members.Contains(tableId);
 
-    protected override void OnInitialized() => Panels.Changed += OnPanelChanged;
-
-    public void Dispose()
-    {
-        Panels.Changed -= OnPanelChanged;
-        Panels.Clear();
-    }
-
-    private void OnPanelChanged() => _ = InvokeAsync(StateHasChanged);
-
-    /// <summary>Publie la liste des tables dans la barre latérale (explorateur) : les coches y sont les mêmes que dans la page.</summary>
-    private void PublishPanel()
-    {
-        if (_database == null || _tables.Length == 0)
-        {
-            Panels.Clear();
-            return;
-        }
-
-        var domain = CurrentDomain;
-        Panels.Publish(new DiagramPanel
-        {
-            DatabaseId = Id, DomainName = domain?.Name,
-            Tables = _tables.Select(t => (t.Id, t.Name)).ToList(),
-            Shown = domain == null ? new HashSet<string>(_visible) : Members,
-            Toggle = ToggleAsync,
-            SelectAll = domain == null ? () => { SelectAll(); return Task.CompletedTask; } : null,
-            SelectNone = domain == null ? () => { SelectNone(); return Task.CompletedTask; } : null,
-            DragStart = id => { StartDrag(id); _ = InvokeAsync(StateHasChanged); },
-            DragEnd = () => { ClearDragged(); _ = InvokeAsync(StateHasChanged); }
-        });
-    }
-
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
@@ -429,7 +379,6 @@
         await LoadDomainCompletenessAsync();
         if (_database != null) Workspace.Describe(Navigation.Uri, $"Diagramme · {_database.Name}");
         _loading = false;
-        PublishPanel();
     }
 
     /// <summary>
@@ -471,7 +420,6 @@
         // Ouverture d'un domaine : le plan entier tient à l'écran (on peut ensuite zoomer).
         if (!keepPositions && domain != null)
             _zoom = Math.Clamp(Math.Round(1000 / Math.Max(1, _diagram.Size().Width), 1), 0.3, 1);
-        if (!_loading) PublishPanel();
     }
 
     private void PlaceFrontierBelow(ISet<string> alreadyPlaced)

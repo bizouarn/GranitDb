@@ -77,6 +77,23 @@ public class ClientProfilingTests : ShellTestBase
     }
 
     [BunitFact]
+    public void The_documentation_tools_of_a_database_are_grouped_in_one_menu_like_the_export()
+    {
+        Serve(true, NoProfile);
+        Nav.NavigateTo("/databases/d1");
+
+        var page = Ctx.Render<DatabaseDetail>(p => p.Add(x => x.Id, "d1"));
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".document-menu")));
+
+        Assert.Contains("Documenter", page.Find(".document-menu").TextContent);
+        // fermé, le menu n'affiche aucun de ses outils : plus de bouton isolé dans la barre
+        Assert.Empty(page.FindAll("button.new-table"));
+        Assert.Empty(page.FindAll("button.profile-database"));
+        Assert.Empty(page.FindAll("a.documentation-assistant"));
+        Assert.Empty(page.FindAll("a.relation-suggestions"));
+    }
+
+    [BunitFact]
     public void Clicking_profile_computes_it_on_the_server_and_shows_the_result()
     {
         Serve(true, NoProfile);

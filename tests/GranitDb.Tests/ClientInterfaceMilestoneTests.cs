@@ -275,40 +275,4 @@ public class ClientInterfaceMilestoneTests : ShellTestBase
         Assert.Empty(Dialogs!.FindAll(".domain-dialog-fk-only")); // une clé étrangère détectée n'est pas indirecte
     }
 
-    // --- Liste des tables du diagramme dans la barre latérale ---
-
-    [BunitFact]
-    public void The_explorer_shows_the_tables_published_by_the_diagram_and_ticking_one_calls_back_the_page()
-    {
-        var panels = Ctx.Services.GetRequiredService<DiagramPanelState>();
-        var toggled = new List<(string Id, bool On)>();
-        var dragged = new List<string>();
-        panels.Publish(new DiagramPanel
-        {
-            DatabaseId = "d1", DomainName = null,
-            Tables = [("t1", "customers"), ("t2", "orders"), ("t3", "tags")],
-            Shown = new HashSet<string> { "t1", "t2" },
-            Toggle = (id, on) => { toggled.Add((id, on)); return Task.CompletedTask; },
-            SelectAll = () => Task.CompletedTask, SelectNone = () => Task.CompletedTask,
-            DragStart = dragged.Add
-        });
-        var explorer = Ctx.Render<Explorer>();
-
-        Assert.True(panels.SidebarHosts); // la page du diagramme sait qu'elle n'a plus à répéter la liste
-        Assert.Contains("Tables affichées (2 / 3)", explorer.Find(".diagram-panel .section-title").TextContent);
-        Assert.Equal(["customers", "orders", "tags"], explorer.FindAll("[data-panel-table]").Select(l => l.GetAttribute("data-panel-table")!).ToArray());
-        Assert.True(explorer.Find("[data-panel-table='orders'] input").HasAttribute("checked"));
-        Assert.False(explorer.Find("[data-panel-table='tags'] input").HasAttribute("checked"));
-
-        explorer.Find("[data-panel-table='tags'] input").Change(true);
-        Assert.Equal([("t3", true)], toggled);
-        explorer.Find("[data-panel-table='orders']").TriggerEvent("ondragstart", new Microsoft.AspNetCore.Components.Web.DragEventArgs());
-        Assert.Equal(["t2"], dragged);
-
-        explorer.Find("input.diagram-panel-filter").Input("ord");
-        Assert.Equal(["orders"], explorer.FindAll("[data-panel-table]").Select(l => l.GetAttribute("data-panel-table")!).ToArray());
-
-        explorer.Instance.Dispose();
-        Assert.False(panels.SidebarHosts);
-    }
 }
