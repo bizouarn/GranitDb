@@ -84,6 +84,8 @@ public class ServerConnectionInput : IValidatableObject
             Encrypt = Encrypt ? SqlConnectionEncryptOption.Mandatory : SqlConnectionEncryptOption.Optional,
             TrustServerCertificate = TrustServerCertificate,
             ConnectTimeout = TimeoutSeconds,
+            // Pas de retry silencieux de 10 s : une base inconnue ou un mauvais mot de passe doivent être signalés tout de suite.
+            ConnectRetryCount = 0,
             ApplicationName = "GranitDb",
             // La documentation ne lit que des métadonnées : on le dit au serveur (réplicas en lecture seule).
             ApplicationIntent = ApplicationIntent.ReadOnly

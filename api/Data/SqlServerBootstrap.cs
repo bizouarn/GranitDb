@@ -22,7 +22,9 @@ public static class SqlServerBootstrap
 
         // Sondes hors pool : SqlClient mémorise pendant quelques secondes l'échec de connexion d'un pool
         // (PoolBlockingPeriod), ce qui ferait échouer l'ouverture juste après la création de la base.
-        var probe = new SqlConnectionStringBuilder(connectionString) { Pooling = false }.ConnectionString;
+        // ConnectRetryCount = 0 : sinon SqlClient retente en silence (10 s) une base absente avant de signaler l'erreur 4060.
+        var probe = new SqlConnectionStringBuilder(connectionString) { Pooling = false, ConnectRetryCount = 0 }
+            .ConnectionString;
 
         for (var attempt = 1;; attempt++)
         {
