@@ -63,3 +63,17 @@ public class Notifier
         Dismiss(toast.Id);
     }
 }
+
+public static class WorkspaceSavedExtensions
+{
+    /// <summary>
+    ///     Dit aux autres vues que le catalogue a changé et confirme par un message (avec annulation possible) : les deux gestes vont
+    ///     ensemble, en oublier un laisse l'explorateur ou un onglet périmé.
+    /// </summary>
+    public static Toast Saved(this WorkspaceState workspace, Notifier notifier, string? databaseId, object? source, string message,
+        Severity severity = Severity.Success, Func<Task>? undo = null)
+    {
+        workspace.NotifyCatalogChanged(databaseId, source);
+        return notifier.Show(message, severity, undo);
+    }
+}

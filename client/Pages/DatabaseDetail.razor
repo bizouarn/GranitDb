@@ -32,7 +32,7 @@
     {
         <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-2 db-actions">
             <MudText Typo="Typo.h4">@_database.Name</MudText>
-            <MudChip T="string" Size="Size.Small">@_database.Type</MudChip>
+            <Badge>@_database.Type</Badge>
             @if (!string.IsNullOrWhiteSpace(_database.SourceLabel) && Auth.IsAdmin)
             {
                 <Muted Typo="Typo.caption" Class="source-label">@_database.SourceLabel</Muted>
@@ -157,10 +157,7 @@
             </MudPaper>
         }
 
-        @if (_message != null)
-        {
-            <MudAlert Severity="@_messageSeverity" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _message = null">@_message</MudAlert>
-        }
+        <PageMessageAlert Message="_message" />
 
         @if (_preview != null)
         {
@@ -247,24 +244,24 @@
                                 <MudText Typo="Typo.subtitle1">@table.Name</MudText>
                                 @if (table.TableType != "Table")
                                 {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@table.TableType</MudChip>
+                                    <Badge Color="Color.Info">@table.TableType</Badge>
                                 }
                                 @if (table.IsManual)
                                 {
-                                    <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Class="table-manual" title="Saisie à la main : la synchronisation la conserve">saisie à la main</MudChip>
+                                    <Badge Color="Color.Secondary" Class="table-manual" title="Saisie à la main : la synchronisation la conserve">saisie à la main</Badge>
                                 }
                                 <Muted Typo="Typo.caption">@table.Columns.Count colonnes</Muted>
                                 @if (CompletenessOf(table.Id) is { } done)
                                 {
-                                    <MudChip T="string" Size="Size.Small" Color="@PercentColor(done.Percent)" Class="table-percent">@done.Percent %</MudChip>
+                                    <Badge Color="@PercentColor(done.Percent)" Class="table-percent">@done.Percent %</Badge>
                                 }
                                 @foreach (var domain in DomainsOf(table.Id))
                                 {
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="table-domain">@domain.Name</MudChip>
+                                    <Badge Variant="Variant.Outlined" Class="table-domain">@domain.Name</Badge>
                                 }
                                 @foreach (var tag in TagsOf(TagKind.Table, table.Id))
                                 {
-                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.LocalOffer">@tag.TagName</MudChip>
+                                    <Badge Variant="Variant.Outlined" Icon="@Icons.Material.Filled.LocalOffer">@tag.TagName</Badge>
                                 }
                             </MudStack>
                         </TitleContent>
@@ -339,7 +336,7 @@
                                                     <span title="@RowsTitle(p)">@ProfileText(p)</span>
                                                     @if (ProfileKindLabel(p.Kind) is { Length: > 0 } label)
                                                     {
-                                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="profile-kind">@label</MudChip>
+                                                        <Badge Variant="Variant.Outlined" Class="profile-kind">@label</Badge>
                                                     }
                                                 }
                                             </td>
@@ -387,7 +384,7 @@
                                             @index.Name (@index.ColumnNames)
                                             @if (index.IsUnique)
                                             {
-                                                <MudChip T="string" Size="Size.Small" Color="Color.Info">unique</MudChip>
+                                                <Badge Color="Color.Info">unique</Badge>
                                             }
                                         </MudListItem>
                                     }
@@ -420,7 +417,7 @@
                                             }
                                             @if (relation.MetaInfo != RelationAutoMarker)
                                             {
-                                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" title="@Glossary.Define("relation-manuelle")">manuelle</MudChip>
+                                                <Badge Variant="Variant.Outlined" title="@Glossary.Define("relation-manuelle")">manuelle</Badge>
                                             }
                                             @if (relation.MetaInfo != RelationAutoMarker)
                                             {
@@ -451,13 +448,9 @@
                     </MudExpansionPanel>
                 }
             </MudExpansionPanels>
-            @if (!Single && _visibleCount > _limit)
+            @if (!Single)
             {
-                <MudStack Row="true" Justify="Justify.Center" AlignItems="AlignItems.Center" Class="mt-3" Spacing="2">
-                    <MudText Typo="Typo.caption">@_limit sur @_visibleCount tables affichées</MudText>
-                    <MudButton Variant="Variant.Outlined" Class="show-more" OnClick="@(() => _limit += PageSize)">Afficher plus</MudButton>
-                    <MudButton Variant="Variant.Text" OnClick="@(() => _limit = int.MaxValue)">Tout afficher</MudButton>
-                </MudStack>
+                <ShowMore Shown="_limit" Total="_visibleCount" Noun="tables" OnMore="@(() => _limit += PageSize)" OnAll="@(() => _limit = int.MaxValue)" />
             }
         }
     }
@@ -527,8 +520,7 @@
     private Dictionary<string, TableCompleteness> _completenessIndex = new();
     private bool _loading = true;
     private bool _syncing;
-    private string? _message;
-    private Severity _messageSeverity = Severity.Info;
+    private readonly PageMessage _message = new();
 
     private string? _editingRelation;
     private bool Single => TableRoute != null;
@@ -691,9 +683,9 @@
             _profiles[table.Id] = await Api.ProfileTableAsync(table.Id);
             Notifier.Show($"Profil de {table.Name} calculé.");
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            (_message, _messageSeverity) = (e.Message, Severity.Error);
+            _message.Error(message);
         }
         finally
         {
@@ -713,9 +705,9 @@
             var failed = run.TablesFailed > 0 ? $", {run.TablesFailed} en échec ({string.Join(" ; ", run.Errors.Take(3))})" : "";
             Notifier.Show($"{run.TablesProfiled} table(s) profilée(s){failed}{more}.", run.TablesFailed > 0 ? Severity.Warning : Severity.Success);
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            (_message, _messageSeverity) = (e.Message, Severity.Error);
+            _message.Error(message);
         }
         finally
         {
@@ -739,12 +731,11 @@
         try
         {
             _database = await Api.SetSyncScheduleAsync(Id, int.TryParse(minutes, out var m) && m > 0 ? m : null);
-            _message = _database.SyncIntervalMinutes == null ? "Synchronisation automatique désactivée." : $"La base sera relue toutes les {_database.SyncIntervalMinutes} minute(s).";
-            _messageSeverity = Severity.Success;
+            _message.Success(_database.SyncIntervalMinutes == null ? "Synchronisation automatique désactivée." : $"La base sera relue toutes les {_database.SyncIntervalMinutes} minute(s).");
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            (_message, _messageSeverity) = (e.Message, Severity.Error);
+            _message.Error(message);
         }
     }
 
@@ -1035,15 +1026,15 @@
                     await InvokeAsync(StateHasChanged);
                 });
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            ShowError(ex.Message);
+            ShowError(message);
         }
     }
 
     private async Task DeleteRelationAsync(RelationInfo relation)
     {
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             await Api.DeleteRelationAsync(relation.Id);
             await LoadTablesAsync();
@@ -1057,11 +1048,7 @@
                 Changed();
                 await InvokeAsync(StateHasChanged);
             });
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     // --- Synchronisation ---
@@ -1071,12 +1058,12 @@
         _syncing = true;
         try
         {
-            _message = null;
+            _message.Clear();
             _preview = await Api.PreviewSyncAsync(Id);
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            ShowError(ex.Message);
+            ShowError(message);
         }
         finally
         {
@@ -1100,7 +1087,7 @@
         _syncing = true;
         try
         {
-            _message = null;
+            _message.Clear();
             await using var stream = e.File.OpenReadStream(MaxReplaceSize);
             using var buffer = new MemoryStream();
             await stream.CopyToAsync(buffer);
@@ -1109,9 +1096,9 @@
             _pendingFile = bytes;
             _pendingName = e.File.Name;
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            ShowError(ex.Message);
+            ShowError(message);
         }
         catch (IOException)
         {
@@ -1138,9 +1125,9 @@
             Changed();
             Notifier.Show($"Synchronisé : {summary.TablesAdded} table(s) ajoutée(s), {summary.TablesRemoved} supprimée(s), {summary.ColumnsAdded} colonne(s) ajoutée(s), {summary.IndexesAdded} index ajouté(s).");
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            ShowError(ex.Message);
+            ShowError(message);
         }
         finally
         {
@@ -1148,11 +1135,7 @@
         }
     }
 
-    private void ShowError(string message)
-    {
-        _message = message;
-        _messageSeverity = Severity.Error;
-    }
+    private void ShowError(string message) => _message.Error(message);
 
     private Task ExportHtmlAsync() => ExportFileAsync("html", "html", "text/html");
 

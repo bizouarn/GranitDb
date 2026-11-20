@@ -306,7 +306,7 @@
         }
         catch (HttpRequestException)
         {
-            _loadError = "L'API est injoignable.";
+            _loadError = ApiErrors.Unreachable;
         }
     }
 
@@ -575,9 +575,9 @@
                 await RefreshDomainsAsync(db.Id);
             });
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            Notifier.Error(ex.Message);
+            Notifier.Error(message);
         }
     }
 
@@ -594,9 +594,9 @@
                 await RefreshDomainsAsync(db.Id);
             });
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            Notifier.Error(ex.Message);
+            Notifier.Error(message);
         }
     }
 

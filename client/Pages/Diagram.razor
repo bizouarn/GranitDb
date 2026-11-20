@@ -36,10 +36,7 @@
     {
         <MudText Typo="Typo.h4" Class="mb-3">Diagramme de @_database.Name@(CurrentDomain == null ? "" : $" — {CurrentDomain.Name}")</MudText>
 
-        @if (_message != null)
-        {
-            <MudAlert Severity="@_messageSeverity" Class="mb-3" ShowCloseIcon="true" CloseIconClicked="() => _message = null">@_message</MudAlert>
-        }
+        <PageMessageAlert Message="_message" />
 
         <MudGrid>
             <MudItem xs="12" md="3">
@@ -295,39 +292,19 @@
                 @if (_impact != null)
                 {
                     <MudPaper Class="pa-3 mt-3" id="impact">
-                        <MudText Typo="Typo.h6">Impact de @Describe(_impact.Root)</MudText>
+                        <MudText Typo="Typo.h6">Impact de @_impact.Root.Label()</MudText>
                         <MudText Class="impact-sentence">@Phrases.Impact(_impact.Root.ColumnId != null, _impact.Dependents.Count, _impact.Dependencies.Count)</MudText>
-                        <a class="impact-open" href="@NodeHref(_impact.Root)">Ouvrir la fiche de @_impact.Root.TableName</a>
+                        <a class="impact-open" href="@_impact.Root.Href(Id)">Ouvrir la fiche de @_impact.Root.TableName</a>
                         @if (_impact.Dependents.Count == 0 && _impact.Dependencies.Count == 0)
                         {
                             <MudText>Aucune relation : rien ne dépend de cet élément dans le catalogue, et il ne dépend de rien.</MudText>
                         }
                         <MudGrid>
                             <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.subtitle2" Color="Color.Error">Modifier cet élément peut casser (@_impact.Dependents.Count)</MudText>
-                                @if (_impact.Dependents.Count == 0)
-                                {
-                                    <MudText Typo="Typo.body2">Rien ne le référence.</MudText>
-                                }
-                                <MudList T="string" Dense="true">
-                                    @foreach (var node in _impact.Dependents)
-                                    {
-                                        <MudListItem T="string"><a class="impact-link" href="@NodeHref(node)">@Describe(node)</a> <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
-                                    }
-                                </MudList>
+                                <ImpactNodeList Title="Modifier cet élément peut casser" TitleColor="Color.Error" Nodes="_impact.Dependents" EmptyText="Rien ne le référence." DatabaseId="@Id" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
-                                <MudText Typo="Typo.subtitle2" Color="Color.Info">Dépend de (@_impact.Dependencies.Count)</MudText>
-                                @if (_impact.Dependencies.Count == 0)
-                                {
-                                    <MudText Typo="Typo.body2">Ne référence rien.</MudText>
-                                }
-                                <MudList T="string" Dense="true">
-                                    @foreach (var node in _impact.Dependencies)
-                                    {
-                                        <MudListItem T="string"><a class="impact-link" href="@NodeHref(node)">@Describe(node)</a> <MudChip T="string" Size="Size.Small">@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</MudChip></MudListItem>
-                                    }
-                                </MudList>
+                                <ImpactNodeList Title="Dépend de" TitleColor="Color.Info" Nodes="_impact.Dependencies" EmptyText="Ne référence rien." DatabaseId="@Id" />
                             </MudItem>
                         </MudGrid>
                     </MudPaper>
@@ -357,8 +334,7 @@
     private const int PickerLimit = 150;
     private const int LargeDatabase = 150;
     private bool _loading = true;
-    private string? _message;
-    private Severity _messageSeverity = Severity.Warning;
+    private readonly PageMessage _message = new();
 
     private string? _draggedTable;
     private string _newDomain = "";
@@ -561,35 +537,27 @@
     private async Task HideIndirectAsync()
     {
         if (CurrentDomain is not { } domain) return;
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             await Api.HideIndirectRelationsAsync(domain.Id);
             await ReloadDomainsAsync();
             ClearSelection();
             Rebuild();
             Notifier.Show("Relations indirectes masquées : il ne reste que les clés étrangères détectées.");
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     private async Task ResetToDocumentationAsync()
     {
         if (CurrentDomain is not { } domain) return;
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             await Api.ResetDomainToDocumentationAsync(domain.Id);
             await ReloadDomainsAsync();
             ClearSelection();
             Rebuild();
             Notifier.Show("Relations masquées remises comme dans la documentation d'origine.");
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     /// <summary>Fenêtre « Modifier le domaine » : le même éditeur que l'écran de gestion, avec ajout en lot et aperçu des relations.</summary>
@@ -604,8 +572,7 @@
         await ReloadDomainsAsync();
         ClearSelection();
         Rebuild();
-        Workspace.NotifyCatalogChanged(Id, this);
-        Notifier.Show("Domaine modifié.");
+        Workspace.Saved(Notifier, Id, this, "Domaine modifié.");
     }
 
     private Task ShowAllRelationsAsync() => CurrentDomain is { } d ? SaveDomainSettingsAsync(d, hiddenRelations: []) : Task.CompletedTask;
@@ -616,18 +583,14 @@
 
     private async Task SaveDomainSettingsAsync(DomainView domain, bool? showNeighbors = null, IEnumerable<string>? hiddenRelations = null)
     {
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             await Api.SaveDomainSettingsAsync(domain.Id, showNeighbors, hiddenRelations);
             if (showNeighbors != null) domain.ShowNeighbors = showNeighbors.Value;
             if (hiddenRelations != null) domain.HiddenRelations = hiddenRelations.ToList();
             ClearSelection();
             Rebuild();
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     private void ToggleAllColumns(bool on)
@@ -678,18 +641,14 @@
     {
         var name = _newDomain.Trim();
         if (name.Length == 0) return;
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             var created = await Api.CreateDomainAsync(Id, name);
             _newDomain = "";
             await ReloadDomainsAsync();
             Workspace.NotifyCatalogChanged(Id, this);
             await SelectDomainAsync(created.Id);
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     /// <summary>Fenêtre « Nouveau domaine » : nom, couleur et tables ; les tables affichées en ce moment sont proposées d'office.</summary>
@@ -727,23 +686,19 @@
         }
         else if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_renameText))
         {
-            try
+            await ApiErrors.TryAsync(async () =>
             {
                 await Api.RenameDomainAsync(domain, _renameText.Trim());
                 _renaming = null;
                 await ReloadDomainsAsync();
                 Workspace.NotifyCatalogChanged(Id, this);
-            }
-            catch (ApiException ex)
-            {
-                ShowError(ex.Message);
-            }
+            }, ShowError);
         }
     }
 
     private async Task DeleteDomainAsync(DomainView domain)
     {
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             await Api.DeleteDomainAsync(domain.Id);
             if (_domainId == domain.Id) _domainId = null;
@@ -761,11 +716,7 @@
                 Workspace.NotifyCatalogChanged(Id, this);
                 await InvokeAsync(StateHasChanged);
             });
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     private static string? DomainStyle(DomainView domain)
@@ -803,7 +754,7 @@
         var current = CurrentDomain;
         var moveFrom = current != null && current.Id != target.Id && current.Tables.Any(t => t.TableId == tableId) ? current.Id : null;
         var name = _tables.FirstOrDefault(t => t.Id == tableId)?.Name ?? tableId;
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             await Api.AddTableToDomainAsync(target.Id, tableId, moveFrom);
             await ReloadDomainsAsync();
@@ -821,11 +772,7 @@
                 Workspace.NotifyCatalogChanged(Id, this);
                 await InvokeAsync(StateHasChanged);
             });
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     /// <summary>Une table du domaine a été déplacée : sa place est mémorisée pour ce domaine.</summary>
@@ -833,16 +780,12 @@
     {
         var domain = CurrentDomain;
         if (domain == null || node.IsFrontier) return;
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             await Api.SaveLayoutAsync(domain.Id, [(node.Id, node.X, node.Y)]);
             var index = domain.Tables.FindIndex(t => t.TableId == node.Id);
             if (index >= 0) domain.Tables[index] = new DomainTableView { TableId = node.Id, X = node.X, Y = node.Y };
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     // --- Tables affichées ---
@@ -859,7 +802,7 @@
             return;
         }
 
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             if (on) await Api.AddTableToDomainAsync(domain.Id, tableId);
             else await Api.RemoveTableFromDomainAsync(domain.Id, tableId);
@@ -867,11 +810,7 @@
             Workspace.NotifyCatalogChanged(Id, this);
             if (!on && _selectedTable == tableId) ClearSelection();
             Rebuild();
-        }
-        catch (ApiException ex)
-        {
-            ShowError(ex.Message);
-        }
+        }, ShowError);
     }
 
     private void SelectAll()
@@ -955,26 +894,9 @@
         return ids;
     }
 
-    /// <summary>La fiche de la table (colonne mise en évidence) : un résultat de l'analyse d'impact y mène.</summary>
-    private string NodeHref(ImpactNode node) =>
-        $"/databases/{Uri.EscapeDataString(Id)}/tables/{Uri.EscapeDataString(node.TableId)}" + (node.ColumnId == null ? "" : $"?column={Uri.EscapeDataString(node.ColumnId)}");
+    private void ShowError(string message) => _message.Warning(message);
 
-    private static string Describe(ImpactNode node)
-    {
-        return node.ColumnName == null ? node.TableName : $"{node.TableName}.{node.ColumnName}";
-    }
-
-    private void ShowError(string message)
-    {
-        _message = message;
-        _messageSeverity = Severity.Warning;
-    }
-
-    private void ShowInfo(string message)
-    {
-        _message = message;
-        _messageSeverity = Severity.Success;
-    }
+    private void ShowInfo(string message) => _message.Success(message);
 
     // --- Exports ---
 

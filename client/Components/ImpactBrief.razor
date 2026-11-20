@@ -1,0 +1,29 @@
+@using GranitDb.Client.Models
+@* L'impact d'un élément en bref (panneau de détail) : une phrase et les premiers éléments qui en dépendent. *@
+<div class="detail-field detail-impact">
+    <div class="mud-typography mud-typography-caption">Impact</div>
+    <p class="impact-summary">
+        @(Impact.Dependents.Count == 0 && Impact.Dependencies.Count == 0
+            ? "Aucune relation : rien ne dépend de cet élément et il ne dépend de rien."
+            : $"{Impact.Dependents.Count} élément(s) en dépendent, il dépend de {Impact.Dependencies.Count}.")
+    </p>
+    @if (Impact.Dependents.Count > 0)
+    {
+        <ul class="impact-list">
+            @foreach (var node in Impact.Dependents.Take(MaxItems))
+            {
+                <li>@node.Label()</li>
+            }
+            @if (Impact.Dependents.Count > MaxItems)
+            {
+                <li>… et @(Impact.Dependents.Count - MaxItems) autre(s)</li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ImpactResult Impact { get; set; } = null!;
+
+    [Parameter] public int MaxItems { get; set; } = 8;
+}

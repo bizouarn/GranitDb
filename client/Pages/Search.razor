@@ -7,11 +7,7 @@
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 
-<PageTitle>Recherche</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <PageCrumbs Current="Recherche" />
-    <MudText Typo="Typo.h4" Class="mb-4">Recherche</MudText>
+<PageShell Title="Recherche" TabTitle="@TabTitle">
 
     @if (string.IsNullOrWhiteSpace(Q) || Q.Trim().Length < 2)
     {
@@ -68,7 +64,7 @@
             </MudList>
         }
     }
-</MudContainer>
+</PageShell>
 
 @code {
     private static readonly (string Kind, string Label)[] Kinds =
@@ -76,6 +72,8 @@
 
 
     private SearchHit[] _hits = [];
+    private string TabTitle => Q?.Trim() is { Length: >= 2 } term ? $"Recherche : {term}" : "Recherche";
+
     private bool _loading;
     private string? _scope;
 
@@ -102,7 +100,6 @@
         _error = null;
         _hits = [];
         var term = Q?.Trim();
-        Workspace.Describe(Navigation.Uri, term is { Length: >= 2 } ? $"Recherche : {term}" : "Recherche");
         if (term is not { Length: >= 2 }) return;
 
         _loading = true;
@@ -110,13 +107,9 @@
         {
             _hits = await Api.SearchAsync(term);
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            _error = ex.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "L'API est injoignable.";
+            _error = message;
         }
         finally
         {

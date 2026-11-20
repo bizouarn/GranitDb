@@ -1,0 +1,22 @@
+@* « x sur n affichées — Afficher plus — Tout afficher » sous une longue liste ; rien tant que tout est affiché. *@
+@if (Total > Shown)
+{
+    <MudStack Row="true" Justify="Justify.Center" AlignItems="AlignItems.Center" Class="mt-3" Spacing="2">
+        <MudText Typo="Typo.caption">@Shown sur @Total @Noun affichées</MudText>
+        <MudButton Variant="Variant.Outlined" Class="show-more" OnClick="OnMore">Afficher plus</MudButton>
+        <MudButton Variant="Variant.Text" OnClick="OnAll">Tout afficher</MudButton>
+    </MudStack>
+}
+
+@code {
+    [Parameter] public int Shown { get; set; }
+
+    [Parameter] public int Total { get; set; }
+
+    /// <summary>Ce que la liste contient, accordé au féminin pluriel (« tables »).</summary>
+    [Parameter] public string Noun { get; set; } = "";
+
+    [Parameter] public EventCallback OnMore { get; set; }
+
+    [Parameter] public EventCallback OnAll { get; set; }
+}

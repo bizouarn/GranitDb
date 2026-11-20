@@ -5,8 +5,8 @@
 <span class="tag-editor">
     @foreach (var tag in Tags)
     {
-        <MudChip T="string" Size="Size.Small" Color="Color.Default" Class="tag-chip" Style="@ChipStyle(tag)"
-                 OnClose="@(() => RemoveAsync(tag))">@tag.TagName</MudChip>
+        <Badge Color="Color.Default" Class="tag-chip" Style="@ChipStyle(tag)"
+                 OnClose="@(() => RemoveAsync(tag))">@tag.TagName</Badge>
     }
     @if (_adding)
     {
@@ -77,9 +77,9 @@
         {
             await action();
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            _error = e.Message;
+            _error = message;
         }
     }
 }

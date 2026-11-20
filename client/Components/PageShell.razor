@@ -1,0 +1,40 @@
+@inject WorkspaceState Workspace
+@inject NavigationManager Navigation
+@using GranitDb.Client.Workspace
+@* Le cadre commun des pages : titre de l'onglet et de la page, fil d'Ariane, explication, erreur, puis le contenu. *@
+<PageTitle>@Title</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth" Class="mt-6">
+    <PageCrumbs DatabaseId="@DatabaseId" DatabaseName="@DatabaseName" Current="@Title" />
+    <PageHeader Title="@Title">@(Description == null ? null : (RenderFragment)(b => b.AddContent(0, Description)))</PageHeader>
+
+    <ErrorAlert Message="@Error" Class="mb-3" OnClose="@(() => ErrorChanged.InvokeAsync(null))" />
+
+    @ChildContent
+</MudContainer>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>L'explication sous le titre.</summary>
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Le titre de l'onglet quand il diffère du titre de la page (« Recherche : mot »).</summary>
+    [Parameter] public string? TabTitle { get; set; }
+
+    /// <summary>La base dont la page parle, pour le fil d'Ariane.</summary>
+    [Parameter] public string? DatabaseId { get; set; }
+
+    [Parameter] public string? DatabaseName { get; set; }
+
+    [Parameter] public MaxWidth MaxWidth { get; set; } = MaxWidth.Large;
+
+    /// <summary>L'erreur à montrer en haut ; la croix la remet à <c>null</c> par <see cref="ErrorChanged" />.</summary>
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public EventCallback<string?> ErrorChanged { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    protected override void OnParametersSet() => Workspace.Describe(Navigation.Uri, TabTitle ?? Title);
+}

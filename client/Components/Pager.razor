@@ -1,0 +1,48 @@
+@* La pagination d'une liste lue par tranches (Skip / PageSize / Total) : des numéros de page, ou « Précédent — x–y sur n — Suivant »
+   (le contenu s'ajoute à droite de la seconde forme). *@
+@if (Mode == PagerMode.Pages)
+{
+    @if (PageCount > 1)
+    {
+        <MudPagination Count="PageCount" Selected="Page" SelectedChanged="@(page => SkipChanged.InvokeAsync((page - 1) * PageSize))"
+                       Class="mt-4 d-flex justify-center" />
+    }
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
+        <MudButton Size="Size.Small" Disabled="@(Skip == 0)" OnClick="@(() => SkipChanged.InvokeAsync(Math.Max(0, Skip - PageSize)))"
+                   Class="@($"{ClassPrefix}-previous")">Précédent</MudButton>
+        <MudText Typo="Typo.body2" Class="@($"{ClassPrefix}-range")">@(Skip + 1)–@(Skip + Shown) sur @Total</MudText>
+        <MudButton Size="Size.Small" Disabled="@(Skip + Shown >= Total)" OnClick="@(() => SkipChanged.InvokeAsync(Skip + PageSize))"
+                   Class="@($"{ClassPrefix}-next")">Suivant</MudButton>
+        @ChildContent
+    </MudStack>
+}
+
+@code {
+    public enum PagerMode { Pages, PreviousNext }
+
+    [Parameter] public PagerMode Mode { get; set; } = PagerMode.Pages;
+
+    /// <summary>Nombre d'éléments déjà passés (0 sur la première tranche).</summary>
+    [Parameter] public int Skip { get; set; }
+
+    [Parameter] public int PageSize { get; set; }
+
+    [Parameter] public int Total { get; set; }
+
+    /// <summary>Éléments de la tranche affichée (pour « x–y sur n »).</summary>
+    [Parameter] public int Shown { get; set; }
+
+    /// <summary>Préfixe des classes CSS (<c>audit</c> donne <c>audit-previous</c>, <c>audit-range</c>, <c>audit-next</c>).</summary>
+    [Parameter] public string ClassPrefix { get; set; } = "pager";
+
+    [Parameter] public EventCallback<int> SkipChanged { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private int Page => Skip / Math.Max(1, PageSize) + 1;
+
+    private int PageCount => Math.Max(1, (int)Math.Ceiling(Total / (double)Math.Max(1, PageSize)));
+}

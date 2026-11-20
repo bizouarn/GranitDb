@@ -49,13 +49,9 @@
             await action();
             return true;
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "L'API ne répond pas.";
+            _error = message;
         }
         finally
         {

@@ -206,16 +206,10 @@
             if (!result.Ok) _error = result.Message;
             return result.Ok;
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
             _schemas.Set(null);
-            _error = ex.Message;
-            return false;
-        }
-        catch (HttpRequestException)
-        {
-            _schemas.Set(null);
-            _error = "L'API est injoignable.";
+            _error = message;
             return false;
         }
         finally
@@ -233,18 +227,13 @@
         {
             _form.Schemas = _schemas.Chosen(_form.Engine);
             var result = Existing == null ? await Api.ImportServerAsync(_form) : await Api.UpdateServerConnectionAsync(Existing.Id, _form);
-            Workspace.NotifyCatalogChanged(Existing?.Id, this);
-            Notifier.Show(Phrases.ServerSaved(result, Existing != null));
+            Workspace.Saved(Notifier, Existing?.Id, this, Phrases.ServerSaved(result, Existing != null));
             _form.Password = null; // le mot de passe ne reste pas dans la page
             MudDialog.Close(DialogResult.Ok(result.Database.Id));
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            _error = ex.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "L'API est injoignable.";
+            _error = message;
         }
         finally
         {

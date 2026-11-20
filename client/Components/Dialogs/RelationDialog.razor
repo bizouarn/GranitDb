@@ -15,31 +15,9 @@
                     (par exemple <i>orders.customer_id</i> pointe vers <i>customers.id</i>).
                 </Muted>
 
-                <div class="relation-dialog-side">
-                    <MudText Typo="Typo.subtitle2">Table de départ (celle qui pointe)</MudText>
-                    <input class="relation-dialog-source-filter" type="search" placeholder="Rechercher une table…" aria-label="Rechercher la table de départ"
-                           @bind="_sourceFilter" @bind:event="oninput" />
-                    <NativeSelect Label="Table de départ" Value="@_sourceTable" ValueChanged="SourceTableChanged" Class="relation-dialog-source-table">
-                        <option value="">Choisir…</option>
-                        @foreach (var table in Matching(_sourceFilter, _sourceTable))
-                        {
-                            <option value="@table.Id">@table.Name</option>
-                        }
-                    </NativeSelect>
-                </div>
+                <TablePicker Tables="Tables" Value="@_sourceTable" ValueChanged="SourceTableChanged" Title="Table de départ (celle qui pointe)" Label="Table de départ" FilterLabel="Rechercher la table de départ" ClassPrefix="relation-dialog-source" />
 
-                <div class="relation-dialog-side">
-                    <MudText Typo="Typo.subtitle2">Table d'arrivée (celle qui est pointée)</MudText>
-                    <input class="relation-dialog-target-filter" type="search" placeholder="Rechercher une table…" aria-label="Rechercher la table d'arrivée"
-                           @bind="_targetFilter" @bind:event="oninput" />
-                    <NativeSelect Label="Table d'arrivée" Value="@_targetTable" ValueChanged="TargetTableChanged" Class="relation-dialog-target-table">
-                        <option value="">Choisir…</option>
-                        @foreach (var table in Matching(_targetFilter, _targetTable))
-                        {
-                            <option value="@table.Id">@table.Name</option>
-                        }
-                    </NativeSelect>
-                </div>
+                <TablePicker Tables="Tables" Value="@_targetTable" ValueChanged="TargetTableChanged" Title="Table d'arrivée (celle qui est pointée)" Label="Table d'arrivée" FilterLabel="Rechercher la table d'arrivée" ClassPrefix="relation-dialog-target" />
 
                 @if (SourceTable != null && TargetTable != null)
                 {
@@ -50,21 +28,9 @@
                             var pair = _pairs[i];
                             var index = i;
                             <div class="relation-dialog-pair" data-pair="@i">
-                                <NativeSelect Label="@($"Colonne de {SourceTable.Name}")" Value="@pair.Source" ValueChanged="@(v => pair.Source = v)" Class="relation-dialog-pair-source">
-                                    <option value="">Choisir…</option>
-                                    @foreach (var column in SourceTable.Columns.OrderBy(c => c.Position))
-                                    {
-                                        <option value="@column.Id">@column.Name</option>
-                                    }
-                                </NativeSelect>
+                                <ColumnSelect Label="@($"Colonne de {SourceTable.Name}")" Columns="SourceTable.Columns" Value="@pair.Source" ValueChanged="@(v => pair.Source = v)" Class="relation-dialog-pair-source" />
                                 <span class="relation-dialog-arrow" aria-hidden="true">→</span>
-                                <NativeSelect Label="@($"Colonne de {TargetTable.Name}")" Value="@pair.Target" ValueChanged="@(v => pair.Target = v)" Class="relation-dialog-pair-target">
-                                    <option value="">Choisir…</option>
-                                    @foreach (var column in TargetTable.Columns.OrderBy(c => c.Position))
-                                    {
-                                        <option value="@column.Id">@column.Name</option>
-                                    }
-                                </NativeSelect>
+                                <ColumnSelect Label="@($"Colonne de {TargetTable.Name}")" Columns="TargetTable.Columns" Value="@pair.Target" ValueChanged="@(v => pair.Target = v)" Class="relation-dialog-pair-target" />
                                 @if (_pairs.Count > 1)
                                 {
                                     <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" Class="relation-dialog-remove-pair"
@@ -129,7 +95,7 @@
     [Parameter] public RelationInfo? Existing { get; set; }
 
     private string? _sourceTable, _targetTable;
-    private string _sourceFilter = "", _targetFilter = "", _description = "", _type = "One-to-Many";
+    private string _description = "", _type = "One-to-Many";
     private readonly List<PairRow> _pairs = [new()];
 
     private TableInfo? SourceTable => Tables.FirstOrDefault(t => t.Id == _sourceTable);
@@ -154,14 +120,6 @@
     }
 
     /// <summary>Les tables qui contiennent le texte cherché (la table déjà choisie reste toujours dans la liste).</summary>
-    private IEnumerable<TableInfo> Matching(string filter, string? selected)
-    {
-        var term = filter.Trim();
-        return Tables
-            .Where(t => t.Id == selected || term.Length == 0 || t.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase))
-            .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).Take(200);
-    }
-
     private void SourceTableChanged(string id)
     {
         _sourceTable = id.Length == 0 ? null : id;

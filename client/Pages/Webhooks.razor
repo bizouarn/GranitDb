@@ -10,16 +10,7 @@
 @inject Notifier Notifier
 @inject IDialogService Dialogs
 
-<PageTitle>Webhooks</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <PageCrumbs Current="Webhooks" />
-    <PageHeader Title="Webhooks">
-        Une adresse appelée en POST (JSON, signé si un secret est défini) quand un événement survient : changement de schéma,
-        base importée ou supprimée. Les adresses locales ou privées sont refusées par défaut.
-    </PageHeader>
-
-    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
+<PageShell Title="Webhooks" Description="Une adresse appelée en POST (JSON, signé si un secret est défini) quand un événement survient : changement de schéma, base importée ou supprimée. Les adresses locales ou privées sont refusées par défaut." Error="@_error" ErrorChanged="@(v => _error = v)">
 
     @if (_loading)
     {
@@ -38,14 +29,14 @@
             <MudPaper Class="pa-3 mb-2" Outlined="true" data-webhook="@hook.Url">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
                     <MudText Typo="Typo.subtitle1" Class="webhook-url">@hook.Url</MudText>
-                    <MudChip T="string" Size="Size.Small" Color="@(hook.IsActive ? Color.Success : Color.Default)">@(hook.IsActive ? "actif" : "en pause")</MudChip>
+                    <Badge Color="@(hook.IsActive ? Color.Success : Color.Default)">@(hook.IsActive ? "actif" : "en pause")</Badge>
                     @foreach (var name in hook.Events)
                     {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@name</MudChip>
+                        <Badge Variant="Variant.Outlined">@name</Badge>
                     }
                     @if (hook.HasSecret)
                     {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" title="Chaque envoi porte une signature HMAC-SHA256 calculée avec le secret : le destinataire peut vérifier qu'il vient de GranitDb">signé</MudChip>
+                        <Badge Variant="Variant.Outlined" title="Chaque envoi porte une signature HMAC-SHA256 calculée avec le secret : le destinataire peut vérifier qu'il vient de GranitDb">signé</Badge>
                     }
                     <MudSpacer />
                     <MudButton Size="Size.Small" OnClick="() => TestAsync(current)" Class="webhook-test">Tester</MudButton>
@@ -94,7 +85,7 @@
 
         <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="CreateAsync" Class="mt-2 webhook-add">Ajouter un webhook</MudButton>
     }
-</MudContainer>
+</PageShell>
 
 @code {
     private WebhookView[] _hooks = [];
@@ -106,27 +97,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Workspace.Describe(Navigation.Uri, "Webhooks");
         await LoadAsync();
         _loading = false;
     }
 
     private async Task LoadAsync()
     {
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             _hooks = await Api.GetWebhooksAsync();
             _databases = (await Api.GetAllDatabaseAsync()).OrderBy(d => d.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
             _error = null;
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "Les webhooks n'ont pas pu être lus : l'API ne répond pas.";
-        }
+        }, message => _error = message);
     }
 
     private string DatabaseName(string id) => _databases.FirstOrDefault(d => d.Id == id)?.Name ?? id;
@@ -195,9 +177,9 @@
         {
             await action();
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            _error = e.Message;
+            _error = message;
         }
     }
 }

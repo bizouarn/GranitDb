@@ -1,27 +1,16 @@
 @page "/databases/{Id}/documentation"
-@inherits BusyComponentBase
+@inherits DatabasePageBase
 @implements IDisposable
 @using GranitDb.Client.Components
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
-@inject Client Api
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
 @inject AuthState Auth
 
-<PageTitle>Assistant de documentation</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <PageCrumbs DatabaseId="@Id" DatabaseName="@_databaseName" Current="Assistant de documentation" />
-    <PageHeader Title="Assistant de documentation">
-        Propose des descriptions pour les éléments qui n'en ont pas, avec un modèle d'IA léger et local qui ne reçoit que des noms, des types et
-        des descriptions (jamais de valeur de ligne ni de colonne sensible). Rien n'est enregistré avant que vous acceptiez, et une description
-        déjà saisie n'est jamais remplacée. Un modèle de petite taille se trompe sur les noms cryptiques : relisez chaque proposition.
-    </PageHeader>
-
-    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
+<PageShell Title="Assistant de documentation" DatabaseId="@Id" DatabaseName="@_databaseName" Description="Propose des descriptions pour les éléments qui n'en ont pas, avec un modèle d'IA léger et local qui ne reçoit que des noms, des types et des descriptions (jamais de valeur de ligne ni de colonne sensible). Rien n'est enregistré avant que vous acceptiez, et une description déjà saisie n'est jamais remplacée. Un modèle de petite taille se trompe sur les noms cryptiques : relisez chaque proposition." Error="@_error" ErrorChanged="@(v => _error = v)">
 
     <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
         @if (_capabilities.AllowAi && Auth.CanEdit)
@@ -68,64 +57,36 @@
         </MudPaper>
     }
 
-    @if (_loading)
-    {
-        <MudProgressCircular Indeterminate="true" />
-    }
-    else if (_items.Count == 0)
-    {
-        <Muted Class="suggestions-empty">Aucune proposition en attente.</Muted>
-    }
-    else
-    {
-        <MudSimpleTable Dense="true" Hover="true" Class="suggestions-table">
-            <thead><tr><th>Élément</th><th>Proposition</th>@if (Auth.CanEdit) {<th></th>}</tr></thead>
-            <tbody>
-            @foreach (var s in _items)
-            {
-                <tr data-suggestion="@s.Id">
-                    <td>
-                        <code>@s.TargetLabel</code>
-                        <div><MudText Typo="Typo.caption">@(s.Kind == "sensitive" ? "colonne sensible" : s.TargetType)</MudText></div>
-                    </td>
-                    <td>
-                        @if (s.Kind == "sensitive")
-                        {
-                            <span class="suggestion-reason">@s.Text</span>
-                        }
-                        else
-                        {
-                            <input class="suggestion-input" type="text" value="@TextOf(s)" @onchange="@(e => Edit(s, e.Value))" aria-label="@($"Proposition pour {s.TargetLabel}")" />
-                        }
-                        @if (s.Uncertain)
-                        {
-                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="uncertain">incertaine</MudChip>
-                        }
-                        <MudText Typo="Typo.caption" Class="d-block">proposé par @s.Model</MudText>
-                    </td>
-                    @if (Auth.CanEdit)
-                    {
-                        <td class="suggestion-actions">
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="accept-suggestion" Disabled="_busy" OnClick="@(() => AcceptAsync(s))">Accepter</MudButton>
-                            <MudButton Size="Size.Small" Class="reject-suggestion" Disabled="_busy" OnClick="@(() => RejectAsync(s))">Refuser</MudButton>
-                        </td>
-                    }
-                </tr>
-            }
-            </tbody>
-        </MudSimpleTable>
-    }
-</MudContainer>
+    <SuggestionsTable TItem="SuggestionView" Items="_items" IdOf="@(s => s.Id)" Loading="_loading" Busy="_busy" EmptyText="Aucune proposition en attente." OnAccept="AcceptAsync" OnReject="RejectAsync">
+        <Header><th>Élément</th><th>Proposition</th></Header>
+        <RowContent Context="s">
+            <td>
+                <code>@s.TargetLabel</code>
+                <div><MudText Typo="Typo.caption">@(s.Kind == "sensitive" ? "colonne sensible" : s.TargetType)</MudText></div>
+            </td>
+            <td>
+                @if (s.Kind == "sensitive")
+                {
+                    <span class="suggestion-reason">@s.Text</span>
+                }
+                else
+                {
+                    <input class="suggestion-input" type="text" value="@TextOf(s)" @onchange="@(e => Edit(s, e.Value))" aria-label="@($"Proposition pour {s.TargetLabel}")" />
+                }
+                @if (s.Uncertain)
+                {
+                    <Badge Color="Color.Warning" Class="uncertain">incertaine</Badge>
+                }
+                <MudText Typo="Typo.caption" Class="d-block">proposé par @s.Model</MudText>
+            </td>
+        </RowContent>
+    </SuggestionsTable>
+</PageShell>
 
 @code {
-    [Parameter] public string Id { get; set; } = "";
-
-    private string? _databaseName;
     private List<SuggestionView> _items = [];
     private readonly Dictionary<string, string> _edited = new();
-    private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
     private SuggestionJobView? _job;
-    private bool _loading = true;
     private CancellationTokenSource? _poll;
 
     private bool Running => _job?.State == "running";
@@ -142,30 +103,11 @@
 
     private void Edit(SuggestionView s, object? value) => _edited[s.Id] = value?.ToString() ?? "";
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task LoadAsync()
     {
-        Workspace.Describe(Navigation.Uri, "Assistant de documentation");
-        _loading = true;
-        try
-        {
-            _capabilities = await Api.GetCapabilitiesAsync();
-            var database = await Api.GetDatabaseAsync(Id);
-            _databaseName = database?.Name;
-            _job = await Api.GetSuggestionJobAsync(Id);
-            _items = await Api.GetSuggestionsAsync(Id);
-            _error = null;
-            if (Running) StartPolling();
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "Les propositions n'ont pas pu être lues : l'API ne répond pas.";
-        }
-
-        _loading = false;
+        _job = await Api.GetSuggestionJobAsync(Id);
+        _items = await Api.GetSuggestionsAsync(Id);
+        if (Running) StartPolling();
     }
 
     /// <summary>Tant que la documentation tourne, l'écran relit l'avancement et la file toutes les 2 secondes.</summary>
@@ -216,8 +158,7 @@
     {
         await Api.AcceptSuggestionAsync(Id, s.Id, s.Kind == "sensitive" ? null : TextOf(s));
         _items.Remove(s);
-        Notifier.Show(s.Kind == "sensitive" ? $"{s.TargetLabel} marquée sensible." : $"Description de {s.TargetLabel} enregistrée.");
-        Workspace.NotifyCatalogChanged(Id, this);
+        Workspace.Saved(Notifier, Id, this, s.Kind == "sensitive" ? $"{s.TargetLabel} marquée sensible." : $"Description de {s.TargetLabel} enregistrée.");
     });
 
     private Task RejectAsync(SuggestionView s) => RunAsync(async () =>

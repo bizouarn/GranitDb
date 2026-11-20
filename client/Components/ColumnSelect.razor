@@ -1,0 +1,21 @@
+@using GranitDb.Client.Models
+@* Choisir une colonne d'une table, dans l'ordre de la table. *@
+<NativeSelect Label="@Label" Value="@Value" ValueChanged="ValueChanged" Class="@Class">
+    <option value="">Choisir…</option>
+    @foreach (var column in Columns.OrderBy(c => c.Position))
+    {
+        <option value="@column.Id">@column.Name</option>
+    }
+</NativeSelect>
+
+@code {
+    [Parameter, EditorRequired] public IEnumerable<ColumnInfo> Columns { get; set; } = [];
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter] public string Label { get; set; } = "";
+
+    [Parameter] public string? Class { get; set; }
+}

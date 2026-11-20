@@ -1,25 +1,15 @@
 @page "/databases/{Id}/relations"
-@inherits BusyComponentBase
+@inherits DatabasePageBase
 @using GranitDb.Client.Components
 @using GranitDb.Client.api
 @using GranitDb.Client.Models
 @using GranitDb.Client.Workspace
-@inject Client Api
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
 @inject AuthState Auth
 
-<PageTitle>Relations suggérées</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <PageCrumbs DatabaseId="@Id" DatabaseName="@_databaseName" Current="Relations suggérées" />
-    <PageHeader Title="Relations suggérées">
-        Colonnes dont le nom et les valeurs laissent penser qu'elles référencent une autre table, sans clé étrangère déclarée. La détection
-        compte, à la source, les valeurs qui n'existent pas dans la table visée : aucune valeur n'est lue ni gardée. Rien n'est créé sans votre accord.
-    </PageHeader>
-
-    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
+<PageShell Title="Relations suggérées" DatabaseId="@Id" DatabaseName="@_databaseName" Description="Colonnes dont le nom et les valeurs laissent penser qu'elles référencent une autre table, sans clé étrangère déclarée. La détection compte, à la source, les valeurs qui n'existent pas dans la table visée : aucune valeur n'est lue ni gardée. Rien n'est créé sans votre accord." Error="@_error" ErrorChanged="@(v => _error = v)">
 
     <MudStack Row="true" Spacing="2" Class="mb-3" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
         @if (CanDetect)
@@ -39,86 +29,34 @@
         }
     </MudStack>
 
-    @if (_loading)
-    {
-        <MudProgressCircular Indeterminate="true" />
-    }
-    else if (_items.Count == 0)
-    {
-        <Muted Class="suggestions-empty">
-            @(CanDetect ? "Aucune suggestion en attente. Lancez la détection pour en chercher." : "Aucune suggestion en attente.")
-        </Muted>
-    }
-    else
-    {
-        <MudSimpleTable Dense="true" Hover="true" Class="suggestions-table">
-            <thead>
-            <tr><th>Colonne</th><th></th><th>Table visée</th><th>Score</th><th>Pourquoi</th>@if (Auth.CanEdit) {<th></th>}</tr>
-            </thead>
-            <tbody>
-            @foreach (var s in _items)
-            {
-                <tr data-suggestion="@s.Id">
-                    <td><code>@s.ChildTable.@s.ChildColumn</code></td>
-                    <td>→</td>
-                    <td><code>@s.ParentTable.@s.ParentColumn</code></td>
-                    <td><MudChip T="string" Size="Size.Small" Color="@ColorOf(s.Level)" Class="@($"level-{s.Level}")">@s.Level (@s.Score)</MudChip></td>
-                    <td>
-                        <ul class="suggestion-reasons">
-                            @foreach (var reason in s.Reasons)
-                            {
-                                <li>@reason</li>
-                            }
-                        </ul>
-                    </td>
-                    @if (Auth.CanEdit)
+    <SuggestionsTable TItem="RelationSuggestionView" Items="_items" IdOf="@(s => s.Id)" Loading="_loading" Busy="_busy" EmptyText="@(CanDetect ? "Aucune suggestion en attente. Lancez la détection pour en chercher." : "Aucune suggestion en attente.")" OnAccept="AcceptAsync" OnReject="RejectAsync">
+        <Header><th>Colonne</th><th></th><th>Table visée</th><th>Score</th><th>Pourquoi</th></Header>
+        <RowContent Context="s">
+            <td><code>@s.ChildTable.@s.ChildColumn</code></td>
+            <td>→</td>
+            <td><code>@s.ParentTable.@s.ParentColumn</code></td>
+            <td><Badge Color="@ColorOf(s.Level)" Class="@($"level-{s.Level}")">@s.Level (@s.Score)</Badge></td>
+            <td>
+                <ul class="suggestion-reasons">
+                    @foreach (var reason in s.Reasons)
                     {
-                        <td class="suggestion-actions">
-                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="accept-suggestion"
-                                       Disabled="_busy" OnClick="@(() => AcceptAsync(s))">Accepter</MudButton>
-                            <MudButton Size="Size.Small" Class="reject-suggestion" Disabled="_busy" OnClick="@(() => RejectAsync(s))">Refuser</MudButton>
-                        </td>
+                        <li>@reason</li>
                     }
-                </tr>
-            }
-            </tbody>
-        </MudSimpleTable>
-    }
-</MudContainer>
+                </ul>
+            </td>
+        </RowContent>
+    </SuggestionsTable>
+</PageShell>
 
 @code {
-    [Parameter] public string Id { get; set; } = "";
-
-    private string? _databaseName;
     private List<RelationSuggestionView> _items = [];
-    private CapabilitiesView _capabilities = new() { AllowSqlServerSources = false, AllowLocalPaths = false, AllowProfiling = false };
     private string? _summary;
-    private bool _loading = true;
 
     private bool CanDetect => _capabilities.AllowProfiling && Auth.IsAdmin;
 
-    protected override async Task OnParametersSetAsync()
+    protected override async Task LoadAsync()
     {
-        Workspace.Describe(Navigation.Uri, "Relations suggérées");
-        _loading = true;
-        try
-        {
-            _capabilities = await Api.GetCapabilitiesAsync();
-            var database = await Api.GetDatabaseAsync(Id);
-            _databaseName = database?.Name;
-            _items = await Api.GetRelationSuggestionsAsync(Id);
-            _error = null;
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "Les suggestions n'ont pas pu être lues : l'API ne répond pas.";
-        }
-
-        _loading = false;
+        _items = await Api.GetRelationSuggestionsAsync(Id);
     }
 
     private static Color ColorOf(string level) => level switch
@@ -142,8 +80,7 @@
     {
         await Api.AcceptRelationSuggestionAsync(Id, s.Id);
         _items.Remove(s);
-        Notifier.Show($"Relation {s.ChildTable}.{s.ChildColumn} → {s.ParentTable}.{s.ParentColumn} créée.");
-        Workspace.NotifyCatalogChanged(Id, this);
+        Workspace.Saved(Notifier, Id, this, $"Relation {s.ChildTable}.{s.ChildColumn} → {s.ParentTable}.{s.ParentColumn} créée.");
     });
 
     private Task RejectAsync(RelationSuggestionView s) => RunAsync(async () =>

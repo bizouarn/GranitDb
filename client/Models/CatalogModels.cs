@@ -234,3 +234,14 @@ public class WebhookForm
     public string? Description { get; set; }
 }
 
+
+public partial class ImpactNode
+{
+    /// <summary>Ce que l'écran écrit : <c>table</c> ou <c>table.colonne</c>.</summary>
+    public string Label() => ColumnName == null ? TableName : $"{TableName}.{ColumnName}";
+
+    /// <summary>La fiche de la table (colonne mise en évidence) : un résultat de l'analyse d'impact y mène.</summary>
+    public string Href(string databaseId) =>
+        $"/databases/{Uri.EscapeDataString(databaseId)}/tables/{Uri.EscapeDataString(TableId)}" +
+        (ColumnId == null ? "" : $"?column={Uri.EscapeDataString(ColumnId)}");
+}

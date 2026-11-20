@@ -7,15 +7,7 @@
 @inject NavigationManager Navigation
 @inject WorkspaceState Workspace
 
-<PageTitle>Journal d'audit</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <PageCrumbs Current="Journal d'audit" />
-    <PageHeader Title="Journal d'audit">
-        Qui a modifié quoi et quand : chaque requête d'écriture et chaque export, du plus récent au plus ancien. Le contenu des requêtes n'est jamais gardé.
-    </PageHeader>
-
-    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
+<PageShell Title="Journal d'audit" Description="Qui a modifié quoi et quand : chaque requête d'écriture et chaque export, du plus récent au plus ancien. Le contenu des requêtes n'est jamais gardé." Error="@_error" ErrorChanged="@(v => _error = v)">
 
     <ActiveFilterBar Description="@AppliedDescription" Result="@(_loading ? null : $"{_page.Total} entrée(s)")" OnClear="ResetAsync" />
 
@@ -63,22 +55,19 @@
                     <td>@(entry.Actor ?? "—")</td>
                     <td>@entry.Method</td>
                     <td class="audit-path">@entry.Path</td>
-                    <td><MudChip T="string" Size="Size.Small" Color="@StatusColor(entry.Status)">@entry.Status</MudChip></td>
+                    <td><Badge Color="@StatusColor(entry.Status)">@entry.Status</Badge></td>
                     <td>@(entry.EntityId ?? "")</td>
                     <td>@(entry.Ip ?? "")</td>
                 </tr>
             }
             </tbody>
         </MudSimpleTable>
-        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-2">
-            <MudButton Size="Size.Small" Disabled="@(_skip == 0)" OnClick="PreviousAsync" Class="audit-previous">Précédent</MudButton>
-            <MudText Typo="Typo.body2" Class="audit-range">@(_skip + 1)–@(_skip + _page.Items.Length) sur @_page.Total</MudText>
-            <MudButton Size="Size.Small" Disabled="@(_skip + _page.Items.Length >= _page.Total)" OnClick="NextAsync" Class="audit-next">Suivant</MudButton>
+        <Pager Mode="Pager.PagerMode.PreviousNext" ClassPrefix="audit" Skip="_skip" PageSize="PageSize" Total="_page.Total" Shown="_page.Items.Length" SkipChanged="GoToAsync">
             <MudSpacer />
             <MudButton Size="Size.Small" OnClick="LoadAsync" StartIcon="@Icons.Material.Filled.Refresh" Class="audit-refresh">Actualiser</MudButton>
-        </MudStack>
+        </Pager>
     }
-</MudContainer>
+</PageShell>
 
 @code {
     private const int PageSize = 50;
@@ -108,27 +97,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Workspace.Describe(Navigation.Uri, "Journal d'audit");
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        try
+        await ApiErrors.TryAsync(async () =>
         {
             _applied = new AuditFilter(_actor, _method, _status, _controller);
             _page = await Api.GetAuditAsync(_applied, _skip, PageSize);
             _error = null;
-        }
-        catch (ApiException e)
-        {
-            _error = e.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "Le journal n'a pas pu être lu : l'API ne répond pas.";
-        }
+        }, message => _error = message);
 
         _loading = false;
     }
@@ -146,15 +126,9 @@
         return ApplyAsync();
     }
 
-    private Task PreviousAsync()
+    private Task GoToAsync(int skip)
     {
-        _skip = Math.Max(0, _skip - PageSize);
-        return LoadAsync();
-    }
-
-    private Task NextAsync()
-    {
-        _skip += PageSize;
+        _skip = skip;
         return LoadAsync();
     }
 

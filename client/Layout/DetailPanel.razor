@@ -31,7 +31,7 @@
     {
         <div class="detail-body" data-detail="database">
             <MudText Typo="Typo.h6" Class="detail-title">@_database.Name</MudText>
-            <MudChip T="string" Size="Size.Small">@_database.Type</MudChip>
+            <Badge>@_database.Type</Badge>
             <div class="detail-field">
                 <MudText Typo="Typo.caption">Description</MudText>
                 <InlineText Value="@_database.Description" Placeholder="Décrire cette base" OnSave="SaveDatabaseAsync" />
@@ -63,12 +63,15 @@
                     <MudText Typo="Typo.caption">Domaines</MudText>
                     @foreach (var domain in inDomains)
                     {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/diagram?domain={domain.Id}")">@domain.Name</MudChip>
+                        <Badge Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/diagram?domain={domain.Id}")">@domain.Name</Badge>
                     }
                 </div>
             }
             @CompletenessView(_completeness?.PerTable?.FirstOrDefault(t => t.TableId == _table.Id) is { } row ? new CompletenessSummary(row.Percent, row.ColumnsDescribed + (row.TableDescribed ? 1 : 0), row.Columns + 1, row.SensitiveUndescribed) : null)
-            @ImpactView()
+            @if (_impact != null)
+            {
+                <ImpactBrief Impact="_impact" />
+            }
             <MudStack Row="true" Spacing="1" Class="mt-2">
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/tables/{_table.Id}")">Ouvrir la table</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Href="@($"/databases/{_database.Id}/diagram")">Diagramme</MudButton>
@@ -81,15 +84,15 @@
             <MudText Typo="Typo.h6" Class="detail-title">@_column.Name</MudText>
             <MudText Typo="Typo.caption" Class="detail-sub">@_database.Name › @_table.Name</MudText>
             <div class="detail-chips">
-                <MudChip T="string" Size="Size.Small">@_column.DataType</MudChip>
+                <Badge>@_column.DataType</Badge>
                 @if (_column.IsPrimaryKey)
                 {
-                    <MudChip T="string" Size="Size.Small" Color="Color.Primary">clé primaire</MudChip>
+                    <Badge Color="Color.Primary">clé primaire</Badge>
                 }
-                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@(_column.IsNullable ? "nullable" : "non nullable")</MudChip>
+                <Badge Variant="Variant.Outlined">@(_column.IsNullable ? "nullable" : "non nullable")</Badge>
                 @if (!string.IsNullOrEmpty(_column.DefaultValue))
                 {
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">défaut : @_column.DefaultValue</MudChip>
+                    <Badge Variant="Variant.Outlined">défaut : @_column.DefaultValue</Badge>
                 }
             </div>
             <div class="detail-field">
@@ -105,7 +108,10 @@
                 <MudText Typo="Typo.caption">Étiquettes</MudText>
                 <TagEditor Tags="TagsOf(KindColumn, _column.Id)" OnAdd="name => AddTagAsync(name, KindColumn, _column.Id)" OnRemove="RemoveTagAsync" />
             </div>
-            @ImpactView()
+            @if (_impact != null)
+            {
+                <ImpactBrief Impact="_impact" />
+            }
             <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="mt-2" Href="@($"/databases/{_database.Id}/tables/{_table.Id}?column={_column.Id}")">Ouvrir la table</MudButton>
         </div>
     }
@@ -261,45 +267,6 @@
             builder.AddAttribute(11, "Color", Color.Warning);
             builder.AddAttribute(12, "ChildContent", (RenderFragment)(b => b.AddContent(0, $"{summary.SensitiveUndescribed} colonne(s) sensible(s) sans description")));
             builder.CloseComponent();
-        }
-
-        builder.CloseElement();
-    };
-
-    private RenderFragment ImpactView() => builder =>
-    {
-        if (_impact == null) return;
-        builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", "detail-field detail-impact");
-        builder.OpenElement(2, "div");
-        builder.AddAttribute(3, "class", "mud-typography mud-typography-caption");
-        builder.AddContent(4, "Impact");
-        builder.CloseElement();
-        builder.OpenElement(5, "p");
-        builder.AddAttribute(6, "class", "impact-summary");
-        builder.AddContent(7, _impact.Dependents.Count == 0 && _impact.Dependencies.Count == 0
-            ? "Aucune relation : rien ne dépend de cet élément et il ne dépend de rien."
-            : $"{_impact.Dependents.Count} élément(s) en dépendent, il dépend de {_impact.Dependencies.Count}.");
-        builder.CloseElement();
-        if (_impact.Dependents.Count > 0)
-        {
-            builder.OpenElement(8, "ul");
-            builder.AddAttribute(9, "class", "impact-list");
-            foreach (var node in _impact.Dependents.Take(8))
-            {
-                builder.OpenElement(10, "li");
-                builder.AddContent(11, node.ColumnName == null ? node.TableName : $"{node.TableName}.{node.ColumnName}");
-                builder.CloseElement();
-            }
-
-            if (_impact.Dependents.Count > 8)
-            {
-                builder.OpenElement(12, "li");
-                builder.AddContent(13, $"… et {_impact.Dependents.Count - 8} autre(s)");
-                builder.CloseElement();
-            }
-
-            builder.CloseElement();
         }
 
         builder.CloseElement();

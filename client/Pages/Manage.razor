@@ -10,18 +10,9 @@
 @inject Notifier Notifier
 @inject IDialogService Dialogs
 
-<PageTitle>Étiquettes et domaines</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
-    <PageCrumbs Current="Étiquettes et domaines" />
-    <PageHeader Title="Étiquettes et domaines">
-        Renommez, colorez ou supprimez les étiquettes (communes à toutes les bases) et les domaines de chaque base.
-        Cliquez un nom pour le modifier ; il s'enregistre en le quittant.
-    </PageHeader>
-
+<PageShell Title="Étiquettes et domaines" Description="Renommez, colorez ou supprimez les étiquettes (communes à toutes les bases) et les domaines de chaque base. Cliquez un nom pour le modifier ; il s'enregistre en le quittant." Error="@_error" ErrorChanged="@(v => _error = v)">
     <AiPanel />
 
-    <ErrorAlert Message="@_error" Class="mb-3" OnClose="@(() => _error = null)" />
 
     @if (_loading)
     {
@@ -97,7 +88,7 @@
             </MudPaper>
         }
     }
-</MudContainer>
+</PageShell>
 
 @code {
 
@@ -110,9 +101,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        Workspace.Describe(Navigation.Uri, "Étiquettes et domaines");
         await LoadAsync();
-        Workspace.Describe(Navigation.Uri, "Étiquettes et domaines");
         _loading = false;
     }
 
@@ -136,9 +125,9 @@
             await LoadAsync();
             Workspace.NotifyCatalogChanged(databaseId, this);
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            _error = e.Message;
+            _error = message;
         }
     }
 
@@ -148,8 +137,7 @@
         var parameters = new DialogParameters<TagDialog> { { x => x.Databases, _databases }, { x => x.Tags, _tags } };
         if (await Dialogs.ShowDataAsync<TagDialog, string>("Nouvelle étiquette", parameters, MaxWidth.Medium) is not { } name) return;
         await LoadAsync();
-        Workspace.NotifyCatalogChanged(null, this);
-        Notifier.Show($"Étiquette {name} créée.");
+        Workspace.Saved(Notifier, null, this, $"Étiquette {name} créée.");
     }
 
     private async Task ApplyTagAsync(TagInfo tag)
@@ -157,8 +145,7 @@
         var parameters = new DialogParameters<TagDialog> { { x => x.Databases, _databases }, { x => x.Tags, _tags }, { x => x.Existing, tag } };
         if (await Dialogs.ShowDataAsync<TagDialog, string>($"Poser l'étiquette {tag.Name}", parameters, MaxWidth.Medium) == null) return;
         await LoadAsync();
-        Workspace.NotifyCatalogChanged(null, this);
-        Notifier.Show($"Étiquette {tag.Name} posée.");
+        Workspace.Saved(Notifier, null, this, $"Étiquette {tag.Name} posée.");
     }
 
     private Func<string?, Task> RenameTagHandler(TagInfo tag) => text => RenameTagAsync(tag, text);
@@ -209,8 +196,7 @@
         if (await Dialogs.ShowFormAsync("Modifier le domaine", parameters, MaxWidth.Large))
         {
             await LoadAsync();
-            Workspace.NotifyCatalogChanged(domain.DatabaseId, this);
-            Notifier.Show("Domaine modifié.");
+            Workspace.Saved(Notifier, domain.DatabaseId, this, "Domaine modifié.");
         }
     }
 
@@ -223,8 +209,7 @@
         };
         if (await Dialogs.ShowDataAsync<DomainDialog, string>("Nouveau domaine", parameters, MaxWidth.Large) == null) return;
         await LoadAsync();
-        Workspace.NotifyCatalogChanged(database.Id, this);
-        Notifier.Show("Domaine créé.");
+        Workspace.Saved(Notifier, database.Id, this, "Domaine créé.");
     }
 
     /// <summary>Pour les champs en place : l'erreur remonte au champ, qui l'affiche sous la saisie.</summary>

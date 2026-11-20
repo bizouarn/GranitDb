@@ -1,0 +1,66 @@
+@typeparam TItem
+@inject AuthState Auth
+@using GranitDb.Client.Workspace
+@* Le tableau des propositions en attente (documentation, relations) : chargement, « rien en attente », puis une ligne par
+   proposition avec « Accepter » / « Refuser » pour qui peut modifier. Chaque page dit seulement ses colonnes. *@
+@if (Loading)
+{
+    <MudProgressCircular Indeterminate="true" />
+}
+else if (Items.Count == 0)
+{
+    <Muted Class="suggestions-empty">@EmptyText</Muted>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" Class="suggestions-table">
+        <thead>
+        <tr>
+            @Header
+            @if (Auth.CanEdit)
+            {
+                <th></th>
+            }
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var item in Items)
+        {
+            var current = item;
+            <tr data-suggestion="@IdOf(current)">
+                @RowContent(current)
+                @if (Auth.CanEdit)
+                {
+                    <td class="suggestion-actions">
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Class="accept-suggestion" Disabled="Busy"
+                                   OnClick="@(() => OnAccept.InvokeAsync(current))">Accepter</MudButton>
+                        <MudButton Size="Size.Small" Class="reject-suggestion" Disabled="Busy" OnClick="@(() => OnReject.InvokeAsync(current))">Refuser</MudButton>
+                    </td>
+                }
+            </tr>
+        }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+
+    [Parameter, EditorRequired] public Func<TItem, string> IdOf { get; set; } = null!;
+
+    [Parameter] public bool Loading { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public string? EmptyText { get; set; }
+
+    /// <summary>Les en-têtes (<c>&lt;th&gt;</c>) ; la colonne des actions s'ajoute toute seule.</summary>
+    [Parameter, EditorRequired] public RenderFragment Header { get; set; } = null!;
+
+    /// <summary>Les cellules (<c>&lt;td&gt;</c>) d'une proposition.</summary>
+    [Parameter, EditorRequired] public RenderFragment<TItem> RowContent { get; set; } = null!;
+
+    [Parameter] public EventCallback<TItem> OnAccept { get; set; }
+
+    [Parameter] public EventCallback<TItem> OnReject { get; set; }
+}

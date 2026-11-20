@@ -7,8 +7,8 @@
 {
     @if (Auth.IsReadOnly)
     {
-        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="read-only-chip"
-                 title="Votre rôle ne permet pas de modifier le catalogue">Lecture seule</MudChip>
+        <Badge Color="Color.Warning" Class="read-only-chip"
+                 title="Votre rôle ne permet pas de modifier le catalogue">Lecture seule</Badge>
     }
     <MudMenu Class="user-menu" aria-label="Compte" Dense="true" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
         <ActivatorContent>
@@ -34,8 +34,8 @@
 
 else if (Auth.IsVisitor)
 {
-    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="visitor-chip"
-             title="Seules les bases publiques sont visibles">Visiteur</MudChip>
+    <Badge Color="Color.Warning" Class="visitor-chip"
+             title="Seules les bases publiques sont visibles">Visiteur</Badge>
     <MudMenu Label="Se connecter" StartIcon="@Icons.Material.Filled.Login" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit"
              Class="visitor-login" Dense="true">
         @foreach (var provider in Auth.Providers)

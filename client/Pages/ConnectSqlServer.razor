@@ -9,11 +9,7 @@
 @inject WorkspaceState Workspace
 @inject Notifier Notifier
 
-<PageTitle>@Title</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-6">
-    <PageCrumbs Current="@Title" />
-    <MudText Typo="Typo.h4" Class="mb-2">@Title</MudText>
+<PageShell Title="@Title" TabTitle="@TabTitle" MaxWidth="MaxWidth.Medium">
 
     @if (_loading)
     {
@@ -98,7 +94,7 @@
             }
         }
     }
-</MudContainer>
+</PageShell>
 
 @code {
     private readonly ServerConnectionInput _form = new();
@@ -111,6 +107,8 @@
 
     /// <summary>Base dont on remplace la connexion (lien « Modifier la connexion » de la page d'une base).</summary>
     [SupplyParameterFromQuery(Name = "id")] public string? EditId { get; set; }
+
+    private string TabTitle => EditId == null ? "Connecter un serveur" : $"Connexion · {_existing?.Name ?? "base"}";
 
     private string Title => EditId == null ? $"Connecter un serveur {ServerEngines.DisplayName(_form.Engine)}" : $"Modifier la connexion de {_existing?.Name ?? "la base"}";
 
@@ -133,7 +131,6 @@
         if (_existing != null && string.IsNullOrWhiteSpace(_form.Name)) _form.Name = _existing.Name;
         // La connexion d'une base existante garde son moteur.
         if (_existing != null && !string.IsNullOrEmpty(_existing.Type)) _form.Engine = _existing.Type;
-        Workspace.Describe(Navigation.Uri, EditId == null ? "Connecter un serveur" : $"Connexion · {_existing?.Name ?? "base"}");
         _loading = false;
     }
 
@@ -145,15 +142,10 @@
         {
             _schemas.Set(await Api.TestServerAsync(_form));
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
             _schemas.Set(null);
-            _error = ex.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _schemas.Set(null);
-            _error = "L'API est injoignable.";
+            _error = message;
         }
         finally
         {
@@ -175,18 +167,13 @@
         {
             _form.Schemas = _schemas.Chosen(_form.Engine);
             var result = EditId == null ? await Api.ImportServerAsync(_form) : await Api.UpdateServerConnectionAsync(EditId, _form);
-            Workspace.NotifyCatalogChanged(EditId, this);
-            Notifier.Show(Phrases.ServerSaved(result, EditId != null));
+            Workspace.Saved(Notifier, EditId, this, Phrases.ServerSaved(result, EditId != null));
             _form.Password = null; // le mot de passe ne reste pas dans la page
             Navigation.NavigateTo($"/databases/{result.Database.Id}");
         }
-        catch (ApiException ex)
+        catch (Exception ex) when (ApiErrors.Describe(ex) is { } message)
         {
-            _error = ex.Message;
-        }
-        catch (HttpRequestException)
-        {
-            _error = "L'API est injoignable.";
+            _error = message;
         }
         finally
         {

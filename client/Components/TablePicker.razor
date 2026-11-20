@@ -1,0 +1,44 @@
+@using GranitDb.Client.Models
+@* Choisir une table parmi beaucoup : un champ de recherche qui restreint la liste (la table choisie y reste toujours). *@
+<div class="relation-dialog-side">
+    <MudText Typo="Typo.subtitle2">@Title</MudText>
+    <input class="@($"{ClassPrefix}-filter")" type="search" placeholder="Rechercher une table…" aria-label="@FilterLabel"
+           @bind="_filter" @bind:event="oninput" />
+    <NativeSelect Label="@Label" Value="@Value" ValueChanged="ValueChanged" Class="@($"{ClassPrefix}-table")">
+        <option value="">Choisir…</option>
+        @foreach (var table in Matching)
+        {
+            <option value="@table.Id">@table.Name</option>
+        }
+    </NativeSelect>
+</div>
+
+@code {
+    private string _filter = "";
+
+    [Parameter, EditorRequired] public IReadOnlyList<TableInfo> Tables { get; set; } = [];
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    [Parameter] public string Title { get; set; } = "";
+
+    [Parameter] public string Label { get; set; } = "";
+
+    [Parameter] public string FilterLabel { get; set; } = "Rechercher une table";
+
+    /// <summary>Préfixe des classes CSS (<c>relation-dialog-source</c> donne <c>-filter</c> et <c>-table</c>).</summary>
+    [Parameter] public string ClassPrefix { get; set; } = "table-picker";
+
+    private IEnumerable<TableInfo> Matching
+    {
+        get
+        {
+            var term = _filter.Trim();
+            return Tables
+                .Where(t => t.Id == Value || term.Length == 0 || t.Name.Contains(term, StringComparison.CurrentCultureIgnoreCase))
+                .OrderBy(t => t.Name, StringComparer.CurrentCultureIgnoreCase).Take(200);
+        }
+    }
+}

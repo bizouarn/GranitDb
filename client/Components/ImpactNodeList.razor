@@ -1,0 +1,25 @@
+@using GranitDb.Client.Models
+@* Une liste de l'analyse d'impact (page du diagramme) : un titre, les éléments avec un lien vers leur fiche et leur distance. *@
+<MudText Typo="Typo.subtitle2" Color="TitleColor">@Title (@Nodes.Count)</MudText>
+@if (Nodes.Count == 0)
+{
+    <MudText Typo="Typo.body2">@EmptyText</MudText>
+}
+<MudList T="string" Dense="true">
+    @foreach (var node in Nodes)
+    {
+        <MudListItem T="string"><a class="impact-link" href="@node.Href(DatabaseId)">@node.Label()</a> <Badge>@(node.Depth == 1 ? "direct" : $"niveau {node.Depth}")</Badge></MudListItem>
+    }
+</MudList>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public Color TitleColor { get; set; } = Color.Default;
+
+    [Parameter, EditorRequired] public IReadOnlyList<ImpactNode> Nodes { get; set; } = [];
+
+    [Parameter] public string EmptyText { get; set; } = "";
+
+    [Parameter, EditorRequired] public string DatabaseId { get; set; } = "";
+}

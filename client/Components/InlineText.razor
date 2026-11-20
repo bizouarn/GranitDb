@@ -123,9 +123,9 @@ else
                 Notifier.Show(text == null ? "Description effacée." : "Modification enregistrée.", MudBlazor.Severity.Success,
                     async () => await OnSave(previous));
         }
-        catch (ApiException e)
+        catch (Exception e) when (ApiErrors.Describe(e) is { } message)
         {
-            _error = e.Message;
+            _error = message;
         }
         finally
         {

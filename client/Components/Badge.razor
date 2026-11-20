@@ -1,0 +1,21 @@
+@* Une pastille (type, état, étiquette…) : une MudChip de petite taille ; les attributs inconnus (title, aria-label…) lui sont transmis. *@
+<MudChip T="string" Size="Size.Small" Color="Color" Variant="Variant" Icon="@Icon" Href="@Href" Class="@Class" OnClose="OnClose" @attributes="Unmatched">@ChildContent</MudChip>
+
+@code {
+    [Parameter] public Color Color { get; set; } = Color.Default;
+
+    [Parameter] public Variant Variant { get; set; } = Variant.Filled;
+
+    [Parameter] public string? Icon { get; set; }
+
+    [Parameter] public string? Href { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Une croix apparaît quand un gestionnaire est donné.</summary>
+    [Parameter] public EventCallback<MudChip<string>> OnClose { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)] public Dictionary<string, object>? Unmatched { get; set; }
+}

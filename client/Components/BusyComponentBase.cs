@@ -15,23 +15,22 @@ public abstract class BusyComponentBase : ComponentBase
     /// <summary>Une action est en cours.</summary>
     protected bool _busy;
 
-    protected async Task RunAsync(Func<Task> action)
+    /// <summary>
+    ///     Exécute l'action. Une erreur d'API va à <paramref name="onError" />, ou à <c>_error</c> par défaut ; le résultat dit si
+    ///     l'action a réussi.
+    /// </summary>
+    protected async Task<bool> RunAsync(Func<Task> action, Action<string>? onError = null)
     {
         _busy = true;
         try
         {
-            await action();
-            _error = null;
+            var ok = await ApiErrors.TryAsync(action, message => (onError ?? (m => _error = m))(message));
+            if (ok) _error = null;
+            return ok;
         }
-        catch (ApiException e)
+        finally
         {
-            _error = e.Message;
+            _busy = false;
         }
-        catch (HttpRequestException)
-        {
-            _error = "L'API ne répond pas.";
-        }
-
-        _busy = false;
     }
 }
