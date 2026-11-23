@@ -166,7 +166,7 @@
                     <MudIconButton Icon="@Icons.Material.Filled.ZoomOut" Size="Size.Small" OnClick="() => Zoom(-0.1)" title="Zoom arrière" />
                     <MudText Typo="Typo.body2">@((int)Math.Round(_zoom * 100)) %</MudText>
                     <MudIconButton Icon="@Icons.Material.Filled.ZoomIn" Size="Size.Small" OnClick="() => Zoom(0.1)" title="Zoom avant" />
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="Relayout"
+                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="RelayoutAsync"
                                StartIcon="@Icons.Material.Filled.AutoFixHigh">Réorganiser</MudButton>
                     @if (CurrentDomain != null)
                     {
@@ -762,7 +762,7 @@
         {
             await Api.SaveLayoutAsync(domain.Id, [(node.Id, node.X, node.Y)]);
             var index = domain.Tables.FindIndex(t => t.TableId == node.Id);
-            if (index >= 0) domain.Tables[index] = new DomainTableView { TableId = node.Id, X = node.X, Y = node.Y };
+            if (index >= 0) { domain.Tables[index].X = node.X; domain.Tables[index].Y = node.Y; }
         }, ShowError);
     }
 
@@ -815,9 +815,28 @@
         _diagram.AutoLayout();
     }
 
-    private void Relayout()
+    private async Task RelayoutAsync()
     {
         _diagram.AutoLayout();
+        await SaveAllPositionsAsync();
+    }
+
+    /// <summary>Mémorise pour le domaine courant la place de toutes ses tables (les tables « frontière » ne sont pas enregistrées).</summary>
+    private async Task SaveAllPositionsAsync()
+    {
+        var domain = CurrentDomain;
+        if (domain == null) return;
+        var nodes = _diagram.Nodes.Where(n => !n.IsFrontier).ToList();
+        if (nodes.Count == 0) return;
+        await ApiErrors.TryAsync(async () =>
+        {
+            await Api.SaveLayoutAsync(domain.Id, nodes.Select(n => (n.Id, n.X, n.Y)));
+            foreach (var node in nodes)
+            {
+                var index = domain.Tables.FindIndex(t => t.TableId == node.Id);
+                if (index >= 0) { domain.Tables[index].X = node.X; domain.Tables[index].Y = node.Y; }
+            }
+        }, ShowError);
     }
 
     private void Zoom(double delta)
