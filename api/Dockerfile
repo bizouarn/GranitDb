@@ -23,4 +23,6 @@ RUN dotnet publish api/GranitDB.API.csproj -c $BUILD_CONFIGURATION -o /app/publi
 FROM base AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+# Licence du projet et mentions des composants tiers.
+COPY LICENSE docs/THIRD-PARTY-NOTICES.md /licenses/
 ENTRYPOINT ["dotnet", "GranitDB.API.dll"]

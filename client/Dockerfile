@@ -14,5 +14,7 @@ COPY client/nginx.conf /etc/nginx/conf.d/default.conf
 COPY client/docker-entrypoint.sh /docker-entrypoint.d/40-appsettings.sh
 RUN chmod +x /docker-entrypoint.d/40-appsettings.sh
 COPY --from=build /app/publish/wwwroot /usr/share/nginx/html
+# Licence du projet et mentions des composants tiers.
+COPY LICENSE docs/THIRD-PARTY-NOTICES.md /licenses/
 ENV API_BASE_URL=http://localhost:5105/
 EXPOSE 80
