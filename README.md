@@ -46,7 +46,7 @@ Ouvrez l'interface et glissez un fichier `.db` / `.sqlite` sur la zone de dépô
 | [Déploiement et tests](docs/deploiement.md) | Docker, sauvegarde, migrations, CI |
 | [API REST](docs/api.md) | Routes, filtres, webhooks |
 
-L'index complet est dans [`docs/`](docs/README.md). L'état des lieux et la feuille de route sont dans [`work-doc/`](work-doc/), l'architecture et les conventions dans [`CLAUDE.md`](CLAUDE.md).
+L'index complet est dans [`docs/`](docs/README.md). L'audit du code et la feuille de route sont dans [`work-doc/`](work-doc/), l'architecture et les conventions dans [`CLAUDE.md`](CLAUDE.md).
 
 ## Tests
 

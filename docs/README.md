@@ -11,4 +11,4 @@
 | [deploiement.md](deploiement.md) | Administrateurs, développeurs | Docker, sauvegarde, migrations, tests, CI |
 | [api.md](api.md) | Développeurs | Routes REST, filtres, pagination, webhooks, client généré |
 
-Pour les développeurs : l'architecture et les conventions sont dans [`CLAUDE.md`](../CLAUDE.md), l'état des lieux et la feuille de route dans [`work-doc/`](../work-doc/).
+Pour les développeurs : l'architecture et les conventions sont dans [`CLAUDE.md`](../CLAUDE.md), l'audit du code et la feuille de route dans [`work-doc/`](../work-doc/).
