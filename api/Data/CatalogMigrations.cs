@@ -62,7 +62,7 @@ public static class CatalogMigrations
                 )
                 """
             ],
-            // Reprend aussi les catalogues SQL Server créés avec l'ancien script InitV1.sql.
+            // Reprend aussi les catalogues SQL Server créés par une version antérieure du script d'initialisation.
             SqlServer:
             [
                 """

@@ -39,7 +39,6 @@ Le schéma du catalogue est versionné (`api/Data/CatalogMigrations.cs`, version
 
 - Une migration déjà publiée ne se modifie jamais : on en ajoute une.
 - Un catalogue plus récent que l'application est refusé.
-- `InitV1.sql` n'est qu'une référence de l'état final côté SQL Server.
 
 ## Tests
 
