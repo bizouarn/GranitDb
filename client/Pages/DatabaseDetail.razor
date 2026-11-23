@@ -1163,7 +1163,7 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("granitdb.openPrintable", await Api.ExportAsync(_database!.Id, "html"));
+            await JS.InvokeVoidAsync("granitdb.openPrintable", Api.HtmlPreviewUrl(_database!.Id));
         }
         catch (Exception e) when (e is ApiException or JSException or HttpRequestException)
         {

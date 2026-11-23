@@ -36,7 +36,7 @@ curl http://localhost:5105/api/v1/DatabaseInfo
 | `POST /api/v1/import/documentation/{databaseId}` | Importe une documentation externe (descriptions vides, domaines, relations manuelles) en rapprochant par nom |
 | `GET /api/v1/Audit?actor=&method=&status=&controller=&entityId=&from=&to=` | Journal d'audit : qui a modifié ou exporté quoi, et quand (jamais le contenu des requêtes) |
 | `GET/POST/PUT/DELETE /api/v1/Webhooks`, `POST /Webhooks/{id}/test`, `GET /Webhooks/{id}/deliveries` | Webhooks (voir plus bas) |
-| `GET /api/v1/DatabaseInfo/{id}/export/html\|markdown\|csv\|xlsx` | Exports de la documentation |
+| `GET /api/v1/DatabaseInfo/{id}/export/html\|markdown\|csv\|xlsx` | Exports de la documentation ; `export/html?inline=true` l'affiche dans le navigateur (aperÃ§u, impression) au lieu de la tÃ©lÃ©charger |
 | `GET /api/v1/Capabilities` | Ce que le serveur autorise (sources serveur, chemins locaux, profilage, IA, synchronisation planifiée) |
 | `GET /api/v1/Search?q=terme&limit=25` | Recherche globale |
 

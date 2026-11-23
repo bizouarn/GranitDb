@@ -965,6 +965,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "inline",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {

@@ -40,6 +40,53 @@ public class ErDiagramTests
     }
 
     [Fact]
+    public void Layout_reorders_each_column_to_remove_the_crossings_a_name_order_would_create()
+    {
+        // Les enfants a, b, c pointent vers P3, P2, P1 : dans l'ordre alphabétique chaque lien croise les deux autres.
+        var tables = new List<TableInfo>();
+        var relations = new List<RelationInfo>();
+        foreach (var (parent, child) in new[] { ("P1", "c"), ("P2", "b"), ("P3", "a") })
+            relations.Add(Rel("r-" + child, "id-" + parent, "fk-" + child));
+        foreach (var (parent, child) in new[] { ("P1", "c"), ("P2", "b"), ("P3", "a") })
+        {
+            tables.Add(new TableInfo { Id = parent, Name = parent, Columns = [Col("id-" + parent, parent, "id", pk: true)],
+                Relations = relations.Where(r => r.FirstId == "id-" + parent).ToList() });
+            tables.Add(new TableInfo { Id = child, Name = child, Columns = [Col("fk-" + child, child, "parent_id")],
+                Relations = relations.Where(r => r.SecondId == "fk-" + child).ToList() });
+        }
+
+        var diagram = ErDiagram.Build(tables);
+
+        Assert.Equal(0, diagram.Crossings());
+        Assert.Equal(ErDiagram.Build(tables).Nodes.Select(n => (n.Id, n.X, n.Y)), diagram.Nodes.Select(n => (n.Id, n.X, n.Y)));
+    }
+
+    [Fact]
+    public void Layout_of_a_large_graph_stays_fast_and_never_overlaps_tables()
+    {
+        var tables = new List<TableInfo>();
+        var relations = new List<RelationInfo>();
+        for (var i = 0; i < 400; i++)
+        {
+            tables.Add(new TableInfo { Id = "t" + i, Name = "t" + i, Columns = [Col("p" + i, "t" + i, "id", pk: true), Col("f" + i, "t" + i, "fk", pos: 1)] });
+            if (i > 0) relations.Add(Rel("r" + i, "p" + (i * 7 % i), "f" + i));
+        }
+
+        foreach (var table in tables)
+            table.Relations = relations.Where(r => r.FirstId == table.Columns[0].Id || r.SecondId == table.Columns[1].Id).ToList();
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+
+        var diagram = ErDiagram.Build(tables);
+
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"Placement trop lent : {watch.Elapsed}");
+        foreach (var group in diagram.Nodes.GroupBy(n => n.X))
+        {
+            var ordered = group.OrderBy(n => n.Y).ToList();
+            for (var i = 1; i < ordered.Count; i++) Assert.True(ordered[i].Y >= ordered[i - 1].Y + ordered[i - 1].Height);
+        }
+    }
+
+    [Fact]
     public void A_table_coloured_in_the_domain_gets_that_header_with_a_readable_ink_and_the_others_stay_blue()
     {
         var diagram = ErDiagram.Build(Shop(), tableColors: new Dictionary<string, string> { ["t-c"] = "#f9a825", ["t-o"] = "#1b5e20" });

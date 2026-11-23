@@ -91,7 +91,7 @@ Ce qui reste ne peut pas se faire sans utilisateurs ni appareils :
 
 | Sujet |
 |---|
-| Analyse d'impact limitée à la base de l'élément (une relation manuelle entre deux bases n'est pas suivie) ; le diagramme place les tables par couches sans minimiser les croisements de relations |
+| Analyse d'impact limitée à la base de l'élément (une relation manuelle entre deux bases n'est pas suivie) |
 | Index : seuls les noms de colonnes sont stockés (pas l'ordre ASC/DESC, ni les prédicats d'index partiels, ni les colonnes `INCLUDE`) |
 
 Les constats de sécurité et de performance ouverts sont dans l'[audit du code](03-audit-code.md).

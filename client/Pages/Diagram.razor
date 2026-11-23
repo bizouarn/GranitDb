@@ -905,7 +905,7 @@
         _previewLoading = true;
         try
         {
-            await CallJsAsync("granitdb.openHtml", await Api.ExportAsync(_database!.Id, "html"));
+            await CallJsAsync("granitdb.openHtml", Api.HtmlPreviewUrl(_database!.Id));
         }
         catch (Exception e)
         {

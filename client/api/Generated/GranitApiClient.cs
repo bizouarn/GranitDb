@@ -7,6 +7,7 @@
 #nullable enable
 
 using GranitDb.Client.Models;
+using GranitDb.Client.Models;
 
 #pragma warning disable 108 // Disable "CS0108 '{derivedDto}.ToJson()' hides inherited member '{dtoBase}.ToJson()'. Use the new keyword if hiding was intended."
 #pragma warning disable 114 // Disable "CS0114 '{derivedDto}.RaisePropertyChanged(String)' hides inherited member 'dtoBase.RaisePropertyChanged(String)'. To make the current member override that implementation, add the override keyword. Otherwise add the new keyword."
@@ -3057,7 +3058,7 @@ namespace GranitDb.Client.Generated
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <returns>OK</returns>
         /// <exception cref="GranitApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task ExportHtmlAsync(string id, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task ExportHtmlAsync(string id, bool? inline = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (id == null)
                 throw new System.ArgumentNullException("id");
@@ -3076,6 +3077,12 @@ namespace GranitDb.Client.Generated
                     urlBuilder_.Append("api/v1/DatabaseInfo/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(id, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/export/html");
+                    urlBuilder_.Append('?');
+                    if (inline != null)
+                    {
+                        urlBuilder_.Append(System.Uri.EscapeDataString("inline")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(inline, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+                    }
+                    urlBuilder_.Length--;
 
                     PrepareRequest(client_, request_, urlBuilder_);
 

@@ -31,9 +31,9 @@ Pas de plafond sur la taille du corps (limite Kestrel par défaut ≈ 30 Mo) ni 
 
 ## Faible
 
-- **F1 — CSP** : les en-têtes `X-Content-Type-Options`, `X-Frame-Options` et `Referrer-Policy` sont posés, mais pas de `Content-Security-Policy` (Blazor WASM demande `wasm-unsafe-eval`, MudBlazor des styles en ligne). HSTS relève du proxy TLS ; `AllowedHosts` est resté à `*`.
+- **F1 — HSTS** : la Content-Security-Policy et `AllowedHosts` sont réglés ; reste HSTS, qui relève du proxy TLS devant l'application.
 - **F2 — Journal technique** : le journal d'audit existe, mais pas de journal technique des erreurs 500 ni d'identifiant de corrélation propagé au-delà de `X-Request-Id`.
-- **F5 — Diagramme en grande taille** : placement par couches sans minimisation des croisements ; un domaine très dense n'est lisible qu'en zoom (une grosse base s'ouvre sur un domaine plutôt que sur toutes les tables).
+- **F5 — Diagramme très dense** : le placement est un Sugiyama complet (`ErLayout`) : croisements minimisés, liens longs tracés entre les tables, hauteurs alignées sur les colonnes reliées ; un domaine très dense reste cependant lisible surtout en zoom ; une grosse base s'ouvre sur un domaine plutôt que sur toutes les tables.
 - **F6 — Composants Razor volumineux** : `DatabaseDetail.razor`, `Diagram.razor` et `Explorer.razor` dépassent 500 lignes (≈ 900 pour les deux premiers) ; les extraire en composants faciliterait les tests et limiterait les rendus.
 - **F7 — Liste des types de relation** (`One-to-Many`…) encore dupliquée côté interface.
 - **F8 — Divers** :
@@ -60,7 +60,7 @@ Pas de plafond sur la taille du corps (limite Kestrel par défaut ≈ 30 Mo) ni 
 | 4 | SQLite : WAL + `busy_timeout`, test de concurrence | Moyenne | S | M5 |
 | 5 | Séparer et protéger les clés Data Protection | Moyenne | M | M2 |
 | 6 | Plafonner l'import de documentation, grouper les écritures | Moyenne | S | M6 |
-| 7 | CSP, journal technique des 500 | Faible | M | F1, F2 |
+| 7 | Journal technique des 500, HSTS au proxy | Faible | S | F1, F2 |
 | 8 | Test de performance sur une base synthétique ; CodeQL en CI | Faible | M | tests |
 | 9 | Découper `DatabaseDetail` / `Diagram` / `Explorer` ; retirer `Newtonsoft.Json` | Faible | L | F6, F8 |
 

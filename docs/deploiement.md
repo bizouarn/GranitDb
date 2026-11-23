@@ -64,3 +64,7 @@ Les tests SQLite n'ont besoin d'aucun service externe. Les tests SQL Server, Pos
 | `work-doc/` | État des lieux et feuille de route |
 
 L'architecture détaillée et les conventions sont dans [`CLAUDE.md`](../CLAUDE.md).
+
+## En-têtes de sécurité
+
+L'image du client sert une `Content-Security-Policy` stricte (scripts de l'application seulement, `wasm-unsafe-eval` pour Blazor, aucun `eval`, pas d'encadrement dans une page tierce). L'adresse autorisée pour les appels à l'API (`connect-src`) est celle de `API_BASE_URL`, réduite à son origine : elle est calculée au démarrage du conteneur par `docker-entrypoint.sh`. L'API n'accepte que les noms d'hôte de `AllowedHosts` (`localhost` par défaut ; `ALLOWED_HOSTS` en Docker, à étendre derrière un nom de domaine). HSTS est à poser sur le proxy TLS.

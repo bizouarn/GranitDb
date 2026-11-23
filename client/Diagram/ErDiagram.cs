@@ -69,8 +69,8 @@ public class ErDiagram
     public const int MaxCaption = 34;
     public const double RowHeight = 20;
     public const double Margin = 24;
-    private const double ColumnGap = 90;
-    private const double RowGap = 36;
+    internal const double ColumnGap = 90;
+    internal const double RowGap = 36;
 
     private readonly Dictionary<string, ErNode> _byId;
 
@@ -175,65 +175,37 @@ public class ErDiagram
     }
 
     /// <summary>
-    ///     Place les tables en colonnes : une table référencée est à gauche de celles qui la référencent. Les tables
-    ///     sans relation sont rangées en grille sous le graphe.
+    ///     Place les tables en couches (le référencé à gauche, celui qui référence à droite), en réduisant les croisements
+    ///     et la longueur des liens ; les liens qui traversent plusieurs colonnes reçoivent des points de passage entre les
+    ///     tables. Les tables sans relation sont rangées en grille sous le graphe. Voir <see cref="ErLayout" />.
     /// </summary>
     public void AutoLayout()
     {
-        var linked = Edges.SelectMany(e => new[] { e.ReferencingTableId, e.ReferencedTableId }).ToHashSet();
-        var layer = Nodes.ToDictionary(n => n.Id, _ => 0);
-        // Relaxation bornée : une boucle de références ne fait pas diverger le calcul.
-        for (var pass = 0; pass < Nodes.Count; pass++)
+        var result = ErLayout.Run(Nodes, Edges, ColumnGap, RowGap);
+        _crossings = result.Crossings;
+        _hints.Clear();
+        var byRelation = Edges.GroupBy(e => e.RelationId).ToDictionary(g => g.Key, g => g.First());
+        foreach (var (edgeId, points) in result.Waypoints)
         {
-            var changed = false;
-            foreach (var e in Edges.Where(e => e.ReferencingTableId != e.ReferencedTableId))
-            {
-                var wanted = Math.Min(layer[e.ReferencedTableId] + 1, Nodes.Count);
-                if (layer[e.ReferencingTableId] >= wanted) continue;
-                layer[e.ReferencingTableId] = wanted;
-                changed = true;
-            }
-
-            if (!changed) break;
-        }
-
-        var x = Margin;
-        var bottom = Margin;
-        foreach (var column in Nodes.Where(n => linked.Contains(n.Id)).GroupBy(n => layer[n.Id]).OrderBy(g => g.Key))
-        {
-            var y = Margin;
-            foreach (var node in column)
-            {
-                node.X = x;
-                node.Y = y;
-                y += node.Height + RowGap;
-            }
-
-            x += column.Max(n => n.Width) + ColumnGap;
-            bottom = Math.Max(bottom, y);
-        }
-
-        var loose = Nodes.Where(n => !linked.Contains(n.Id)).ToList();
-        if (loose.Count == 0) return;
-        var perRow = Math.Max(1, (int)Math.Ceiling(Math.Sqrt(loose.Count)));
-        var cx = Margin;
-        var cy = bottom;
-        var rowHeight = 0.0;
-        for (var i = 0; i < loose.Count; i++)
-        {
-            if (i > 0 && i % perRow == 0)
-            {
-                cx = Margin;
-                cy += rowHeight + RowGap;
-                rowHeight = 0;
-            }
-
-            loose[i].X = cx;
-            loose[i].Y = cy;
-            cx += loose[i].Width + ColumnGap / 2;
-            rowHeight = Math.Max(rowHeight, loose[i].Height);
+            var edge = byRelation[edgeId];
+            var from = _byId[edge.ReferencingTableId];
+            var to = _byId[edge.ReferencedTableId];
+            _hints[edgeId] = new RouteHint(points, from.X, from.Y, to.X, to.Y);
         }
     }
+
+    private int _crossings;
+
+    /// <summary>
+    ///     Croisements de liens entre colonnes voisines au dernier placement automatique (les liens longs comptent à chaque
+    ///     colonne traversée) ; ne suit pas les tables que l'on déplace ensuite.
+    /// </summary>
+    public int Crossings() => _crossings;
+
+    /// <summary>Points de passage d'un lien long, valables tant que ses deux tables n'ont pas bougé depuis le placement.</summary>
+    private sealed record RouteHint(IReadOnlyList<(double Left, double Right, double Y)> Points, double FromX, double FromY, double ToX, double ToY);
+
+    private readonly Dictionary<string, RouteHint> _hints = new();
 
     /// <summary>Taille du dessin : la boîte qui contient toutes les tables, marge comprise.</summary>
     public (double Width, double Height) Size()
@@ -266,10 +238,34 @@ public class ErDiagram
         var y1 = fromRows.Average();
         var y2 = toRows.Average();
 
-        // Séparation verticale plus grande que l'horizontale : liens orthogonaux bas -> haut, comme dans Dataedo.
+        // Lien long placé par le placement automatique : il passe entre les tables, par ses points de passage.
+        if (_hints.TryGetValue(edge.RelationId, out var hint) && hint.FromX == from.X && hint.FromY == from.Y &&
+            hint.ToX == to.X && hint.ToY == to.Y && Math.Abs(from.X - to.X) > 1)
+        {
+            // Le tracé ne tourne que dans les couloirs entre colonnes (au milieu de l'écart) et traverse chaque colonne
+            // de passage à la hauteur de son point de passage, libre de table.
+            var forward = from.X < to.X;
+            var (hx1, hx2) = forward ? (from.X + from.Width, to.X) : (from.X, to.X + to.Width);
+            var path = new StringBuilder(string.Create(CultureInfo.InvariantCulture, $"M {hx1:0.#} {y1:0.#}"));
+            var current = y1;
+            var channel = hx1;
+            foreach (var (left, right, y) in forward ? hint.Points : hint.Points.Reverse())
+            {
+                var enter = forward ? left - ColumnGap / 2 : right + ColumnGap / 2;
+                channel = forward ? right + ColumnGap / 2 : left - ColumnGap / 2;
+                path.Append(CultureInfo.InvariantCulture, $" L {enter:0.#} {current:0.#} L {enter:0.#} {y:0.#} L {channel:0.#} {y:0.#}");
+                current = y;
+            }
+
+            path.Append(CultureInfo.InvariantCulture, $" L {channel:0.#} {y2:0.#} L {hx2:0.#} {y2:0.#}");
+            if (multi) path.Append(Brackets(hx1, hx2, fromRows, toRows));
+            return new ErRoute(hx1, y1, hx2, y2, path.ToString());
+        }
+
+        // Tables empilées (peu ou pas d'écart horizontal) et séparées verticalement : liens orthogonaux bas -> haut, comme dans Dataedo.
         var hGap = Math.Max(to.X - (from.X + from.Width), from.X - (to.X + to.Width));
         var vGap = Math.Max(to.Y - (from.Y + from.Height), from.Y - (to.Y + to.Height));
-        if (vGap >= 20 && vGap > hGap)
+        if (vGap >= 20 && vGap > hGap && hGap < 20)
         {
             var down = from.Y < to.Y;
             var xa = Spread(from, edge.RelationId);

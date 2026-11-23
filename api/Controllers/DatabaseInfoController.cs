@@ -160,10 +160,20 @@ public class DatabaseInfoController(ICatalogRepository repository, DatabaseImpor
 
     /// <summary>Documentation de la base en un seul fichier HTML autonome (présentation type Dataedo), à télécharger.</summary>
     [HttpGet("{id}/export/html")]
-    public async Task<IActionResult> ExportHtml(string id, CancellationToken ct)
+    public async Task<IActionResult> ExportHtml(string id, [FromQuery] bool inline = false, CancellationToken ct = default)
     {
         var html = await HtmlDocumentationExporter.ExportAsync(repository, id, ct);
-        return html == null ? NotFound() : File(System.Text.Encoding.UTF8.GetBytes(html), "text/html; charset=utf-8", "documentation.html");
+        if (html == null) return NotFound();
+        // inline : affichée dans l'onglet (aperçu, impression) au lieu d'être téléchargée. La page est autonome : on lui
+        // interdit tout appel réseau, elle n'en a pas besoin.
+        if (inline)
+        {
+            Response.Headers["Content-Security-Policy"] =
+                "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'";
+            return Content(html, "text/html; charset=utf-8");
+        }
+
+        return File(System.Text.Encoding.UTF8.GetBytes(html), "text/html; charset=utf-8", "documentation.html");
     }
 
     /// <summary>Documentation en Markdown (un fichier .md : domaines, tables, colonnes, relations, index).</summary>

@@ -248,6 +248,10 @@ public class Client(HttpClient http)
     /// <summary>Documentation de la base en un fichier HTML autonome.</summary>
     public Task<string> ExportHtmlAsync(string id) => ExportAsync(id, "html");
 
+    /// <summary>Adresse de la documentation HTML affichée dans le navigateur (et non téléchargée), pour l'aperçu et l'impression.</summary>
+    public string HtmlPreviewUrl(string id) =>
+        new Uri(http.BaseAddress!, $"api/v1/DatabaseInfo/{Uri.EscapeDataString(id)}/export/html?inline=true").ToString();
+
     /// <summary>Exporte la documentation d'une base : <paramref name="format" /> = <c>html</c>, <c>markdown</c> ou <c>csv</c>.</summary>
     public async Task<string> ExportAsync(string id, string format) =>
         await (await GetExportAsync(id, format)).Content.ReadAsStringAsync();

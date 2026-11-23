@@ -31,6 +31,8 @@ services:
       Auth__GitHub__ClientSecret: ${GITHUB_CLIENT_SECRET:-}
       Auth__Roles__Admins__0: ${AUTH_FIRST_ADMIN:-}
       # Origine de l'interface, autorisée à appeler l'API avec les cookies de session.
+      # Noms sous lesquels l'API est jointe (en-tête Host) ; à étendre derrière un nom de domaine : ALLOWED_HOSTS="doc.exemple.fr;localhost".
+      AllowedHosts: ${ALLOWED_HOSTS:-localhost;127.0.0.1;[::1]}
       Cors__AllowedOrigins__0: ${CORS_ORIGIN:-http://localhost:8081}
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
     # Permet d'atteindre un SQL Server du poste hôte avec « host.docker.internal » (déjà vrai sous Docker Desktop, utile sous Linux).

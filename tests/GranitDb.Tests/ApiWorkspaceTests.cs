@@ -166,6 +166,19 @@ public sealed class ApiWorkspaceTests : IDisposable
     // --- Export HTML ---
 
     [Fact]
+    public async Task Inline_html_export_is_shown_not_downloaded_and_cannot_call_the_network()
+    {
+        var db = await ImportAsync();
+
+        var inline = await _client.GetAsync($"{V1}/DatabaseInfo/{db}/export/html?inline=true");
+        var download = await _client.GetAsync($"{V1}/DatabaseInfo/{db}/export/html");
+
+        Assert.Null(inline.Content.Headers.ContentDisposition);
+        Assert.Contains("default-src 'none'", inline.Headers.GetValues("Content-Security-Policy").Single());
+        Assert.NotNull(download.Content.Headers.ContentDisposition);
+    }
+
+    [Fact]
     public async Task The_html_export_is_one_self_contained_file_with_the_documentation_and_no_script_breakout()
     {
         var db = await ImportAsync("Boutique </script><b>");

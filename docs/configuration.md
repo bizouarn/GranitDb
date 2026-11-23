@@ -13,6 +13,7 @@ Les réglages vivent dans `api/appsettings.json` (ou en variables d'environnemen
 | `AllowLocalPaths` | `false` | Autorise `POST /import/sqlite/local` (chemin sur le serveur) |
 | `AllowSqlServerSources` | `true` | Autorise l'API à se connecter à un serveur (SQL Server, PostgreSQL, MySQL) choisi par l'appelant |
 | `KeysDirectory` | `<DataDirectory>/keys` | Clés qui chiffrent les connexions enregistrées |
+| `AllowedHosts` (racine, pas dans `Catalog`) | `localhost;127.0.0.1;[::1]` | Noms d'hôte acceptés par l'API (en-tête `Host`, séparés par `;`) : à étendre derrière un nom de domaine (`ALLOWED_HOSTS` en Docker) |
 | `KeysProtection` | `None` | Chiffrement des clés : `Dpapi` (Windows) ou `Certificate` (`KeysCertificatePath`, `KeysCertificatePassword`) |
 | `StartupSources` | `[]` | Sources (`Sqlite` ou `SqlServer`) synchronisées au démarrage |
 | `AllowProfiling` | `false` | Profilage des colonnes et détection des relations ([aides-documentation.md](aides-documentation.md)) |

@@ -33,7 +33,7 @@ Priorités : **P1** gêne constatée ou probable pour tous · **P2** confort · 
 
 - [ ] **Clic sur un lien** (S) : cliquer une relation la sélectionne, surligne ses colonnes des deux côtés et ouvre ses détails (type, description modifiables en place).
 - [ ] **Minicarte, recentrage et « tout voir »** (M) : « Ajuster à l'écran », minicarte pour les grands plans, centrage automatique sur la sélection.
-- [ ] **Dessin qui s'adapte** (M) : mise en page qui réduit les croisements, masquage automatique des colonnes sans relation au-delà d'un seuil, repli d'une table d'un clic.
+- [ ] **Dessin qui s'adapte** (M) : masquage automatique des colonnes sans relation au-delà d'un seuil, repli d'une table d'un clic.
 - [ ] **Annuler / rétablir** (M) : déplacements de tables et changements de domaine (Ctrl+Z).
 - [ ] **Changer la couleur d'un domaine existant** (S) : choix à la modification du domaine, depuis le panneau des domaines du diagramme et depuis « Étiquettes et domaines », avec annulation et retour à la couleur par défaut.
 - [ ] **Réglages de domaine compris** (S) : un petit schéma qui montre l'effet de « Tables voisines » et des relations masquées.
