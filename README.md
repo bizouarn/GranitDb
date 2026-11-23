@@ -55,3 +55,7 @@ dotnet test tests/GranitDb.Tests
 ```
 
 Aucun service externe n'est nécessaire ; les tests des serveurs SQL sont ignorés sans Docker.
+
+## Licence
+
+[PolyForm Noncommercial 1.0.0](LICENSE) : utilisation, modification et redistribution libres pour tout usage non commercial (personnel, recherche, enseignement, associations, organismes publics…). Tout usage commercial demande l'accord de l'auteur.
