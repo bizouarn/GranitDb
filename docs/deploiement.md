@@ -9,7 +9,7 @@
 
 ```bash
 dotnet run --project api --launch-profile http   # API sur http://localhost:5105 (Swagger : /swagger)
-dotnet run --project client                      # interface sur http://localhost:41248
+dotnet run --project client                      # interface sur http://localhost:5028
 ```
 
 ## Docker

@@ -15,7 +15,7 @@ Projects (.NET 10; `GranitDb.sln` at the root holds them all, `api/` and `client
 
 ```bash
 dotnet run --project api --launch-profile http    # http://localhost:5105, swagger at /swagger
-dotnet run --project client                       # http://localhost:41248 (API URL: client/wwwroot/appsettings*.json)
+dotnet run --project client                       # http://localhost:5028 (API URL: client/wwwroot/appsettings*.json)
 dotnet test tests/GranitDb.Tests                  # all tests
 dotnet test tests/GranitDb.Tests --filter "FullyQualifiedName~SchemaSynchronizerTests"   # one class
 ```

@@ -8,7 +8,7 @@ Les exemples utilisent `shop.sqlite`, la base de boutique fournie à la racine d
 
 ```bash
 dotnet run --project api --launch-profile http   # API : http://localhost:5105
-dotnet run --project client                      # interface : http://localhost:41248
+dotnet run --project client                      # interface : http://localhost:5028
 ```
 
 Avec Docker : `docker compose up --build`, puis http://localhost:8081.

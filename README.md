@@ -28,7 +28,7 @@ Sans Docker ([.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)) :
 
 ```bash
 dotnet run --project api --launch-profile http   # API sur http://localhost:5105 (Swagger : /swagger)
-dotnet run --project client                      # interface sur http://localhost:41248
+dotnet run --project client                      # interface sur http://localhost:5028
 ```
 
 Ouvrez l'interface et glissez un fichier `.db` / `.sqlite` sur la zone de dépôt : tables, colonnes, types, clés et relations sont extraits et affichés. Le fichier source est ouvert en lecture seule.
