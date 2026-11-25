@@ -13,3 +13,5 @@ api/granitdb-data/
 
 # Documentation officielle Herakles (export Dataedo, ne pas commiter)
 work-doc/herakles/
+
+.claude/

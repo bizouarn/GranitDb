@@ -1,16 +1,27 @@
-.er-scroll {
-    overflow: auto;
+.er-canvas {
+    height: 75vh;
+    min-height: 360px;
     border: 1px solid var(--mud-palette-lines-default);
     border-radius: 4px;
-    background: var(--mud-palette-background);
-    max-height: 75vh;
+    overflow: hidden;
 }
 
-.er-svg {
-    display: block;
-    user-select: none;
-    touch-action: none;
-    font-size: 12px;
+/* Wpflow prend les couleurs du thème de l'application (clair comme sombre). */
+.er-canvas ::deep .wf-flow.er-flow {
+    --wf-bg: var(--mud-palette-background);
+    --wf-dot: var(--mud-palette-lines-inputs);
+    --wf-node-text: var(--mud-palette-text-primary);
+    --wf-panel-bg: var(--mud-palette-surface);
+    --wf-panel-border: var(--mud-palette-lines-default);
+    --wf-minimap-bg: var(--mud-palette-surface);
+    --wf-minimap-node: var(--mud-palette-lines-inputs);
+    --wf-minimap-mask: var(--mud-palette-action-disabled-background);
+    font-family: inherit;
+}
+
+/* Les relations ne se choisissent pas : leur zone de clic de Wpflow ne doit pas le laisser croire. */
+.er-canvas ::deep .wf-edge-hit {
+    pointer-events: none;
 }
 
 .er-edge {
@@ -26,105 +37,123 @@
     opacity: 1;
 }
 
-.er-svg ::deep .er-card {
+.er-canvas ::deep .er-card {
     fill: var(--mud-palette-text-secondary);
     font-size: 11px;
 }
 
+/* Le contour est une ombre : il ne prend pas de place, les lignes restent là où les liens les attendent. */
 .er-node {
-    cursor: grab;
-}
-
-.er-node:active {
-    cursor: grabbing;
-}
-
-.er-box {
-    fill: var(--mud-palette-surface);
-    stroke: var(--mud-palette-lines-inputs);
+    box-sizing: border-box;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 4px;
+    background: var(--mud-palette-surface);
+    box-shadow: 0 0 0 1px var(--mud-palette-lines-inputs);
+    font-size: 12px;
+    line-height: 1.2;
 }
 
 .er-head {
-    fill: var(--mud-palette-primary);
+    background: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
 }
 
 .er-head-view {
-    fill: var(--mud-palette-secondary);
+    background: var(--mud-palette-secondary);
 }
 
-.er-svg ::deep .er-title {
-    fill: var(--mud-palette-primary-text);
+.er-title, .er-caption {
+    display: block;
+    overflow: hidden;
+    padding: 0 10px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.er-title {
+    line-height: 30px;
     font-weight: bold;
 }
 
-.er-row-bg {
-    fill: transparent;
+.er-caption {
+    margin-top: -4px;
+    font-size: 11px;
+    opacity: .85;
 }
 
-.er-row:hover .er-row-bg {
-    fill: var(--mud-palette-action-default-hover);
+.er-row {
+    display: flex;
+    align-items: center;
+    padding: 0 8px 0 10px;
+    white-space: nowrap;
 }
 
-.er-svg ::deep .er-col, .er-svg ::deep .er-type {
-    fill: var(--mud-palette-text-primary);
+.er-row:hover {
+    background: var(--mud-palette-action-default-hover);
 }
 
-.er-svg ::deep .er-type {
-    fill: var(--mud-palette-text-secondary);
-}
-
-.er-svg ::deep .er-col-pk {
-    font-weight: bold;
-}
-
-.er-svg ::deep .er-key {
-    fill: var(--mud-palette-warning);
+.er-key {
+    flex: 0 0 24px;
+    color: var(--mud-palette-warning);
     font-size: 10px;
     font-weight: bold;
 }
 
-.er-selected > .er-box {
-    stroke: var(--mud-palette-primary);
-    stroke-width: 3;
+.er-col {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--mud-palette-text-primary);
 }
 
-.er-dependent > .er-box {
-    stroke: var(--mud-palette-error);
-    stroke-width: 3;
+.er-col-pk {
+    font-weight: bold;
 }
 
-.er-dependency > .er-box {
-    stroke: var(--mud-palette-info);
-    stroke-width: 3;
+.er-type {
+    margin-left: 8px;
+    color: var(--mud-palette-text-secondary);
 }
 
-.er-row.er-selected .er-row-bg {
-    fill: var(--mud-palette-primary-hover);
+.er-node.er-selected {
+    box-shadow: 0 0 0 3px var(--mud-palette-primary);
 }
 
-.er-row.er-sibling .er-row-bg {
-    fill: var(--mud-palette-primary-hover);
-    opacity: 0.6;
+.er-node.er-dependent {
+    box-shadow: 0 0 0 3px var(--mud-palette-error);
 }
 
-.er-row.er-dependent .er-row-bg {
-    fill: var(--mud-palette-error-hover);
+.er-node.er-dependency {
+    box-shadow: 0 0 0 3px var(--mud-palette-info);
 }
 
-.er-row.er-dependency .er-row-bg {
-    fill: var(--mud-palette-info-hover);
+.er-row.er-selected, .er-row.er-sibling {
+    background: var(--mud-palette-primary-hover);
 }
 
-.er-frontier > .er-box {
-    stroke-dasharray: 5 3;
+.er-row.er-dependent {
+    background: var(--mud-palette-error-hover);
 }
 
-.er-frontier {
+.er-row.er-dependency {
+    background: var(--mud-palette-info-hover);
+}
+
+.er-node.er-frontier {
+    box-shadow: none;
+    outline: 1px dashed var(--mud-palette-text-secondary);
     opacity: .7;
 }
 
-.er-svg ::deep .er-caption {
-    fill: var(--mud-palette-primary-text);
-    font-size: 11px;
-    opacity: .85;
+.er-node.er-frontier.er-selected {
+    outline: 3px dashed var(--mud-palette-primary);
+}
+
+.er-node.er-frontier.er-dependent {
+    outline: 3px dashed var(--mud-palette-error);
+}
+
+.er-node.er-frontier.er-dependency {
+    outline: 3px dashed var(--mud-palette-info);
 }

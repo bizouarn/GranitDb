@@ -78,7 +78,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     private IRenderedComponent<Diagram> Open()
     {
         var page = _ctx.Render<Diagram>(p => p.Add(x => x.Id, "db"));
-        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("g.er-node")));
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-node")));
         return page;
     }
 
@@ -122,7 +122,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     }
 
     private static string[] Shown(IRenderedComponent<Diagram> page) =>
-        page.FindAll("g.er-node").Select(n => n.GetAttribute("data-table")!).Order().ToArray();
+        page.FindAll(".er-node").Select(n => n.GetAttribute("data-table")!).Order().ToArray();
 
     private static void SelectDomain(IRenderedComponent<Diagram> page, string name)
     {
@@ -169,13 +169,13 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         SelectDomain(page, "Ventes");
 
         Assert.Equal(["customers", "invoices", "orders"], Shown(page)); // tags : sans lien avec le domaine, absent
-        Assert.DoesNotContain("er-frontier", page.Find("g.er-node[data-table='orders']").ClassName);
-        Assert.Contains("er-frontier", page.Find("g.er-node[data-table='customers']").ClassName);
-        Assert.Contains("er-frontier", page.Find("g.er-node[data-table='invoices']").ClassName);
+        Assert.DoesNotContain("er-frontier", page.Find(".er-node[data-table='orders']").ClassName);
+        Assert.Contains("er-frontier", page.Find(".er-node[data-table='customers']").ClassName);
+        Assert.Contains("er-frontier", page.Find(".er-node[data-table='invoices']").ClassName);
         // Une table frontière ne montre que les colonnes de ses relations.
-        Assert.Empty(page.FindAll("g.er-node[data-table='customers'] g.er-row[data-column='email']"));
-        Assert.NotEmpty(page.FindAll("g.er-node[data-table='customers'] g.er-row[data-column='id']"));
-        Assert.Empty(page.FindAll("g.er-node[data-table='invoices'] g.er-row[data-column='total']"));
+        Assert.Empty(page.FindAll(".er-node[data-table='customers'] .er-row[data-column='email']"));
+        Assert.NotEmpty(page.FindAll(".er-node[data-table='customers'] .er-row[data-column='id']"));
+        Assert.Empty(page.FindAll(".er-node[data-table='invoices'] .er-row[data-column='total']"));
         Assert.Equal(2, page.FindAll("path.er-edge").Count);
         Assert.Contains("Tables du domaine (1 / 4)", page.Markup);
     }
@@ -187,7 +187,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
 
         SelectDomain(page, "Ventes");
 
-        Assert.Equal("translate(300 50)", page.Find("g.er-node[data-table='orders']").GetAttribute("transform"));
+        Assert.Equal((300d, 50d), DiagramGestures.Position(page, "orders"));
         page.WaitForAssertion(() => Assert.Contains("Documentation du domaine : 50 %", page.Markup));
         Assert.Contains(_api.Requests, r => r.RequestUri!.PathAndQuery == "/api/v1/Completeness/database/db?domainId=d1");
     }
@@ -200,7 +200,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
 
         page.Find(".domain-all").Click();
 
-        page.WaitForAssertion(() => Assert.Equal(4, page.FindAll("g.er-node").Count));
+        page.WaitForAssertion(() => Assert.Equal(4, page.FindAll(".er-node").Count));
         Assert.Empty(page.FindAll(".er-frontier"));
     }
 
@@ -213,7 +213,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         page.Find("[data-domain='Vide']").Click();
 
         page.WaitForAssertion(() => Assert.Contains("Ce domaine est vide", page.Markup));
-        Assert.Empty(page.FindAll("g.er-node"));
+        Assert.Empty(page.FindAll(".er-node"));
     }
 
     // --- Place mémorisée ---
@@ -224,10 +224,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         var page = Open();
         SelectDomain(page, "Ventes");
 
-        var orders = page.Find("g.er-node[data-table='orders']");
-        orders.PointerDown(new PointerEventArgs { ClientX = 100, ClientY = 100 });
-        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 160, ClientY = 130 });
-        page.Find("g.er-node[data-table='orders']").PointerUp(new PointerEventArgs { ClientX = 160, ClientY = 130 });
+        DiagramGestures.Drag(page, "orders", (100, 100), (160, 130));
 
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/DomainInfo/d1/layout")));
         var (_, body) = Sent(HttpMethod.Put, "/api/v1/DomainInfo/d1/layout");
@@ -237,10 +234,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
         Assert.Equal(80, place.GetProperty("y").GetDouble());
 
         var before = _api.Requests.Count(r => r.RequestUri!.AbsolutePath.EndsWith("/layout"));
-        var customers = page.Find("g.er-node[data-table='customers']");
-        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 90, ClientY = 90 });
-        page.Find("g.er-node[data-table='customers']").PointerUp(new PointerEventArgs { ClientX = 90, ClientY = 90 });
+        DiagramGestures.Drag(page, "customers", (10, 10), (90, 90));
         Assert.Equal(before, _api.Requests.Count(r => r.RequestUri!.AbsolutePath.EndsWith("/layout")));
     }
 
@@ -249,9 +243,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     {
         var page = Open();
 
-        page.Find("g.er-node[data-table='tags']").PointerDown(new PointerEventArgs { ClientX = 1, ClientY = 1 });
-        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 80, ClientY = 80 });
-        page.Find("g.er-node[data-table='tags']").PointerUp(new PointerEventArgs { ClientX = 80, ClientY = 80 });
+        DiagramGestures.Drag(page, "tags", (1, 1), (80, 80));
 
         Assert.DoesNotContain(_api.Requests, r => r.Method == HttpMethod.Put);
     }
@@ -263,10 +255,9 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     {
         var page = Open();
         SelectDomain(page, "Ventes");
-        var orders = page.Find("g.er-node[data-table='orders']");
-        Assert.Null(orders.QuerySelector("rect.er-head")!.GetAttribute("style")); // bleu par défaut
-        orders.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        orders.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        var orders = page.Find(".er-node[data-table='orders']");
+        Assert.DoesNotContain("background", orders.QuerySelector(".er-head")!.GetAttribute("style")); // bleu par défaut
+        DiagramGestures.ClickTable(page, "orders");
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".table-colour .color-picker-toggle")));
 
         page.Find(".table-colour .color-picker-toggle").Click();
@@ -274,16 +265,14 @@ public class ClientDiagramDomainTests : IAsyncLifetime
 
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/DomainInfo/d1/tables/t2/color")));
         Assert.Equal("#2e7d32", Sent(HttpMethod.Put, "/api/v1/DomainInfo/d1/tables/t2/color").Body.GetProperty("color").GetString());
-        page.WaitForAssertion(() => Assert.Contains("fill:#2e7d32", page.Find("g.er-node[data-table='orders'] rect.er-head").GetAttribute("style")));
+        page.WaitForAssertion(() => Assert.Contains("background:#2e7d32", page.Find(".er-node[data-table='orders'] .er-head").GetAttribute("style")));
     }
 
     [BunitFact]
     public void The_colour_choice_is_offered_only_inside_a_domain_for_one_of_its_own_tables()
     {
         var page = Open();
-        var orders = page.Find("g.er-node[data-table='orders']");
-        orders.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        orders.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        DiagramGestures.ClickTable(page, "orders");
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-legend")));
 
         Assert.Empty(page.FindAll(".table-colour")); // vue libre : pas de domaine, donc pas de couleur par domaine
@@ -311,7 +300,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
 
         Check(page, "tags", false);
 
-        page.WaitForAssertion(() => Assert.Equal(3, page.FindAll("g.er-node").Count));
+        page.WaitForAssertion(() => Assert.Equal(3, page.FindAll(".er-node").Count));
         Assert.DoesNotContain(_api.Requests, r => r.Method != HttpMethod.Get);
     }
 
@@ -377,7 +366,7 @@ public class ClientDiagramDomainTests : IAsyncLifetime
 
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Delete, "/api/v1/DomainInfo/d1")));
         page.WaitForAssertion(() => Assert.Contains(Notices.Toasts, t => t.Message.Contains("ses tables sont conservées") && t.Undo != null));
-        Assert.Equal(4, page.FindAll("g.er-node").Count);
+        Assert.Equal(4, page.FindAll(".er-node").Count);
         Assert.Empty(page.FindAll("[data-domain='Ventes']"));
     }
 
@@ -438,16 +427,21 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     {
         var page = Open();
 
-        page.Find("g.er-node[data-table='tags']").PointerDown(new PointerEventArgs { ClientX = 5, ClientY = 5 });
-        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 60, ClientY = 5 });
+        _ctx.JSInterop.Setup<string?>("granitdb.domainAt", _ => true).SetResult("d2"); // le pointeur est sur « Facturation »
+        DiagramGestures.Measure(page);
+        var place = DiagramGestures.Position(page, "tags");
+
+        DiagramGestures.Press(page, DiagramGestures.Table("tags"), 400, 300);
+        DiagramGestures.Move(page, 460, 300);
         Assert.Empty(page.FindAll(".domain-target"));
-        page.Find("svg.er-svg").PointerLeave(new PointerEventArgs());
+        DiagramGestures.Move(page, -120, 300);
         Assert.Equal(2, page.FindAll(".domain-target").Count);
 
-        page.Find("[data-domain='Facturation']").PointerUp(new PointerEventArgs());
+        DiagramGestures.Release(page, -120, 300);
 
         page.WaitForAssertion(() => Assert.True(WasSent(HttpMethod.Put, "/api/v1/DomainInfo/d2/tables/t3")));
         Assert.Empty(page.FindAll(".domain-target"));
+        Assert.Equal(place, DiagramGestures.Position(page, "tags")); // la table reprend sa place dans le dessin
         // Un dépôt hors diagramme ne déplace rien dans le domaine « Toutes les tables » : rien n'est mémorisé.
         Assert.DoesNotContain(_api.Requests, r => r.RequestUri!.AbsolutePath.EndsWith("/layout"));
     }
@@ -456,13 +450,15 @@ public class ClientDiagramDomainTests : IAsyncLifetime
     public void Releasing_outside_every_domain_cancels_the_drag_and_files_nothing()
     {
         var page = Open();
-        page.Find("g.er-node[data-table='tags']").PointerDown(new PointerEventArgs { ClientX = 5, ClientY = 5 });
-        page.Find("svg.er-svg").PointerLeave(new PointerEventArgs());
+        _ctx.JSInterop.Setup<string?>("granitdb.domainAt", _ => true).SetResult(null); // aucun domaine sous le pointeur
+        DiagramGestures.Measure(page);
+        DiagramGestures.Press(page, DiagramGestures.Table("tags"), 400, 300);
+        DiagramGestures.Move(page, -120, 300);
         Assert.NotEmpty(page.FindAll(".domain-target"));
 
-        page.Find("#domains").PointerUp(new PointerEventArgs()); // le dépôt retombe sur le conteneur, pas sur un domaine
+        DiagramGestures.Release(page, -120, 300);
 
-        Assert.Empty(page.FindAll(".domain-target"));
+        page.WaitForAssertion(() => Assert.Empty(page.FindAll(".domain-target")));
         Assert.DoesNotContain(_api.Requests, r => r.Method == HttpMethod.Put);
     }
 

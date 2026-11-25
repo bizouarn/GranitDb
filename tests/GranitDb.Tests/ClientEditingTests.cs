@@ -438,12 +438,12 @@ public class ClientDiagramWorkspaceTests : ShellTestBase
     {
         Nav.NavigateTo("/databases/d1/diagram" + query);
         var page = Ctx.Render<Diagram>(p => p.Add(x => x.Id, "d1"));
-        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("g.er-node")));
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-node")));
         return page;
     }
 
     private static string[] Shown(IRenderedComponent<Diagram> page) =>
-        page.FindAll("g.er-node").Select(n => n.GetAttribute("data-table")!).Order().ToArray();
+        page.FindAll(".er-node").Select(n => n.GetAttribute("data-table")!).Order().ToArray();
 
     [BunitFact]
     public void The_tab_is_titled_with_the_database_and_all_tables_are_shown_by_default()
@@ -470,7 +470,7 @@ public class ClientDiagramWorkspaceTests : ShellTestBase
     {
         var page = Open("?domain=inconnu");
 
-        Assert.Equal(3, page.FindAll("g.er-node").Count);
+        Assert.Equal(3, page.FindAll(".er-node").Count);
         Assert.Contains("domain-selected", page.Find(".domain-all").ClassName);
     }
 

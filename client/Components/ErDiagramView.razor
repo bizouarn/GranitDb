@@ -1,82 +1,75 @@
 @using System.Globalization
 @using GranitDb.Client.Diagram
+@using Wpflow.Blazor
+@using Wpflow.Core
+@using FlowNode = Wpflow.Core.Node
+@using FlowEdge = Wpflow.Core.Edge
+@inject IJSRuntime JS
 
-@* Affichage interactif d'un diagramme : glisser une table pour la déplacer, cliquer une table ou une colonne pour la sélectionner. *@
-@{
-    var (width, height) = Diagram.Size();
-    var touched = Dependents.Union(Dependencies).ToHashSet();
-    var siblings = SelectedColumnId == null ? new HashSet<string>() : Diagram.SiblingColumns(SelectedColumnId);
-}
-<div class="er-scroll">
-    <svg class="er-svg" width="@N(width * Zoom)" height="@N(height * Zoom)" viewBox="0 0 @N(width) @N(height)"
-         @onpointermove="OnMove" @onpointerup="FinishDragAsync" @onpointerleave="LeaveAsync" @onpointercancel="CancelDrag">
-        @foreach (var edge in Diagram.Edges)
-        {
-            var route = Diagram.Route(edge);
-            if (route == null) continue;
-            var (many, one) = ErDiagram.Cardinality(edge.RelationType);
-            var toRight = route.X2 > route.X1;
-            var active = IsActive(edge, touched);
-            <path d="@route.Path" class="@($"er-edge{(active ? " er-edge-active" : "")}")" />
-            @if (route.Vertical)
-            {
-                var down = route.Y2 > route.Y1;
-                @Txt("er-card", route.X1 + 5, route.Y1 + (down ? 12 : -5), many)
-                @Txt("er-card", route.X2 + 5, route.Y2 + (down ? -5 : 12), one)
-            }
-            else
-            {
-                @Txt("er-card", route.X1 + (toRight ? 6 : -6), route.Y1 - 5, many, toRight ? "start" : "end")
-                @Txt("er-card", route.X2 + (toRight ? -6 : 6), route.Y2 - 5, one, toRight ? "end" : "start")
-            }
-        }
-
-        @foreach (var node in Diagram.Nodes)
-        {
-            var state = StateOf(node.Id) + (node.IsFrontier ? " er-frontier" : "");
-            <g class="@($"er-node{state}")" transform="translate(@N(node.X) @N(node.Y))"
-               data-table="@node.Name" @onpointerdown="e => StartDrag(node, e)" @onpointerdown:preventDefault="true"
-               @onpointerup="() => EndDrag(node, null)" @onpointerup:stopPropagation="true"
-               @ondblclick="() => OnOpenTable.InvokeAsync((node.Id, null))">
-                <rect class="er-box" width="@N(node.Width)" height="@N(node.Height)" rx="4" />
-                <rect class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")" width="@N(node.Width)" height="@N(node.HeaderHeight)" rx="4"
-                      style="@(node.Color == null ? null : $"fill:{node.Color}")" />
-                @Txt("er-title", 10, ErDiagram.HeaderHeight / 2 + 4, node.Name, fill: node.Ink)
-                @if (node.Caption != null)
-                {
-                    @Txt("er-caption", 10, ErDiagram.HeaderHeight + ErDiagram.CaptionHeight / 2 + 1, node.Caption, fill: node.Ink)
-                }
-                @for (var i = 0; i < node.Rows.Count; i++)
-                {
-                    var row = node.Rows[i];
-                    var y = node.HeaderHeight + (i + 0.5) * ErDiagram.RowHeight + 4;
-                    var rowState = RowStateOf(row.ColumnId) + (siblings.Contains(row.ColumnId) ? " er-sibling" : "");
-                    <g class="@($"er-row{rowState}")" data-column="@row.Name"
-                       @onpointerup="() => EndDrag(node, row)" @onpointerup:stopPropagation="true"
-                       @ondblclick="() => OnOpenTable.InvokeAsync((node.Id, row.ColumnId))" @ondblclick:stopPropagation="true">
-                        <rect x="1" y="@N(node.HeaderHeight + i * ErDiagram.RowHeight)" width="@N(node.Width - 2)" height="@N(ErDiagram.RowHeight)" class="er-row-bg" />
-                        @Txt("er-key", 10, y, row.IsPrimaryKey ? "PK" : row.IsForeignKey ? "FK" : "")
-                        @Txt(row.IsPrimaryKey ? "er-col er-col-pk" : "er-col", 34, y, row.Name)
-                        @Txt("er-type", node.Width - 8, y, row.DataType, "end")
-                    </g>
-                }
-            </g>
-        }
-    </svg>
+@* Affichage interactif d'un diagramme, au-dessus de Wpflow.Blazor : les tables sont des nœuds (glisser, zoom, déplacement de la vue,
+   minimap), les relations des liens dont le tracé vient d'ErDiagram. La sélection reste celle de la page (Wpflow ne sélectionne rien). *@
+<div class="er-canvas" @ref="_host">
+    <FlowView @ref="_flow" Class="er-flow" Nodes="_nodes" NodesChanged="n => _nodes = n" Edges="_edges"
+              Viewport="_viewport" ViewportChanged="ViewportChangedAsync" MinZoom="MinZoom" MaxZoom="MaxZoom" FitViewOnInit="false"
+              NodeTemplate="_nodeTemplate" EdgeTypes="_edgeTypes" EdgeTemplates="_edgeTemplates"
+              NodeExtent="Bounds" NodeDragThreshold="4" AutoPanOnNodeDrag="false" OnlyRenderVisibleElements="@(_nodes.Count > VirtualizeAbove)"
+              ElementsSelectable="false" NodesConnectable="false" EdgesReconnectable="false" DeleteKeyEnabled="false" HistoryEnabled="false"
+              NodesFocusable="false" EdgesFocusable="false" AnnounceSelection="false" ZoomOnDoubleClick="false" ShowBackground="true"
+              OnNodesChange="NodesChanging" OnNodeClick="NodeClickAsync"
+              OnNodeDragStart="DragStarted" OnNodeDrag="DraggingAsync" OnNodeDragStop="DragStoppedAsync"
+              OnPaneClick="_ => OnClearSelection.InvokeAsync()" OnInit="FitIfPendingAsync">
+        <FlowMiniMap NodeColor="MiniMapColor" Width="170" Height="120" Zoomable="true" />
+        <FlowControls ShowZoom="false" ShowInteractive="false" />
+    </FlowView>
 </div>
 
 @code {
-    private sealed record Drag(ErNode Node, double StartX, double StartY, double NodeX, double NodeY)
-    {
-        public bool Moved { get; set; }
-    }
+    private const double MinZoom = 0.1;
+    private const double MaxZoom = 2.5;
+    private const int DoubleClickMilliseconds = 500;
 
-    private Drag? _drag;
+    /// <summary>Au-delà, seules les tables proches de la vue sont dessinées.</summary>
+    private const int VirtualizeAbove = 200;
+
+    private static readonly Wpflow.Core.Rect Bounds = new(0, 0, 10_000_000, 10_000_000);
+
+    /// <summary>Ce qu'un nœud affiche : tout est dans le nœud, car Wpflow ne redessine un nœud que s'il change.</summary>
+    private sealed record TableView(ErNode Table, string State, IReadOnlyList<string> RowStates);
+
+    private FlowView? _flow;
+    private ElementReference _host;
+    private IReadOnlyList<FlowNode> _nodes = [];
+    private IReadOnlyList<FlowEdge> _edges = [];
+    private Dictionary<string, IEdgePathProvider> _edgeTypes = new();
+    private Dictionary<string, RenderFragment<EdgeRenderContext>> _edgeTemplates = new();
+    private readonly RenderFragment<FlowNode> _nodeTemplate;
+
+    private Viewport _viewport = Viewport.Identity;
+    private int? _viewKey;
+    private bool _fitPending;
+    private string? _signature;
+    private ErDiagram? _built;
+
+    private string? _pressedColumn;
+    private (string TableId, string? ColumnId, long At)? _lastClick;
+    private (string Id, double X, double Y)? _dragStart;
+    private bool _outside;
+
+    public ErDiagramView()
+    {
+        _nodeTemplate = node => RenderTable((TableView)node.Data!);
+    }
 
     [Parameter, EditorRequired] public ErDiagram Diagram { get; set; } = null!;
 
     /// <summary>Échelle d'affichage (1 = taille réelle).</summary>
     [Parameter] public double Zoom { get; set; } = 1;
+
+    /// <summary>La molette ou le cadrage ont changé l'échelle.</summary>
+    [Parameter] public EventCallback<double> ZoomChanged { get; set; }
+
+    /// <summary>Change quand un autre dessin est ouvert : la vue revient à l'origine et cadre le tout.</summary>
+    [Parameter] public int ViewKey { get; set; }
 
     [Parameter] public string? SelectedTableId { get; set; }
 
@@ -88,7 +81,7 @@
     /// <summary>Identifiants (tables et colonnes) dont dépend la sélection.</summary>
     [Parameter] public IReadOnlySet<string> Dependencies { get; set; } = new HashSet<string>();
 
-    /// <summary>Une table vient d'être déplacée (relâchée ailleurs) : la place peut être mémorisée.</summary>
+    /// <summary>Une table vient d'être déplacée (relâchée dans le dessin) : la place peut être mémorisée.</summary>
     [Parameter] public EventCallback<ErNode> OnNodeMoved { get; set; }
 
     /// <summary>
@@ -96,6 +89,14 @@
     ///     la cible d'un dépôt.
     /// </summary>
     [Parameter] public EventCallback<ErNode> OnDragLeave { get; set; }
+
+    /// <summary>La table, sortie du dessin, y est revenue : plus de dépôt en vue.</summary>
+    [Parameter] public EventCallback OnDragBack { get; set; }
+
+    /// <summary>
+    ///     La table est relâchée hors du dessin, sur le domaine donné (null : ailleurs). Elle reprend sa place dans le dessin.
+    /// </summary>
+    [Parameter] public EventCallback<(ErNode Node, string? DomainId)> OnDroppedOutside { get; set; }
 
     /// <summary>Clic dans le vide du dessin (hors de toute table) : la sélection peut être levée.</summary>
     [Parameter] public EventCallback OnClearSelection { get; set; }
@@ -107,10 +108,137 @@
 
     [Parameter] public EventCallback<(string TableId, string ColumnId)> OnSelectColumn { get; set; }
 
+    protected override void OnParametersSet()
+    {
+        if (_viewKey != ViewKey)
+        {
+            _viewKey = ViewKey;
+            _viewport = new Viewport(0, 0, Zoom);
+            _fitPending = true;
+        }
+        else if (Math.Abs(_viewport.Zoom - Zoom) > 0.0001)
+        {
+            // Boutons de zoom de la page : le centre du dessin visible reste en place.
+            var (width, height) = _flow?.Size ?? (0, 0);
+            _viewport = ViewportMath.ZoomAt(_viewport, new XYPosition(width / 2, height / 2), Zoom, MinZoom, MaxZoom);
+        }
+
+        var signature = Signature();
+        if (!ReferenceEquals(_built, Diagram) || signature != _signature)
+        {
+            _built = Diagram;
+            _signature = signature;
+            Build();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender) => await FitIfPendingAsync();
+
+    /// <summary>Cadre le dessin dès que sa place à l'écran est connue (sans jamais l'agrandir au-delà de sa taille réelle).</summary>
+    private async Task FitIfPendingAsync()
+    {
+        if (!_fitPending || _flow == null || _flow.Size.Width <= 0 || _nodes.Count == 0) return;
+        _fitPending = false;
+        await _flow.FitView(new FitViewOptions(0.05, MinZoom, 1));
+    }
+
+    private async Task ViewportChangedAsync(Viewport viewport)
+    {
+        var zoomed = Math.Abs(viewport.Zoom - _viewport.Zoom) > 0.0001;
+        _viewport = viewport;
+        if (zoomed && Math.Abs(viewport.Zoom - Zoom) > 0.0001) await ZoomChanged.InvokeAsync(viewport.Zoom);
+    }
+
+    /// <summary>Ce qui, hors changement de diagramme, demande de redessiner : la sélection et les places (réorganisation en place).</summary>
+    private string Signature()
+    {
+        var text = new System.Text.StringBuilder();
+        text.Append(SelectedTableId).Append('|').Append(SelectedColumnId).Append('|')
+            .AppendJoin(',', Dependents).Append('|').AppendJoin(',', Dependencies).Append('|');
+        foreach (var node in Diagram.Nodes) text.Append(CultureInfo.InvariantCulture, $"{node.X};{node.Y};");
+        return text.ToString();
+    }
+
+    private void Build()
+    {
+        var siblings = SelectedColumnId == null ? new HashSet<string>() : Diagram.SiblingColumns(SelectedColumnId);
+        _nodes = Diagram.Nodes.Select(node => new FlowNode(node.Id, new XYPosition(node.X, node.Y), "table",
+            new TableView(node, StateOf(node.Id) + (node.IsFrontier ? " er-frontier" : ""),
+                node.Rows.Select(r => StateOf(r.ColumnId, SelectedColumnId) + (siblings.Contains(r.ColumnId) ? " er-sibling" : "")).ToList()),
+            node.Width, node.Height, FixedWidth: node.Width, FixedHeight: node.Height)).ToList();
+
+        var touched = Dependents.Union(Dependencies).ToHashSet();
+        var types = new Dictionary<string, IEdgePathProvider>();
+        var templates = new Dictionary<string, RenderFragment<EdgeRenderContext>>();
+        var edges = new List<FlowEdge>();
+        foreach (var edge in Diagram.Edges)
+        {
+            // Le tracé dépend des colonnes reliées : un type par relation, qui interroge le modèle plutôt que les poignées.
+            var current = edge;
+            var type = "er-" + edge.RelationId;
+            types[type] = new DelegateEdgePathProvider(_ => new Wpflow.Core.EdgePath(Diagram.Route(current)?.Path ?? "", 0, 0, 0, 0));
+            var active = IsActive(edge, touched);
+            templates[type] = context => RenderEdge(current, context.Path.Path, active);
+            edges.Add(new FlowEdge(edge.RelationId, edge.ReferencingTableId, edge.ReferencedTableId, Type: type,
+                Selectable: false, Deletable: false, Reconnectable: false));
+        }
+
+        _edgeTypes = types;
+        _edgeTemplates = templates;
+        _edges = edges;
+    }
+
     private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
 
+    private RenderFragment RenderTable(TableView view)
+    {
+        var node = view.Table;
+        return @<div class="@($"er-node{view.State}")" data-table="@node.Name" style="@($"height:{N(node.Height)}px")">
+            <div class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")" @onpointerdown="() => _pressedColumn = null"
+                 style="@($"height:{N(node.HeaderHeight)}px{(node.Color == null ? "" : $";background:{node.Color};color:{node.Ink}")}")">
+                <div class="er-title" style="@($"height:{N(ErDiagram.HeaderHeight)}px")">@node.Name</div>
+                @if (node.Caption != null)
+                {
+                    <div class="er-caption" style="@($"height:{N(ErDiagram.CaptionHeight)}px")">@node.Caption</div>
+                }
+            </div>
+            @for (var i = 0; i < node.Rows.Count; i++)
+            {
+                var row = node.Rows[i];
+                <div class="@($"er-row{view.RowStates[i]}")" data-column="@row.Name" style="@($"height:{N(ErDiagram.RowHeight)}px")"
+                     @onpointerdown="() => _pressedColumn = row.ColumnId">
+                    <span class="er-key">@(row.IsPrimaryKey ? "PK" : row.IsForeignKey ? "FK" : "")</span>
+                    <span class="@(row.IsPrimaryKey ? "er-col er-col-pk" : "er-col")">@row.Name</span>
+                    <span class="er-type">@row.DataType</span>
+                </div>
+            }
+        </div>;
+    }
+
+    private RenderFragment RenderEdge(ErEdge edge, string path, bool active)
+    {
+        var route = Diagram.Route(edge);
+        if (route == null) return _ => { };
+        var (many, one) = ErDiagram.Cardinality(edge.RelationType);
+        var toRight = route.X2 > route.X1;
+        var down = route.Y2 > route.Y1;
+        return @<g>
+            <path d="@path" class="@($"er-edge{(active ? " er-edge-active" : "")}")" />
+            @if (route.Vertical)
+            {
+                @Txt("er-card", route.X1 + 5, route.Y1 + (down ? 12 : -5), many)
+                @Txt("er-card", route.X2 + 5, route.Y2 + (down ? -5 : 12), one)
+            }
+            else
+            {
+                @Txt("er-card", route.X1 + (toRight ? 6 : -6), route.Y1 - 5, many, toRight ? "start" : "end")
+                @Txt("er-card", route.X2 + (toRight ? -6 : 6), route.Y2 - 5, one, toRight ? "end" : "start")
+            }
+        </g>;
+    }
+
     /// <summary>Texte SVG (Razor réserve la balise <c>text</c> : l'élément est construit à la main).</summary>
-    private static RenderFragment Txt(string cssClass, double x, double y, string content, string? anchor = null, string? fill = null)
+    private static RenderFragment Txt(string cssClass, double x, double y, string content, string? anchor = null)
     {
         return builder =>
         {
@@ -119,25 +247,19 @@
             builder.AddAttribute(2, "x", N(x));
             builder.AddAttribute(3, "y", N(y));
             if (anchor != null) builder.AddAttribute(4, "text-anchor", anchor);
-            if (fill != null) builder.AddAttribute(5, "style", $"fill:{fill}");
-            builder.AddContent(6, content);
+            builder.AddContent(5, content);
             builder.CloseElement();
         };
     }
 
-    private string StateOf(string tableId)
+    private string StateOf(string id, string? selected)
     {
-        if (tableId == SelectedTableId) return " er-selected";
-        if (Dependents.Contains(tableId)) return " er-dependent";
-        return Dependencies.Contains(tableId) ? " er-dependency" : "";
+        if (id == selected) return " er-selected";
+        if (Dependents.Contains(id)) return " er-dependent";
+        return Dependencies.Contains(id) ? " er-dependency" : "";
     }
 
-    private string RowStateOf(string columnId)
-    {
-        if (columnId == SelectedColumnId) return " er-selected";
-        if (Dependents.Contains(columnId)) return " er-dependent";
-        return Dependencies.Contains(columnId) ? " er-dependency" : "";
-    }
+    private string StateOf(string tableId) => StateOf(tableId, SelectedTableId);
 
     private bool IsActive(ErEdge edge, HashSet<string> touched)
     {
@@ -148,60 +270,94 @@
                && Hit(edge.ReferencedTableId, edge.ReferencedColumnId);
     }
 
-    private void StartDrag(ErNode node, PointerEventArgs e)
+    private static string? MiniMapColor(FlowNode node)
     {
-        _drag = new Drag(node, e.ClientX, e.ClientY, node.X, node.Y);
+        var table = ((TableView)node.Data!).Table;
+        return table.IsFrontier ? null : table.Color ?? "var(--mud-palette-primary)";
     }
 
-    private void OnMove(PointerEventArgs e)
+    /// <summary>Avant que Wpflow n'applique un déplacement : le modèle suit, les liens sont tracés à la nouvelle place.</summary>
+    private void NodesChanging(IReadOnlyList<NodeChange> changes)
     {
-        if (_drag == null) return;
-        var dx = e.ClientX - _drag.StartX;
-        var dy = e.ClientY - _drag.StartY;
-        if (!_drag.Moved && Math.Abs(dx) + Math.Abs(dy) < 4) return;
-        _drag.Moved = true;
-        _drag.Node.X = Math.Max(0, _drag.NodeX + dx / Zoom);
-        _drag.Node.Y = Math.Max(0, _drag.NodeY + dy / Zoom);
+        foreach (var change in changes.OfType<NodePositionChange>())
+            if (Diagram.Node(change.Id) is { } node)
+                (node.X, node.Y) = (change.Position.X, change.Position.Y);
     }
 
-    private void CancelDrag()
+    /// <summary>
+    ///     Le double-clic se reconnaît ici : Wpflow capture le pointeur sur sa racine, le navigateur y envoie donc
+    ///     <c>dblclick</c> et son <c>OnNodeDoubleClick</c> ne se déclenche pas (Wpflow.Blazor 1.0.1).
+    /// </summary>
+    private async Task NodeClickAsync(NodeEventArgs e)
     {
-        _drag = null;
-    }
-
-    /// <summary>Relâchement sur le fond du dessin : une table déplacée garde sa nouvelle place.</summary>
-    private async Task FinishDragAsync()
-    {
-        var drag = _drag;
-        _drag = null;
-        if (drag is { Moved: true })
-            await OnNodeMoved.InvokeAsync(drag.Node);
-        else if (drag == null)
-            await OnClearSelection.InvokeAsync(); // le relâchement d'un clic sur une table ne remonte pas jusqu'ici
-    }
-
-    private async Task LeaveAsync()
-    {
-        var drag = _drag;
-        _drag = null;
-        if (drag != null) await OnDragLeave.InvokeAsync(drag.Node);
-    }
-
-    /// <summary>Relâchement sur une table ou une colonne : sans déplacement, c'est un clic (sélection).</summary>
-    private async Task EndDrag(ErNode node, ErRow? row)
-    {
-        var drag = _drag;
-        _drag = null;
-        if (drag == null) return;
-        if (drag.Moved)
+        var column = _pressedColumn;
+        var now = Environment.TickCount64;
+        if (_lastClick is { } last && last.TableId == e.Node.Id && last.ColumnId == column && now - last.At <= DoubleClickMilliseconds)
         {
-            await OnNodeMoved.InvokeAsync(drag.Node);
+            _lastClick = null;
+            await OnOpenTable.InvokeAsync((e.Node.Id, column));
             return;
         }
 
-        if (row == null)
-            await OnSelectTable.InvokeAsync(node.Id);
+        _lastClick = (e.Node.Id, column, now);
+        if (column == null)
+            await OnSelectTable.InvokeAsync(e.Node.Id);
         else
-            await OnSelectColumn.InvokeAsync((node.Id, row.ColumnId));
+            await OnSelectColumn.InvokeAsync((e.Node.Id, column));
+    }
+
+    private void DragStarted(NodeDragEventArgs e)
+    {
+        _outside = false;
+        // Le modèle n'a pas encore bougé : c'est la place à rendre si la table est déposée hors du dessin.
+        _dragStart = Diagram.Node(e.Node.Id) is { } node ? (node.Id, node.X, node.Y) : null;
+    }
+
+    private bool IsOutside(XYPosition screen)
+    {
+        var (width, height) = _flow?.Size ?? (0, 0);
+        return width > 0 && (screen.X < 0 || screen.Y < 0 || screen.X > width || screen.Y > height);
+    }
+
+    private async Task DraggingAsync(NodeDragEventArgs e)
+    {
+        var outside = IsOutside(e.Pointer.Screen);
+        if (outside == _outside || Diagram.Node(e.Node.Id) is not { } node) return;
+        _outside = outside;
+        if (outside) await OnDragLeave.InvokeAsync(node);
+        else await OnDragBack.InvokeAsync();
+    }
+
+    private async Task DragStoppedAsync(NodeDragEventArgs e)
+    {
+        var start = _dragStart;
+        _dragStart = null;
+        _outside = false;
+        if (Diagram.Node(e.Node.Id) is not { } node) return;
+        if (!IsOutside(e.Pointer.Screen))
+        {
+            _signature = Signature(); // Wpflow a déjà la nouvelle place : rien à reconstruire.
+            await OnNodeMoved.InvokeAsync(node);
+            return;
+        }
+
+        string? domainId = null;
+        try
+        {
+            domainId = await JS.InvokeAsync<string?>("granitdb.domainAt", _host, e.Pointer.Screen.X, e.Pointer.Screen.Y);
+        }
+        catch (JSException)
+        {
+            // Sans réponse du navigateur, le dépôt est abandonné.
+        }
+
+        if (start is { } place && place.Id == node.Id)
+        {
+            (node.X, node.Y) = (place.X, place.Y);
+            _signature = Signature();
+            Build();
+        }
+
+        await OnDroppedOutside.InvokeAsync((node, domainId));
     }
 }

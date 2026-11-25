@@ -386,7 +386,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
     private IRenderedComponent<Diagram> Open()
     {
         var page = _ctx.Render<Diagram>(p => p.Add(x => x.Id, "db"));
-        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("g.er-node")));
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-node")));
         return page;
     }
 
@@ -396,10 +396,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
         page.FindAll("label").First(l => l.TextContent.Trim() == table).QuerySelector("input")!.Change(false);
     }
 
-    private static string Translate(IRenderedComponent<Diagram> page, string table)
-    {
-        return page.Find($"g.er-node[data-table='{table}']").GetAttribute("transform")!;
-    }
+    private static (double X, double Y) Translate(IRenderedComponent<Diagram> page, string table) => DiagramGestures.Position(page, table);
 
     [BunitFact]
     public void The_diagram_shows_every_table_with_its_columns_and_a_link_between_related_tables()
@@ -407,8 +404,8 @@ public class ClientDiagramPageTests : IAsyncLifetime
         var page = Open();
 
         Assert.Equal(["customers", "orders", "tags"],
-            page.FindAll("g.er-node").Select(n => n.GetAttribute("data-table")).Order().ToArray());
-        Assert.NotNull(page.Find("g.er-row[data-column='customer_id']"));
+            page.FindAll(".er-node").Select(n => n.GetAttribute("data-table")).Order().ToArray());
+        Assert.NotNull(page.Find(".er-row[data-column='customer_id']"));
         Assert.Single(page.FindAll("path.er-edge"));
         Assert.Contains("Tables affichées (3 / 3)", page.Markup);
     }
@@ -422,7 +419,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
 
         page.WaitForAssertion(() =>
         {
-            Assert.Equal(2, page.FindAll("g.er-node").Count);
+            Assert.Equal(2, page.FindAll(".er-node").Count);
             Assert.Empty(page.FindAll("path.er-edge"));
             Assert.Contains("Tables affichées (2 / 3)", page.Markup);
         });
@@ -433,9 +430,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
     {
         var page = Open();
 
-        var customers = page.Find("g.er-node[data-table='customers']");
-        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        DiagramGestures.ClickTable(page, "customers");
 
         page.WaitForAssertion(() =>
         {
@@ -443,8 +438,8 @@ public class ClientDiagramPageTests : IAsyncLifetime
             Assert.Contains("orders", page.Find("#impact").TextContent);
             Assert.Contains("direct", page.Find("#impact").TextContent);
         });
-        Assert.Contains("er-selected", page.Find("g.er-node[data-table='customers']").ClassName);
-        Assert.Contains("er-dependent", page.Find("g.er-node[data-table='orders']").ClassName);
+        Assert.Contains("er-selected", page.Find(".er-node[data-table='customers']").ClassName);
+        Assert.Contains("er-dependent", page.Find(".er-node[data-table='orders']").ClassName);
         Assert.Contains("er-edge-active", page.Find("path.er-edge").ClassName);
         Assert.Contains(_api.Requests, r => r.RequestUri!.AbsolutePath == "/api/v1/Impact/table/t1");
     }
@@ -453,18 +448,16 @@ public class ClientDiagramPageTests : IAsyncLifetime
     public void Clicking_the_empty_background_clears_the_selection_and_the_legend()
     {
         var page = Open();
-        var customers = page.Find("g.er-node[data-table='customers']");
-        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        DiagramGestures.ClickTable(page, "customers");
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#impact")));
         Assert.NotEmpty(page.FindAll(".er-legend"));
         Assert.Contains("Élément choisi", page.Find(".er-legend").TextContent);
 
-        page.Find("svg.er-svg").PointerUp(new PointerEventArgs { ClientX = 900, ClientY = 900 });
+        DiagramGestures.ClickBackground(page);
 
         page.WaitForAssertion(() => Assert.Empty(page.FindAll("#impact")));
         Assert.Empty(page.FindAll(".er-legend"));
-        Assert.DoesNotContain("er-selected", page.Find("g.er-node[data-table='customers']").ClassName);
+        Assert.DoesNotContain("er-selected", page.Find(".er-node[data-table='customers']").ClassName);
         Assert.Empty(page.FindAll("path.er-edge-active"));
     }
 
@@ -474,12 +467,14 @@ public class ClientDiagramPageTests : IAsyncLifetime
         var page = Open();
         var nav = _ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
 
-        page.Find("g.er-node[data-table='customers']").DoubleClick();
+        DiagramGestures.ClickTable(page, "customers");
+        DiagramGestures.ClickTable(page, "customers");
 
         page.WaitForAssertion(() => Assert.Contains("/databases/db/tables/", nav.Uri));
         Assert.DoesNotContain("column=", nav.Uri);
 
-        page.Find("g.er-node[data-table='customers'] g.er-row").DoubleClick();
+        DiagramGestures.Click(page, ".er-node[data-table='customers'] .er-row");
+        DiagramGestures.Click(page, ".er-node[data-table='customers'] .er-row");
 
         page.WaitForAssertion(() => Assert.Contains("?column=", nav.Uri));
     }
@@ -488,9 +483,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
     public void Escape_inside_the_impact_panel_closes_it_and_clears_the_selection()
     {
         var page = Open();
-        var customers = page.Find("g.er-node[data-table='customers']");
-        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        DiagramGestures.ClickTable(page, "customers");
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#impact")));
 
         page.Find("#impact").KeyDown(new KeyboardEventArgs { Key = "Escape" });
@@ -503,9 +496,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
     public void The_legend_button_clears_the_selection_too()
     {
         var page = Open();
-        var customers = page.Find("g.er-node[data-table='customers']");
-        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        DiagramGestures.ClickTable(page, "customers");
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-legend-clear")));
 
         page.Find(".er-legend-clear").Click();
@@ -518,15 +509,10 @@ public class ClientDiagramPageTests : IAsyncLifetime
     public void Dragging_a_table_does_not_clear_the_selection()
     {
         var page = Open();
-        var customers = page.Find("g.er-node[data-table='customers']");
-        customers.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        customers.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        DiagramGestures.ClickTable(page, "customers");
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("#impact")));
 
-        var orders = page.Find("g.er-node[data-table='orders']");
-        orders.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 80, ClientY = 80 });
-        page.Find("svg.er-svg").PointerUp(new PointerEventArgs { ClientX = 80, ClientY = 80 });
+        DiagramGestures.Drag(page, "orders", (10, 10), (80, 80));
 
         Assert.NotEmpty(page.FindAll("#impact"));
     }
@@ -536,14 +522,12 @@ public class ClientDiagramPageTests : IAsyncLifetime
     {
         var page = Open();
 
-        var column = page.Find("g.er-row[data-column='customer_id']");
-        column.PointerDown(new PointerEventArgs { ClientX = 5, ClientY = 5 });
-        column.PointerUp(new PointerEventArgs { ClientX = 5, ClientY = 5 });
+        DiagramGestures.Click(page, ".er-row[data-column='customer_id']");
 
         page.WaitForAssertion(() => Assert.Contains("Impact de orders.customer_id", page.Find("#impact").TextContent));
         Assert.Contains("customers.id", page.Find("#impact").TextContent);
-        Assert.Contains("er-selected", page.Find("g.er-row[data-column='customer_id']").ClassName);
-        Assert.Contains("er-dependency", page.Find("g.er-row[data-column='id']").ClassName);
+        Assert.Contains("er-selected", page.Find(".er-row[data-column='customer_id']").ClassName);
+        Assert.Contains("er-dependency", page.Find(".er-row[data-column='id']").ClassName);
     }
 
     [BunitFact]
@@ -552,13 +536,10 @@ public class ClientDiagramPageTests : IAsyncLifetime
         var page = Open();
         var before = Translate(page, "tags");
 
-        var tags = page.Find("g.er-node[data-table='tags']");
-        tags.PointerDown(new PointerEventArgs { ClientX = 100, ClientY = 100 });
-        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 260, ClientY = 180 });
-        page.Find("g.er-node[data-table='tags']").PointerUp(new PointerEventArgs { ClientX = 260, ClientY = 180 });
+        DiagramGestures.Drag(page, "tags", (100, 100), (260, 180));
 
         Assert.NotEqual(before, Translate(page, "tags"));
-        Assert.DoesNotContain("er-selected", page.Find("g.er-node[data-table='tags']").ClassName);
+        Assert.DoesNotContain("er-selected", page.Find(".er-node[data-table='tags']").ClassName);
         Assert.DoesNotContain(_api.Requests, r => r.RequestUri!.AbsolutePath.StartsWith("/api/v1/Impact/"));
     }
 
@@ -566,14 +547,12 @@ public class ClientDiagramPageTests : IAsyncLifetime
     public void A_moved_table_keeps_its_place_when_another_table_is_toggled()
     {
         var page = Open();
-        page.Find("g.er-node[data-table='tags']").PointerDown(new PointerEventArgs { ClientX = 100, ClientY = 100 });
-        page.Find("svg.er-svg").PointerMove(new PointerEventArgs { ClientX = 300, ClientY = 300 });
-        page.Find("g.er-node[data-table='tags']").PointerUp(new PointerEventArgs { ClientX = 300, ClientY = 300 });
+        DiagramGestures.Drag(page, "tags", (100, 100), (300, 300));
         var moved = Translate(page, "tags");
 
         Uncheck(page, "orders");
 
-        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("g.er-node").Count));
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".er-node").Count));
         Assert.Equal(moved, Translate(page, "tags"));
     }
 
@@ -601,7 +580,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
     {
         var page = Open();
         Uncheck(page, "tags");
-        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll("g.er-node").Count));
+        page.WaitForAssertion(() => Assert.Equal(2, page.FindAll(".er-node").Count));
 
         Export(page, "export-mermaid");
 
@@ -614,30 +593,28 @@ public class ClientDiagramPageTests : IAsyncLifetime
     public void Keeping_only_the_neighbours_of_the_selection_hides_the_unrelated_tables()
     {
         var page = Open();
-        var customers = page.Find("g.er-node[data-table='customers']");
-        customers.PointerDown(new PointerEventArgs { ClientX = 1, ClientY = 1 });
-        customers.PointerUp(new PointerEventArgs { ClientX = 1, ClientY = 1 });
+        DiagramGestures.ClickTable(page, "customers");
         page.WaitForAssertion(() => Assert.NotNull(page.Find("#impact")));
 
         page.FindAll("button").First(b => b.TextContent.Trim() == "Voisines").Click();
 
         page.WaitForAssertion(() => Assert.Equal(["customers", "orders"],
-            page.FindAll("g.er-node").Select(n => n.GetAttribute("data-table")).Order().ToArray()));
+            page.FindAll(".er-node").Select(n => n.GetAttribute("data-table")).Order().ToArray()));
     }
 
     [BunitFact]
     public void Zoom_buttons_scale_the_drawing_within_limits()
     {
         var page = Open();
-        var width = double.Parse(page.Find("svg.er-svg").GetAttribute("width")!, CultureInfo.InvariantCulture);
+        var width = DiagramGestures.Scale(page);
 
         page.Find("button[title='Zoom avant']").Click();
-        var zoomed = double.Parse(page.Find("svg.er-svg").GetAttribute("width")!, CultureInfo.InvariantCulture);
+        var zoomed = DiagramGestures.Scale(page);
         for (var i = 0; i < 40; i++) page.Find("button[title='Zoom arrière']").Click();
-        var minimum = double.Parse(page.Find("svg.er-svg").GetAttribute("width")!, CultureInfo.InvariantCulture);
+        var minimum = DiagramGestures.Scale(page);
 
         Assert.True(zoomed > width);
-        Assert.Equal(width * 0.3, minimum, 0);
+        Assert.Equal(width * 0.3, minimum, 3);
         Assert.Contains("30 %", page.Markup);
     }
 
@@ -649,7 +626,7 @@ public class ClientDiagramPageTests : IAsyncLifetime
         var page = _ctx.Render<Diagram>(p => p.Add(x => x.Id, "nope"));
 
         page.WaitForAssertion(() => Assert.Contains("Base introuvable", page.Markup));
-        Assert.Empty(page.FindAll("svg.er-svg"));
+        Assert.Empty(page.FindAll(".er-canvas"));
     }
 
     [BunitFact]

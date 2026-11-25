@@ -50,6 +50,12 @@ function granitdbOpenTab(url) {
 window.granitdb.openPrintable = url => granitdbOpenTab(url + "#/print");
 window.granitdb.openHtml = url => granitdbOpenTab(url);
 window.granitdb.copyText = text => navigator.clipboard.writeText(text);
+// Domaine sous le point (x, y) compté depuis le coin de l'élément : cible d'une table lâchée hors du diagramme.
+window.granitdb.domainAt = (element, x, y) => {
+	const box = element.getBoundingClientRect();
+	const target = document.elementFromPoint(box.left + x, box.top + y);
+	return target?.closest("[data-domain-id]")?.getAttribute("data-domain-id") ?? null;
+};
 window.granitdb.downloadPng = (fileName, svg, width, height) => new Promise((resolve, reject) => {
 	const scale = 2;
 	const image = new Image();

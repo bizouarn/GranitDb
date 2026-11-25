@@ -12,6 +12,7 @@ GranitDb est distribué sous licence PolyForm Noncommercial 1.0.0 (fichier `LICE
 
 - **Microsoft.Data.SqlClient.SNI.runtime** : « Microsoft Software License Terms » (fichier `LICENSE.txt` du paquet). Code redistribuable sous conditions : à utiliser dans une application et non seul, utilisateurs finaux liés par des conditions au moins aussi protectrices, aucun usage des marques Microsoft. Texte complet dans le paquet.
 - **Microsoft.VisualStudio.Azure.Containers.Tools.Targets** : licence Microsoft (`EULA.md` du paquet). Outil de construction pour les images Docker, non intégré à l'application distribuée.
+- **Wpflow** : portage en .NET de [xyflow](https://github.com/xyflow/xyflow) (React Flow), lui aussi sous licence MIT, Copyright (c) 2019-2025 webkid GmbH.
 - **SQLite** (paquet `SQLite`, moteur embarqué via SQLitePCLRaw) : domaine public, https://sqlite.org/copyright.html.
 
 ## Composants
@@ -87,6 +88,8 @@ GranitDb est distribué sous licence PolyForm Noncommercial 1.0.0 (fichier `LICE
 | System.IdentityModel.Tokens.Jwt | 8.16.0 | MIT | © Microsoft Corporation. All rights reserved. |
 | System.Security.Cryptography.Pkcs | 9.0.21 | MIT | © Microsoft Corporation. All rights reserved. |
 | System.Security.Cryptography.ProtectedData | 9.0.21 | MIT | © Microsoft Corporation. All rights reserved. |
+| Wpflow.Blazor | 1.0.1 | MIT | Copyright (c) bizouarn |
+| Wpflow.Core | 1.0.1 | MIT | Copyright (c) bizouarn |
 
 ## Texte de la licence MIT
 

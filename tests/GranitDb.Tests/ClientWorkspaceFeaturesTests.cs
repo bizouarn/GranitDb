@@ -18,12 +18,12 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
             Override = r => r.Method == HttpMethod.Get && r.RequestUri!.AbsolutePath == "/api/v1/DomainInfo/database/d1" ? FakeApi.Json(domains) : null;
         Nav.NavigateTo("/databases/d1/diagram?domain=g1");
         var page = Ctx.Render<Diagram>(p => p.Add(x => x.Id, "d1"));
-        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll("g.er-node")));
+        page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-node")));
         return page;
     }
 
     private static string[] Shown(IRenderedComponent<Diagram> page) =>
-        page.FindAll("g.er-node").Select(n => n.GetAttribute("data-table")!).Order().ToArray();
+        page.FindAll(".er-node").Select(n => n.GetAttribute("data-table")!).Order().ToArray();
 
     [BunitFact]
     public void The_legend_explains_the_symbols_and_can_be_closed()
@@ -45,15 +45,13 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
     public void Escape_clears_the_selection_of_the_diagram()
     {
         var page = OpenDomain();
-        var orders = page.Find("g.er-node[data-table='orders']");
-        orders.PointerDown(new PointerEventArgs { ClientX = 10, ClientY = 10 });
-        orders.PointerUp(new PointerEventArgs { ClientX = 10, ClientY = 10 });
+        DiagramGestures.ClickTable(page, "orders");
         page.WaitForAssertion(() => Assert.NotEmpty(page.FindAll(".er-legend")));
 
         page.Find(".er-focus").KeyDown(new KeyboardEventArgs { Key = "Escape" });
 
         Assert.Empty(page.FindAll(".er-legend"));
-        Assert.DoesNotContain("er-selected", page.Find("g.er-node[data-table='orders']").ClassName);
+        Assert.DoesNotContain("er-selected", page.Find(".er-node[data-table='orders']").ClassName);
     }
 
     [BunitFact]
@@ -94,7 +92,7 @@ public class ClientWorkspaceFeaturesTests : ShellTestBase
         page.Find(".show-neighbors input").Change(true);
 
         page.WaitForAssertion(() => Assert.Equal(["customers", "orders"], Shown(page)));
-        Assert.Contains("er-frontier", page.Find("g.er-node[data-table='customers']").ClassName);
+        Assert.Contains("er-frontier", page.Find(".er-node[data-table='customers']").ClassName);
         Assert.True(BodyOf(HttpMethod.Put, "/api/v1/DomainInfo/g1/settings").GetProperty("showNeighbors").GetBoolean());
     }
 
