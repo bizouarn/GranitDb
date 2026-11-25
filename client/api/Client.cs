@@ -12,7 +12,7 @@ namespace GranitDb.Client.api;
 ///     messages à afficher (<see cref="ApiException" />), quelles lectures peuvent se replier sur une valeur vide, et les
 ///     téléchargements de fichiers, que le contrat ne décrit pas comme des données.
 /// </summary>
-public class Client(HttpClient http)
+public class Client(HttpClient http, SessionHandler? sessionHandler = null)
 {
     private readonly GranitApi _api = new(http);
 
@@ -389,8 +389,22 @@ public class Client(HttpClient http)
     /// <summary>Levé quand l'API répond 401 : la session a expiré (ou n'a jamais existé), l'interface doit proposer la connexion.</summary>
     public static event Action? Unauthorized;
 
-    /// <summary>La session de l'appelant ; sans authentification (ou si l'API ne la décrit pas) : désactivée.</summary>
+    /// <summary>
+    ///     La session de l'appelant ; sans authentification (ou si l'API ne la décrit pas) : désactivée. La première question
+    ///     part sans les identifiants (une API sans authentification les refuse depuis une autre origine) ; si l'API demande
+    ///     une session, ils sont activés pour tous les appels suivants et la question est reposée avec le cookie.
+    /// </summary>
     public async Task<SessionView> GetSessionAsync()
+    {
+        var session = await ReadSessionAsync();
+        if (sessionHandler == null || sessionHandler.SendCredentials || !session.Enabled) return session;
+        sessionHandler.SendCredentials = true;
+        var signedIn = await ReadSessionAsync();
+        // Origine de l'interface absente de Cors:AllowedOrigins : la seconde réponse est illisible, la première reste vraie.
+        return signedIn.Enabled ? signedIn : session;
+    }
+
+    private async Task<SessionView> ReadSessionAsync()
     {
         try
         {

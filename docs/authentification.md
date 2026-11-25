@@ -40,7 +40,7 @@ Une liste de logins (`octocat` ou `github:octocat` / `corp:jdupont` pour viser u
 
 ## CORS, cookies et proxy
 
-- **CORS** : déclarez l'adresse de l'interface dans `Cors:AllowedOrigins` (avec cookies). Sans cela, l'API répond à toutes les origines mais sans cookies : seule sa propre origine peut se connecter (un avertissement le dit au démarrage).
+- **CORS** : déclarez l'adresse de l'interface dans `Cors:AllowedOrigins` (avec cookies). Sans cela, l'API répond à toutes les origines mais sans cookies : seule sa propre origine peut se connecter (un avertissement le dit au démarrage). L'interface ne joint ses identifiants aux appels vers une autre origine que si l'API annonce l'authentification : sans elle, aucune origine n'est à déclarer.
 - **SameSite** : interface et API sur le même site : `Lax` (défaut) ; sur deux sites différents : `Auth:CookieSameSite` = `None` (HTTPS obligatoire, cookie `Secure`).
 - **Retour de connexion** : l'adresse de retour n'est suivie que si elle est un chemin de l'API ou une origine de `Cors:AllowedOrigins`.
 - **Écritures** : avec l'authentification, chaque POST/PUT/DELETE doit porter l'en-tête `X-GranitDb-Client` (l'interface l'ajoute) : un site tiers ne peut pas l'envoyer sans autorisation CORS, ce qui ferme la voie aux requêtes forgées avec le cookie.
