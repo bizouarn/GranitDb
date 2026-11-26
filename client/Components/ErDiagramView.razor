@@ -11,11 +11,11 @@
 <div class="er-canvas" @ref="_host">
     <FlowView @ref="_flow" Class="er-flow" Nodes="_nodes" NodesChanged="n => _nodes = n" Edges="_edges"
               Viewport="_viewport" ViewportChanged="ViewportChangedAsync" MinZoom="MinZoom" MaxZoom="MaxZoom" FitViewOnInit="false"
-              NodeTemplate="_nodeTemplate" EdgeTypes="_edgeTypes" EdgeTemplates="_edgeTemplates"
+              NodeTemplate="_nodeTemplate" EdgeTypes="_edgeTypes" EdgeTemplates="_edgeTemplates" EdgeHitWidth="0"
               NodeExtent="Bounds" NodeDragThreshold="4" AutoPanOnNodeDrag="false" OnlyRenderVisibleElements="@(_nodes.Count > VirtualizeAbove)"
               ElementsSelectable="false" NodesConnectable="false" EdgesReconnectable="false" DeleteKeyEnabled="false" HistoryEnabled="false"
               NodesFocusable="false" EdgesFocusable="false" AnnounceSelection="false" ZoomOnDoubleClick="false" ShowBackground="true"
-              OnNodesChange="NodesChanging" OnNodeClick="NodeClickAsync"
+              OnNodesChange="NodesChanging" OnNodeClick="NodeClickAsync" OnNodeDoubleClick="NodeDoubleClickAsync"
               OnNodeDragStart="DragStarted" OnNodeDrag="DraggingAsync" OnNodeDragStop="DragStoppedAsync"
               OnPaneClick="_ => OnClearSelection.InvokeAsync()" OnInit="FitIfPendingAsync">
         <FlowMiniMap NodeColor="MiniMapColor" Width="170" Height="120" Zoomable="true" />
@@ -26,7 +26,7 @@
 @code {
     private const double MinZoom = 0.1;
     private const double MaxZoom = 2.5;
-    private const int DoubleClickMilliseconds = 500;
+    private const string EdgeType = "er";
 
     /// <summary>Au-delà, seules les tables proches de la vue sont dessinées.</summary>
     private const int VirtualizeAbove = 200;
@@ -36,12 +36,15 @@
     /// <summary>Ce qu'un nœud affiche : tout est dans le nœud, car Wpflow ne redessine un nœud que s'il change.</summary>
     private sealed record TableView(ErNode Table, string State, IReadOnlyList<string> RowStates);
 
+    /// <summary>De même pour un lien : la relation qu'il trace et sa mise en évidence.</summary>
+    private sealed record RelationView(ErEdge Relation, bool Active);
+
     private FlowView? _flow;
     private ElementReference _host;
     private IReadOnlyList<FlowNode> _nodes = [];
     private IReadOnlyList<FlowEdge> _edges = [];
-    private Dictionary<string, IEdgePathProvider> _edgeTypes = new();
-    private Dictionary<string, RenderFragment<EdgeRenderContext>> _edgeTemplates = new();
+    private readonly Dictionary<string, IEdgePathProvider> _edgeTypes;
+    private readonly Dictionary<string, RenderFragment<EdgeRenderContext>> _edgeTemplates;
     private readonly RenderFragment<FlowNode> _nodeTemplate;
 
     private Viewport _viewport = Viewport.Identity;
@@ -50,14 +53,22 @@
     private string? _signature;
     private ErDiagram? _built;
 
-    private string? _pressedColumn;
-    private (string TableId, string? ColumnId, long At)? _lastClick;
     private (string Id, double X, double Y)? _dragStart;
     private bool _outside;
 
     public ErDiagramView()
     {
         _nodeTemplate = node => RenderTable((TableView)node.Data!);
+        // Le tracé dépend des colonnes reliées : il vient du modèle plutôt que des poignées.
+        _edgeTypes = new Dictionary<string, IEdgePathProvider>
+        {
+            [EdgeType] = new DelegateEdgePathProvider(geometry =>
+                new Wpflow.Core.EdgePath(Diagram.Route(((RelationView)geometry.Edge!.Data!).Relation)?.Path ?? "", 0, 0, 0, 0))
+        };
+        _edgeTemplates = new Dictionary<string, RenderFragment<EdgeRenderContext>>
+        {
+            [EdgeType] = context => RenderEdge((RelationView)context.Edge.Data!, context.Path.Path)
+        };
     }
 
     [Parameter, EditorRequired] public ErDiagram Diagram { get; set; } = null!;
@@ -168,24 +179,9 @@
             node.Width, node.Height, FixedWidth: node.Width, FixedHeight: node.Height)).ToList();
 
         var touched = Dependents.Union(Dependencies).ToHashSet();
-        var types = new Dictionary<string, IEdgePathProvider>();
-        var templates = new Dictionary<string, RenderFragment<EdgeRenderContext>>();
-        var edges = new List<FlowEdge>();
-        foreach (var edge in Diagram.Edges)
-        {
-            // Le tracé dépend des colonnes reliées : un type par relation, qui interroge le modèle plutôt que les poignées.
-            var current = edge;
-            var type = "er-" + edge.RelationId;
-            types[type] = new DelegateEdgePathProvider(_ => new Wpflow.Core.EdgePath(Diagram.Route(current)?.Path ?? "", 0, 0, 0, 0));
-            var active = IsActive(edge, touched);
-            templates[type] = context => RenderEdge(current, context.Path.Path, active);
-            edges.Add(new FlowEdge(edge.RelationId, edge.ReferencingTableId, edge.ReferencedTableId, Type: type,
-                Selectable: false, Deletable: false, Reconnectable: false));
-        }
-
-        _edgeTypes = types;
-        _edgeTemplates = templates;
-        _edges = edges;
+        _edges = Diagram.Edges.Select(edge => new FlowEdge(edge.RelationId, edge.ReferencingTableId, edge.ReferencedTableId,
+            Type: EdgeType, Data: new RelationView(edge, IsActive(edge, touched)),
+            Selectable: false, Deletable: false, Reconnectable: false)).ToList();
     }
 
     private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
@@ -194,7 +190,7 @@
     {
         var node = view.Table;
         return @<div class="@($"er-node{view.State}")" data-table="@node.Name" style="@($"height:{N(node.Height)}px")">
-            <div class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")" @onpointerdown="() => _pressedColumn = null"
+            <div class="@($"er-head{(node.TableType == "Table" ? "" : " er-head-view")}")"
                  style="@($"height:{N(node.HeaderHeight)}px{(node.Color == null ? "" : $";background:{node.Color};color:{node.Ink}")}")">
                 <div class="er-title" style="@($"height:{N(ErDiagram.HeaderHeight)}px")">@node.Name</div>
                 @if (node.Caption != null)
@@ -205,8 +201,8 @@
             @for (var i = 0; i < node.Rows.Count; i++)
             {
                 var row = node.Rows[i];
-                <div class="@($"er-row{view.RowStates[i]}")" data-column="@row.Name" style="@($"height:{N(ErDiagram.RowHeight)}px")"
-                     @onpointerdown="() => _pressedColumn = row.ColumnId">
+                <div class="@($"er-row{view.RowStates[i]}")" data-column="@row.Name" data-column-id="@row.ColumnId"
+                     style="@($"height:{N(ErDiagram.RowHeight)}px")">
                     <span class="er-key">@(row.IsPrimaryKey ? "PK" : row.IsForeignKey ? "FK" : "")</span>
                     <span class="@(row.IsPrimaryKey ? "er-col er-col-pk" : "er-col")">@row.Name</span>
                     <span class="er-type">@row.DataType</span>
@@ -215,8 +211,9 @@
         </div>;
     }
 
-    private RenderFragment RenderEdge(ErEdge edge, string path, bool active)
+    private RenderFragment RenderEdge(RelationView view, string path)
     {
+        var (edge, active) = view;
         var route = Diagram.Route(edge);
         if (route == null) return _ => { };
         var (many, one) = ErDiagram.Cardinality(edge.RelationType);
@@ -284,27 +281,14 @@
                 (node.X, node.Y) = (change.Position.X, change.Position.Y);
     }
 
-    /// <summary>
-    ///     Le double-clic se reconnaît ici : Wpflow capture le pointeur sur sa racine, le navigateur y envoie donc
-    ///     <c>dblclick</c> et son <c>OnNodeDoubleClick</c> ne se déclenche pas (Wpflow.Blazor 1.0.1).
-    /// </summary>
-    private async Task NodeClickAsync(NodeEventArgs e)
-    {
-        var column = _pressedColumn;
-        var now = Environment.TickCount64;
-        if (_lastClick is { } last && last.TableId == e.Node.Id && last.ColumnId == column && now - last.At <= DoubleClickMilliseconds)
-        {
-            _lastClick = null;
-            await OnOpenTable.InvokeAsync((e.Node.Id, column));
-            return;
-        }
+    /// <summary>La colonne visée par un geste sur un nœud (null : l'en-tête de la table).</summary>
+    private static string? ColumnOf(NodeEventArgs e) => e.TargetData.GetValueOrDefault("column-id");
 
-        _lastClick = (e.Node.Id, column, now);
-        if (column == null)
-            await OnSelectTable.InvokeAsync(e.Node.Id);
-        else
-            await OnSelectColumn.InvokeAsync((e.Node.Id, column));
-    }
+    private Task NodeClickAsync(NodeEventArgs e) => ColumnOf(e) is { } column
+        ? OnSelectColumn.InvokeAsync((e.Node.Id, column))
+        : OnSelectTable.InvokeAsync(e.Node.Id);
+
+    private Task NodeDoubleClickAsync(NodeEventArgs e) => OnOpenTable.InvokeAsync((e.Node.Id, ColumnOf(e)));
 
     private void DragStarted(NodeDragEventArgs e)
     {

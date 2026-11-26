@@ -15,8 +15,39 @@ internal static class DiagramGestures
 {
     private static FlowView Flow(IRenderedComponent<Diagram> page) => page.FindComponent<FlowView>().Instance;
 
-    public static void Press(IRenderedComponent<Diagram> page, string selector, double x = 10, double y = 10) =>
+    public static void Press(IRenderedComponent<Diagram> page, string selector, double x = 10, double y = 10)
+    {
+        SendPressData(page, selector);
         page.Find(selector).PointerDown(new PointerEventArgs { ClientX = x, ClientY = y });
+    }
+
+    /// <summary>
+    ///     Comme le pont JavaScript avant l'évènement d'appui : les attributs <c>data-*</c> de l'élément pressé et de ses
+    ///     parents dans le nœud (c'est ce que Wpflow donne ensuite dans <c>NodeEventArgs.TargetData</c>).
+    /// </summary>
+    private static void SendPressData(IRenderedComponent<Diagram> page, string selector)
+    {
+        var data = new Dictionary<string, string>();
+        var element = page.Find(selector);
+        while (element != null && !element.ClassList.Contains("wf-node"))
+        {
+            foreach (var attribute in element.Attributes.Where(a => a.Name.StartsWith("data-", StringComparison.Ordinal)))
+                data.TryAdd(attribute.Name["data-".Length..], attribute.Value);
+            element = element.ParentElement;
+        }
+
+        if (element?.GetAttribute("data-node-id") is not { } nodeId) return;
+        var flow = Flow(page);
+        page.InvokeAsync(() => flow.OnPressData(nodeId, data)).GetAwaiter().GetResult();
+    }
+
+    /// <summary>Deux clics puis le <c>dblclick</c> du navigateur.</summary>
+    public static void DoubleClick(IRenderedComponent<Diagram> page, string selector)
+    {
+        Click(page, selector);
+        Click(page, selector);
+        page.Find(selector).DoubleClick();
+    }
 
     public static void Move(IRenderedComponent<Diagram> page, double x, double y)
     {

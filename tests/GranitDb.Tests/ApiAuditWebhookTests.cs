@@ -97,6 +97,23 @@ public sealed class ApiAuditWebhookTests : IDisposable
 
     private int ReceivedCount() { lock (_received) return _received.Count; }
 
+    /// <summary>
+    ///     La livraison n'est enregistrée qu'après la réponse du destinataire : avoir reçu le message ne suffit pas, il
+    ///     faut attendre qu'elle apparaisse.
+    /// </summary>
+    private async Task<JsonElement> WaitForDeliveriesAsync(string hook, int count)
+    {
+        var deliveries = await GetJsonAsync($"{V1}/Webhooks/{hook}/deliveries");
+        for (var i = 0; i < 300 && deliveries.GetArrayLength() < count; i++)
+        {
+            await Task.Delay(100);
+            deliveries = await GetJsonAsync($"{V1}/Webhooks/{hook}/deliveries");
+        }
+
+        Assert.Equal(count, deliveries.GetArrayLength());
+        return deliveries;
+    }
+
     // --- Journal d'audit ---
 
     [Fact]
@@ -189,8 +206,7 @@ public sealed class ApiAuditWebhookTests : IDisposable
         Assert.Equal(db, json.GetProperty("data").GetProperty("database").GetProperty("id").GetString());
         Assert.Equal(1, json.GetProperty("data").GetProperty("changes").GetProperty("tablesAdded").GetInt32());
 
-        await WaitForAsync(() => GetJsonAsync($"{V1}/Webhooks/{hook}/deliveries").Result.GetArrayLength() == 1);
-        var delivery = (await GetJsonAsync($"{V1}/Webhooks/{hook}/deliveries")).EnumerateArray().Single();
+        var delivery = (await WaitForDeliveriesAsync(hook, 1)).EnumerateArray().Single();
         Assert.True(delivery.GetProperty("success").GetBoolean());
         Assert.Equal(200, delivery.GetProperty("statusCode").GetInt32());
         Assert.Equal(0, (await GetJsonAsync($"{V1}/Webhooks/{elsewhere}/deliveries")).GetArrayLength());
@@ -213,7 +229,7 @@ public sealed class ApiAuditWebhookTests : IDisposable
         Assert.Equal("database.deleted", message.Event);
         Assert.Equal(db, JsonDocument.Parse(message.Body).RootElement.GetProperty("data").GetProperty("database").GetProperty("id").GetString());
         Assert.Equal(0, (await GetJsonAsync($"{V1}/Webhooks/{schemaOnly}/deliveries")).GetArrayLength());
-        Assert.Equal(1, (await GetJsonAsync($"{V1}/Webhooks/{listener}/deliveries")).GetArrayLength());
+        await WaitForDeliveriesAsync(listener, 1);
     }
 
     [Fact]
@@ -231,7 +247,7 @@ public sealed class ApiAuditWebhookTests : IDisposable
         Assert.Equal(db, data.GetProperty("database").GetProperty("id").GetString());
         Assert.Equal("Nouvelle", data.GetProperty("database").GetProperty("name").GetString());
         Assert.True(data.GetProperty("tables").GetInt32() > 0);
-        Assert.Equal(1, (await GetJsonAsync($"{V1}/Webhooks/{listener}/deliveries")).GetArrayLength());
+        await WaitForDeliveriesAsync(listener, 1);
     }
 
     [Fact]

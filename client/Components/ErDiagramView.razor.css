@@ -19,11 +19,6 @@
     font-family: inherit;
 }
 
-/* Les relations ne se choisissent pas : leur zone de clic de Wpflow ne doit pas le laisser croire. */
-.er-canvas ::deep .wf-edge-hit {
-    pointer-events: none;
-}
-
 .er-edge {
     fill: none;
     stroke: var(--mud-palette-text-secondary);

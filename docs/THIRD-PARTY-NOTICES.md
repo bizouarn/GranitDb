@@ -88,8 +88,8 @@ GranitDb est distribué sous licence PolyForm Noncommercial 1.0.0 (fichier `LICE
 | System.IdentityModel.Tokens.Jwt | 8.16.0 | MIT | © Microsoft Corporation. All rights reserved. |
 | System.Security.Cryptography.Pkcs | 9.0.21 | MIT | © Microsoft Corporation. All rights reserved. |
 | System.Security.Cryptography.ProtectedData | 9.0.21 | MIT | © Microsoft Corporation. All rights reserved. |
-| Wpflow.Blazor | 1.0.1 | MIT | Copyright (c) bizouarn |
-| Wpflow.Core | 1.0.1 | MIT | Copyright (c) bizouarn |
+| Wpflow.Blazor | 1.1.0 | MIT | Copyright (c) bizouarn |
+| Wpflow.Core | 1.1.0 | MIT | Copyright (c) bizouarn |
 
 ## Texte de la licence MIT
 

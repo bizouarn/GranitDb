@@ -467,14 +467,12 @@ public class ClientDiagramPageTests : IAsyncLifetime
         var page = Open();
         var nav = _ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
 
-        DiagramGestures.ClickTable(page, "customers");
-        DiagramGestures.ClickTable(page, "customers");
+        DiagramGestures.DoubleClick(page, DiagramGestures.Table("customers"));
 
         page.WaitForAssertion(() => Assert.Contains("/databases/db/tables/", nav.Uri));
         Assert.DoesNotContain("column=", nav.Uri);
 
-        DiagramGestures.Click(page, ".er-node[data-table='customers'] .er-row");
-        DiagramGestures.Click(page, ".er-node[data-table='customers'] .er-row");
+        DiagramGestures.DoubleClick(page, ".er-node[data-table='customers'] .er-row");
 
         page.WaitForAssertion(() => Assert.Contains("?column=", nav.Uri));
     }
