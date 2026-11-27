@@ -9,19 +9,26 @@ on:
   pull_request:
     branches: [main]
 
+# Moindre privilège : le jeton ne peut que lire le dépôt, quel que soit le réglage par défaut du dépôt.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     name: Build et tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       # Docker est disponible sur les runners : les tests SQL Server (Testcontainers) doivent tourner, pas être ignorés.
       GRANITDB_REQUIRE_SQLSERVER: "1"
       DOTNET_NOLOGO: "true"
       DOTNET_CLI_TELEMETRY_OPTOUT: "true"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           dotnet-version: 10.0.x
 
@@ -36,7 +43,7 @@ jobs:
 
       - name: Résultats des tests
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: test-results
           path: tests/GranitDb.Tests/TestResults/*.trx
@@ -44,9 +51,12 @@ jobs:
   docker:
     name: Images Docker
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: build-test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Image de l'API
         run: docker build -f api/Dockerfile -t granitdb-api .

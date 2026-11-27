@@ -1,0 +1,27 @@
+# Mises à jour proposées en pull request : actions (épinglées par SHA), paquets NuGet, images de base Docker.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      nuget:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directories: [/api, /client]
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
