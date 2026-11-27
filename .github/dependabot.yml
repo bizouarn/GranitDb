@@ -19,9 +19,16 @@ updates:
     groups:
       nuget:
         update-types: [minor, patch]
+    # Les versions majeures (dont le passage à un nouveau .NET) se décident à la main.
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker
     directories: [/api, /client]
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
