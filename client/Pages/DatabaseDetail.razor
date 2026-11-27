@@ -66,7 +66,7 @@
                                      Icon="@Icons.Material.Filled.AutoAwesome"
                                      title="Propositions de descriptions (modèle d'IA local) et de colonnes sensibles, à relire avant d'être enregistrées">Assistant de documentation</MudMenuItem>
                     }
-                    <MudMenuItem Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/relations")" Class="relation-suggestions"
+                    <MudMenuItem Href="@($"/databases/{Uri.EscapeDataString(_database.Id)}/relations")" Class="relation-suggestions" Disabled="IsH2"
                                  Icon="@Icons.Material.Filled.AccountTree"
                                  title="Relations que le schéma ne déclare pas, détectées par le nom des colonnes et vérifiées par des comptes">Relations suggérées</MudMenuItem>
                     @if (CanProfile)
@@ -77,11 +77,11 @@
                     }
                 </MudMenu>
             }
-            @if (_database.Type == "Sqlite" && !Single && Auth.CanEdit)
+            @if (!Single && (_database.Type == "Sqlite" || IsH2) && Auth.CanEdit)
             {
                 <label class="replace-file">
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" Disabled="_syncing" Class="replace-file-button">Remplacer le fichier</MudButton>
-                    <InputFile OnChange="PreviewReplaceAsync" accept=".db,.sqlite,.sqlite3,.db3" class="replace-file-input" aria-label="Remplacer le fichier SQLite de cette base" />
+                    <InputFile @ref="_replaceInput" OnChange="PreviewReplaceAsync" accept=".db,.sqlite,.sqlite3,.db3" class="replace-file-input" aria-label="Remplacer le fichier de cette base" />
                 </label>
             }
         </MudStack>
@@ -163,7 +163,7 @@
         @if (_preview != null)
         {
             <MudPaper Class="pa-3 mb-3" id="sync-preview">
-                <MudText Typo="Typo.h6">@(_pendingFile == null ? "Aperçu de la synchronisation" : $"Aperçu du remplacement par {_pendingName}")</MudText>
+                <MudText Typo="Typo.h6">@(!HasPendingFile ? "Aperçu de la synchronisation" : $"Aperçu du remplacement par {_pendingName}")</MudText>
                 @if (!_preview.HasChanges)
                 {
                     <MudText Class="mt-1">Le catalogue est déjà à jour : la source n'a pas changé.</MudText>
@@ -200,7 +200,7 @@
                         </tbody>
                     </MudSimpleTable>
                     <MudStack Row="true" Spacing="2" Class="mt-2">
-                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplySyncAsync" Disabled="_syncing">@(_pendingFile == null ? "Appliquer la synchronisation" : "Remplacer le fichier et synchroniser")</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplySyncAsync" Disabled="_syncing">@(!HasPendingFile ? "Appliquer la synchronisation" : "Remplacer le fichier et synchroniser")</MudButton>
                         <MudButton Variant="Variant.Text" OnClick="ClosePreview" Disabled="_syncing">Annuler</MudButton>
                     </MudStack>
                 }
@@ -664,7 +664,10 @@
     private ColumnProfileView? ProfileOf(string tableId, string columnId) =>
         _profiles.TryGetValue(tableId, out var profile) ? profile.Columns.FirstOrDefault(c => c.ColumnId == columnId) : null;
 
-    private bool CanProfile => _capabilities.AllowProfiling && Auth.IsAdmin;
+    private bool IsH2 => _database?.Type == "H2";
+
+    /// <summary>H2 : seul le schéma est lu, il n'y a donc ni profilage ni détection de relations.</summary>
+    private bool CanProfile => _capabilities.AllowProfiling && Auth.IsAdmin && !IsH2;
 
     private bool CanSuggest => _capabilities.AllowAi && Auth.CanEdit;
 
@@ -1076,9 +1079,13 @@
     {
         _preview = null;
         _pendingFile = null;
+        _pendingLarge = false;
     }
 
-    private const long MaxReplaceSize = 100L * 1024 * 1024;
+    private InputFile? _replaceInput;
+    /// <summary>Le fichier en attente est resté dans le navigateur (trop gros pour la mémoire de l'application).</summary>
+    private bool _pendingLarge;
+    private bool HasPendingFile => _pendingFile != null || _pendingLarge;
     private byte[]? _pendingFile;
     private string _pendingName = "";
 
@@ -1089,7 +1096,24 @@
         try
         {
             _message.Clear();
-            await using var stream = e.File.OpenReadStream(MaxReplaceSize);
+            _pendingFile = null;
+            _pendingLarge = false;
+            if (e.File.Size > _capabilities.MaxUploadBytes())
+            {
+                ShowError(_capabilities.TooLargeMessage());
+                return;
+            }
+
+            if (e.File.Size > Client.DirectUploadThreshold)
+            {
+                _preview = await Api.UploadFromBrowserAsync<SyncPreview>(JS, _replaceInput!.Element!.Value, HttpMethod.Post,
+                    $"{ReplaceRoute}/preview");
+                _pendingLarge = true;
+                _pendingName = e.File.Name;
+                return;
+            }
+
+            await using var stream = e.File.OpenReadStream(_capabilities.MaxUploadBytes());
             using var buffer = new MemoryStream();
             await stream.CopyToAsync(buffer);
             var bytes = buffer.ToArray();
@@ -1103,7 +1127,7 @@
         }
         catch (IOException)
         {
-            ShowError("Fichier trop volumineux (100 Mo maximum).");
+            ShowError(_capabilities.TooLargeMessage());
         }
         finally
         {
@@ -1116,11 +1140,14 @@
         _syncing = true;
         try
         {
-            var summary = _pendingFile == null
+            var summary = _pendingLarge
+                ? (await Api.UploadFromBrowserAsync<ImportView>(JS, _replaceInput!.Element!.Value, HttpMethod.Put, ReplaceRoute)).Sync
+                : _pendingFile == null
                 ? await Api.SyncAsync(Id)
                 : (await Api.ReplaceSqliteAsync(Id, _pendingFile, _pendingName)).Sync;
             _preview = null;
             _pendingFile = null;
+            _pendingLarge = false;
             await LoadTablesAsync();
             await LoadGovernanceAsync();
             Changed();
@@ -1135,6 +1162,8 @@
             _syncing = false;
         }
     }
+
+    private string ReplaceRoute => $"api/v1/import/sqlite/{Uri.EscapeDataString(Id)}";
 
     private void ShowError(string message) => _message.Error(message);
 

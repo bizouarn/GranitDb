@@ -9,7 +9,7 @@ Les réglages vivent dans `api/appsettings.json` (ou en variables d'environnemen
 | `Provider` | `Sqlite` | Stockage du catalogue : `Sqlite` ou `SqlServer` |
 | `ConnectionString` | — | Obligatoire pour `SqlServer` ; facultative en SQLite |
 | `DataDirectory` | `granitdb-data` | Fichier de catalogue SQLite et fichiers importés |
-| `MaxUploadMb` | `100` | Taille maximale d'un fichier importé |
+| `MaxUploadMb` | `1024` | Taille maximale d'un fichier importé (`MAX_UPLOAD_MB` en Docker) ; le serveur en tient jusqu'à deux copies le temps de l'import |
 | `AllowLocalPaths` | `false` | Autorise `POST /import/sqlite/local` (chemin sur le serveur) |
 | `AllowSqlServerSources` | `true` | Autorise l'API à se connecter à un serveur (SQL Server, PostgreSQL, MySQL) choisi par l'appelant |
 | `KeysDirectory` | `<DataDirectory>/keys` | Clés qui chiffrent les connexions enregistrées |
@@ -24,6 +24,16 @@ Les réglages vivent dans `api/appsettings.json` (ou en variables d'environnemen
 | `SyncTimeoutSeconds` | `300` | Durée maximale d'une relecture de source |
 
 Les clés propres au profilage, à la détection de relations et à l'IA sont dans [aides-documentation.md](aides-documentation.md).
+
+## Bases H2
+
+Un fichier H2 (`.mv.db`) s'importe comme un fichier SQLite, **sans réglage, sans Java et sans jar** : l'API reconnaît son type à son en-tête et lit directement le schéma (tables, vues, colonnes, clés, relations, index ; le schéma `PUBLIC` garde les noms nus, les autres sont préfixés). Rien de la base n'est exécuté et le fichier est ouvert en lecture seule.
+
+- **Versions** : H2 2.x (formats de fichier 2 et 3), vérifié avec 2.1.214 et 2.5.252. Les fichiers de H2 1.x sont refusés : convertissez-les avec H2 2.x (`SCRIPT` puis `RUNSCRIPT`).
+- **Mot de passe** : il n'est pas demandé. Il protège la connexion par H2, pas le contenu d'un fichier non chiffré. Les bases chiffrées (`CIPHER`) ne sont pas prises en charge.
+- **Vues** : H2 ne garde pas le type de leurs colonnes, affiché `ANY`.
+- **Données** : seul le schéma est lu ; le profilage et la détection de relations ne sont pas disponibles pour H2.
+- Fermez de préférence l'application qui utilise le fichier avant de le copier.
 
 ## Sources déclarées au démarrage
 

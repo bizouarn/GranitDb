@@ -116,4 +116,22 @@ window.granitdb.downloadPng = (fileName, svg, width, height) => new Promise((res
 		if (target) target.focus();
 	};
 })();
-	
+
+// Envoi d'un gros fichier : le navigateur le lit sur le disque au fil de l'envoi, sans le charger dans la mémoire de
+// l'application WebAssembly. L'en-tête est celui que l'API exige de l'interface pour les écritures.
+window.granitdb.uploadFile = async (input, url, method, fields, withCredentials) => {
+	const file = input.files && input.files[0];
+	if (!file) return { status: 400, body: "Le fichier n'est plus sélectionné : choisissez-le de nouveau." };
+	const form = new FormData();
+	form.append("file", file, file.name);
+	for (const [name, value] of Object.entries(fields)) form.append(name, value);
+	try {
+		const response = await fetch(url, {
+			method, body: form, headers: { "X-GranitDb-Client": "1" },
+			credentials: withCredentials ? "include" : "same-origin"
+		});
+		return { status: response.status, body: await response.text() };
+	} catch (error) {
+		return { status: 0, body: String(error) };
+	}
+};

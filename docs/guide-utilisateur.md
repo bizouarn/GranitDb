@@ -20,6 +20,9 @@ Avec Docker : `docker compose up --build`, puis http://localhost:8081.
 ### Fichier SQLite
 Sur l'accueil (page **Bases**), glissez un fichier `.db` / `.sqlite` sur la zone de dépôt, ou cliquez dessus pour le choisir. Donnez-lui un nom : tables, colonnes, types, clés et relations apparaissent. Le fichier est conservé par le serveur pour pouvoir être relu plus tard.
 
+### Fichier H2
+Déposez le fichier `.mv.db` sur la même zone : il est reconnu et lu sans autre information ([détails et limites](configuration.md#bases-h2)).
+
 ### Base SQL Server
 Depuis l'accueil (ou **Ctrl+K**) : « Connecter un serveur SQL Server ».
 1. Saisissez serveur, port, base, authentification (identifiant SQL ou compte Windows du processus de l'API) et chiffrement.
@@ -131,7 +134,7 @@ La configuration du serveur (fournisseur du catalogue, taille maximale d'import,
 
 | Symptôme | Piste |
 |---|---|
-| « Fichier refusé » à l'import | Ce n'est pas une base SQLite valide, ou elle dépasse la taille maximale (`MaxUploadMb`, 100 Mo). |
+| « Fichier refusé » à l'import | Ce n'est pas une base SQLite valide, ou elle dépasse la taille maximale (`MaxUploadMb`, 1024 Mo par défaut). |
 | SQL Server : serveur injoignable depuis Docker | Utilisez `host.docker.internal` au lieu de `localhost`, activez TCP/IP et le port dans le pare-feu. |
 | « Saisissez-la de nouveau » | La connexion enregistrée n'est plus déchiffrable (clés perdues) : ressaisissez-la avec **Modifier la connexion**. |
 | Données obsolètes dans l'interface | **Actualiser**, ou resynchronisez la base. |

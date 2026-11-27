@@ -10,7 +10,7 @@ namespace GranitDB.API.Controllers;
 
 /// <summary>Capacités activées sur ce serveur : l'interface propose seulement ce qui est permis.</summary>
 public record CapabilitiesView(bool AllowSqlServerSources, bool AllowLocalPaths, bool AllowProfiling = false, bool AllowAi = false,
-    string? AiModel = null);
+    string? AiModel = null, int MaxUploadMb = 0);
 
 [Route("api/v1/[controller]")]
 [Route("[controller]")]
@@ -19,7 +19,8 @@ public class CapabilitiesController(IOptions<CatalogOptions> options, IOptions<A
 {
     [HttpGet]
     public IActionResult Get() => Ok(new CapabilitiesView(options.Value.AllowSqlServerSources, options.Value.AllowLocalPaths,
-        options.Value.AllowProfiling, options.Value.AllowAi, options.Value.AllowAi ? ai.Value.Model : null));
+        options.Value.AllowProfiling, options.Value.AllowAi, options.Value.AllowAi ? ai.Value.Model : null,
+        options.Value.MaxUploadMb));
 }
 
 /// <summary>

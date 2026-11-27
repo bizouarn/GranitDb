@@ -12,7 +12,7 @@ namespace GranitDb.Client.api;
 ///     messages à afficher (<see cref="ApiException" />), quelles lectures peuvent se replier sur une valeur vide, et les
 ///     téléchargements de fichiers, que le contrat ne décrit pas comme des données.
 /// </summary>
-public class Client(HttpClient http, SessionHandler? sessionHandler = null)
+public partial class Client(HttpClient http, SessionHandler? sessionHandler = null)
 {
     private readonly GranitApi _api = new(http);
 

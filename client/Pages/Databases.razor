@@ -11,6 +11,7 @@
 @inject Notifier Notifier
 @inject AuthState Auth
 @inject IDialogService Dialogs
+@inject IJSRuntime Js
 
 <PageTitle>Bases documentées</PageTitle>
 
@@ -20,10 +21,10 @@
     @if (Auth.CanEdit)
     {
     <MudPaper Class="pa-6 mb-6 dropzone" Outlined="true">
-        <InputFile class="dropzone-input" OnChange="OnFileSelected" accept=".db,.sqlite,.sqlite3,.db3" disabled="@_busy" />
+        <InputFile @ref="_dropZone" class="dropzone-input" OnChange="OnFileSelected" accept=".db,.sqlite,.sqlite3,.db3" disabled="@_busy" />
         <MudStack AlignItems="AlignItems.Center" Spacing="1">
             <MudIcon Icon="@Icons.Material.Filled.UploadFile" Size="Size.Large" />
-            <MudText Typo="Typo.h6">Glissez un fichier SQLite ici, ou cliquez pour le choisir</MudText>
+            <MudText Typo="Typo.h6">Glissez un fichier SQLite ou H2 (.mv.db) ici, ou cliquez pour le choisir</MudText>
             <Muted>
                 Aucun serveur de base de données n'est nécessaire : le schéma est lu directement dans le fichier.
             </Muted>
@@ -112,10 +113,9 @@
 </MudContainer>
 
 @code {
-    private const long MaxFileSize = 100L * 1024 * 1024;
-
     private const int PageSize = 12;
 
+    private InputFile? _dropZone;
     private DatabaseView[] _databases = [];
     private int _skip;
     private int _total;
@@ -154,8 +154,18 @@
         await LoadPageAsync();
     }
 
-    private Task OnFileSelected(InputFileChangeEventArgs e) =>
-        ImportAsync(() => { var stream = e.File.OpenReadStream(MaxFileSize); return Api.UploadSqliteAsync(stream, e.File.Name, null, null); });
+    private Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        if (e.File.Size > _capabilities.MaxUploadBytes())
+        {
+            _error = _capabilities.TooLargeMessage();
+            return Task.CompletedTask;
+        }
+
+        if (e.File.Size > Client.DirectUploadThreshold)
+            return ImportAsync(() => Api.UploadFromBrowserAsync<ImportView>(Js, _dropZone!.Element!.Value, HttpMethod.Post, "api/v1/import/sqlite"));
+        return ImportAsync(() => { var stream = e.File.OpenReadStream(_capabilities.MaxUploadBytes()); return Api.UploadSqliteAsync(stream, e.File.Name, null, null); });
+    }
 
     private async Task ConnectServerAsync()
     {
@@ -181,7 +191,7 @@
         }
         catch (IOException)
         {
-            _error = "Fichier trop volumineux (100 Mo maximum).";
+            _error = _capabilities.TooLargeMessage();
         }
         finally
         {

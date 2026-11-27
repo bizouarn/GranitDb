@@ -22,7 +22,7 @@ public record ConnectionTestResult(bool Ok, string Message, int Tables, int View
 internal record SourceConnection(string ConnectionString, string[]? Schemas);
 
 /// <summary>
-///     Documente une base à partir d'un fichier SQLite (upload ou chemin local) ou d'une source déjà connue,
+///     Documente une base à partir d'un fichier SQLite ou H2 (upload ou chemin local) ou d'une source déjà connue,
 ///     sans serveur de base de données.
 /// </summary>
 public class DatabaseImportService(
@@ -62,12 +62,12 @@ public class DatabaseImportService(
     public async Task<ImportResult> ImportSqliteAsync(Stream content, string fileName, string? name,
         string? description, bool keepFile, CancellationToken ct = default)
     {
-        var temp = await SaveTempAsync(content, ct);
+        var (temp, type) = await SaveTempAsync(content, ct);
         try
         {
-            var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(temp, ct);
+            var schema = await Connector(type).ReadSchemaAsync(temp, ct);
             var id = Guid.NewGuid().ToString();
-            var displayName = !string.IsNullOrWhiteSpace(name) ? name : Path.GetFileNameWithoutExtension(fileName);
+            var displayName = !string.IsNullOrWhiteSpace(name) ? name : BaseName(fileName);
             if (string.IsNullOrWhiteSpace(displayName)) displayName = schema.DatabaseName;
 
             string? kept = null;
@@ -77,7 +77,7 @@ public class DatabaseImportService(
                 var imported = await SyncInTransactionAsync(id, schema, displayName, database =>
                 {
                     database.Description = string.IsNullOrWhiteSpace(description) ? null : description;
-                    database.SourcePath = keepFile ? kept = Keep(temp) : null;
+                    database.SourcePath = keepFile ? kept = Keep(temp, type) : null;
                 }, ct);
                 NotifyImported(imported);
                 return imported;
@@ -100,19 +100,20 @@ public class DatabaseImportService(
     {
         var database = await repository.GetAsync<DatabaseInfo>(id, ct);
         if (database == null) return null;
-        EnsureSqlite(database);
+        EnsureFile(database);
 
-        var temp = await SaveTempAsync(content, ct);
+        var (temp, type) = await SaveTempAsync(content, ct);
         try
         {
-            var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(temp, ct);
+            EnsureType(database, type);
+            var schema = await Connector(type).ReadSchemaAsync(temp, ct);
             var previous = database.SourcePath;
             string? kept = null;
             ImportResult result;
             try
             {
                 result = await SyncInTransactionAsync(id, schema, null, updated =>
-                    updated.SourcePath = keepFile ? kept = Keep(temp) : null, ct);
+                    updated.SourcePath = keepFile ? kept = Keep(temp, type) : null, ct);
             }
             catch
             {
@@ -135,11 +136,12 @@ public class DatabaseImportService(
     {
         var database = await repository.GetAsync<DatabaseInfo>(id, ct);
         if (database == null) return null;
-        EnsureSqlite(database);
-        var temp = await SaveTempAsync(content, ct);
+        EnsureFile(database);
+        var (temp, type) = await SaveTempAsync(content, ct);
         try
         {
-            var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(temp, ct);
+            EnsureType(database, type);
+            var schema = await Connector(type).ReadSchemaAsync(temp, ct);
             return await SchemaDiffer.DiffAsync(repository, id, schema, ct);
         }
         finally
@@ -156,7 +158,8 @@ public class DatabaseImportService(
             throw new InvalidSourceException(
                 "Les chemins locaux sont désactivés (Catalog:AllowLocalPaths = false).");
         var full = Path.GetFullPath(path);
-        var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(full, ct);
+        var type = File.Exists(full) && await TypeOfAsync(full, ct) is { } found ? found : SqliteSchemaConnector.TypeName;
+        var schema = await Connector(type).ReadSchemaAsync(full, ct);
         var id = Guid.NewGuid().ToString();
         var imported = await SyncInTransactionAsync(id, schema, name, database =>
         {
@@ -221,15 +224,21 @@ public class DatabaseImportService(
         if (database == null) return null;
         if (ServerEngines.IsServer(database.Type))
             return (database, await ReadServerSourceAsync(database, ct));
-        EnsureSqlite(database);
+        EnsureFile(database);
+        var schema = await Connector(database.Type).ReadSchemaAsync(KeptFile(database), ct);
+        // Le fichier conservé porte un nom aléatoire : le nom de la base ne doit pas en venir.
+        return (database, schema with { DatabaseName = database.Name });
+    }
+
+    /// <summary>Le fichier conservé d'une base : présent, et dans le dossier des sources sauf si les chemins locaux sont permis.</summary>
+    private string KeptFile(DatabaseInfo database)
+    {
         if (string.IsNullOrWhiteSpace(database.SourcePath))
             throw new InvalidSourceException(
                 "Aucun fichier source n'est conservé pour cette base : renvoyez le fichier (PUT).");
         if (!IsManagedFile(database.SourcePath) && !Options.AllowLocalPaths)
             throw new InvalidSourceException("Ce chemin source n'est pas autorisé.");
-
-        var schema = await Connector(SqliteSchemaConnector.TypeName).ReadSchemaAsync(database.SourcePath, ct);
-        return (database, schema);
+        return database.SourcePath;
     }
 
     // --- SQL Server ---
@@ -283,12 +292,11 @@ public class DatabaseImportService(
     {
         if (ServerEngines.Find(database.Type) is { } engine)
             return Task.FromResult<(string, string)?>((engine.Type, ServerConnectionOf(database).ConnectionString));
+        if (IsType(database, H2SchemaConnector.TypeName))
+            throw new InvalidSourceException(
+                "La lecture des données (profilage, détection de relations) n'est pas disponible pour les bases H2 : seul leur schéma est lu.");
         EnsureSqlite(database);
-        if (string.IsNullOrWhiteSpace(database.SourcePath))
-            throw new InvalidSourceException("Aucun fichier source n'est conservé pour cette base : renvoyez le fichier (PUT).");
-        if (!IsManagedFile(database.SourcePath) && !Options.AllowLocalPaths)
-            throw new InvalidSourceException("Ce chemin source n'est pas autorisé.");
-        return Task.FromResult<(string, string)?>((SqliteSchemaConnector.TypeName, database.SourcePath));
+        return Task.FromResult<(string, string)?>((SqliteSchemaConnector.TypeName, KeptFile(database)));
     }
 
     /// <summary>
@@ -436,11 +444,23 @@ public class DatabaseImportService(
         return deleted;
     }
 
-    private static void EnsureSqlite(DatabaseInfo database)
+    private static bool IsType(DatabaseInfo database, string type) =>
+        database.Type.Equals(type, StringComparison.OrdinalIgnoreCase);
+
+    private static void EnsureType(DatabaseInfo database, string type)
     {
-        if (!database.Type.Equals(SqliteSchemaConnector.TypeName, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidSourceException($"Cette base est de type {database.Type}, pas Sqlite.");
+        if (!IsType(database, type))
+            throw new InvalidSourceException($"Cette base est de type {database.Type}, pas {type}.");
     }
+
+    /// <summary>Une base documentée à partir d'un fichier (SQLite ou H2).</summary>
+    private static void EnsureFile(DatabaseInfo database)
+    {
+        if (!IsType(database, SqliteSchemaConnector.TypeName) && !IsType(database, H2SchemaConnector.TypeName))
+            throw new InvalidSourceException($"Cette base est de type {database.Type} : elle n'est pas documentée à partir d'un fichier.");
+    }
+
+    private static void EnsureSqlite(DatabaseInfo database) => EnsureType(database, SqliteSchemaConnector.TypeName);
 
     private bool IsManagedFile(string path)
     {
@@ -448,8 +468,8 @@ public class DatabaseImportService(
         return Path.GetFullPath(path).StartsWith(dir, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Copie le flux dans un fichier temporaire en contrôlant taille et en-tête SQLite.</summary>
-    private async Task<string> SaveTempAsync(Stream content, CancellationToken ct)
+    /// <summary>Copie le flux dans un fichier temporaire en contrôlant taille et en-tête ; renvoie aussi le type reconnu.</summary>
+    private async Task<(string Path, string Type)> SaveTempAsync(Stream content, CancellationToken ct)
     {
         Directory.CreateDirectory(Options.SourcesDirectory);
         var temp = Path.Combine(Options.SourcesDirectory, $"{Guid.NewGuid()}.tmp");
@@ -472,15 +492,9 @@ public class DatabaseImportService(
                 if (total == 0) throw new InvalidSourceException("Aucun fichier n'a été envoyé.");
             }
 
-            var header = new byte[SqliteHeader.Length];
-            await using (var check = File.OpenRead(temp))
-            {
-                var n = await check.ReadAsync(header, ct);
-                if (n < SqliteHeader.Length || !header.AsSpan().SequenceEqual(SqliteHeader))
-                    throw new InvalidSourceException("Le fichier n'est pas une base SQLite (en-tête invalide).");
-            }
-
-            return temp;
+            var type = await TypeOfAsync(temp, ct) ?? throw new InvalidSourceException(
+                "Le fichier n'est ni une base SQLite ni une base H2 (en-tête invalide).");
+            return (temp, type);
         }
         catch
         {
@@ -489,10 +503,30 @@ public class DatabaseImportService(
         }
     }
 
-    /// <summary>Renomme le fichier temporaire en fichier conservé (nom aléatoire) et retourne son chemin.</summary>
-    private string Keep(string temp)
+    /// <summary>Le type d'un fichier de base d'après ses premiers octets ; <c>null</c> s'il n'est pas reconnu.</summary>
+    private static async Task<string?> TypeOfAsync(string path, CancellationToken ct)
     {
-        var final = Path.GetFullPath(Path.Combine(Options.SourcesDirectory, $"{Guid.NewGuid()}.db"));
+        var header = new byte[16];
+        await using var file = File.OpenRead(path);
+        var read = await file.ReadAtLeastAsync(header, header.Length, false, ct);
+        var start = header.AsSpan(0, read);
+        if (start.StartsWith(SqliteHeader)) return SqliteSchemaConnector.TypeName;
+        // Une base chiffrée est reconnue pour que le lecteur H2 dise pourquoi il la refuse.
+        return start.StartsWith("H:2,"u8) || start.StartsWith("H2encrypt"u8) ? H2SchemaConnector.TypeName : null;
+    }
+
+    /// <summary>Le nom d'un fichier sans son extension (<c>.mv.db</c> compte pour une seule).</summary>
+    private static string BaseName(string fileName)
+    {
+        var name = Path.GetFileName(fileName);
+        return name.EndsWith(".mv.db", StringComparison.OrdinalIgnoreCase) ? name[..^6] : Path.GetFileNameWithoutExtension(name);
+    }
+
+    /// <summary>Renomme le fichier temporaire en fichier conservé (nom aléatoire) et retourne son chemin.</summary>
+    private string Keep(string temp, string type)
+    {
+        var extension = type == H2SchemaConnector.TypeName ? ".mv.db" : ".db";
+        var final = Path.GetFullPath(Path.Combine(Options.SourcesDirectory, $"{Guid.NewGuid()}{extension}"));
         File.Copy(temp, final);
         return final;
     }

@@ -22,7 +22,8 @@ builder.Services.AddScoped(_ =>
     return new Client(new HttpClient(session)
     {
         BaseAddress = new Uri(apiBaseUrl.EndsWith('/') ? apiBaseUrl : apiBaseUrl + "/"),
-        Timeout = TimeSpan.FromMinutes(5)
+        // Large : l'envoi d'un gros fichier de base prend du temps.
+        Timeout = TimeSpan.FromMinutes(30)
     }, session);
 });
 

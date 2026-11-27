@@ -14,7 +14,7 @@ public class CatalogOptions
     public string DataDirectory { get; set; } = "granitdb-data";
 
     /// <summary>Taille maximale d'un fichier SQLite importé (Mo).</summary>
-    public int MaxUploadMb { get; set; } = 100;
+    public int MaxUploadMb { get; set; } = 1024;
 
     /// <summary>Autorise de documenter un fichier SQLite par son chemin local sur le serveur.</summary>
     public bool AllowLocalPaths { get; set; }

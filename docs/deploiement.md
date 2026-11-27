@@ -47,7 +47,7 @@ dotnet test tests/GranitDb.Tests
 dotnet test tests/GranitDb.Tests --filter "FullyQualifiedName~SchemaSynchronizerTests"   # une classe
 ```
 
-Les tests SQLite n'ont besoin d'aucun service externe. Les tests SQL Server, PostgreSQL et MySQL (migrations, dépôt, connecteurs) démarrent un conteneur via Testcontainers : ils sont ignorés si Docker est absent, sauf avec `GRANITDB_REQUIRE_SQLSERVER=1` (positionné par la CI). La première exécution télécharge l'image SQL Server (≈ 1,5 Go).
+Les tests SQLite n'ont besoin d'aucun service externe. Les tests SQL Server, PostgreSQL et MySQL (migrations, dépôt, connecteurs) démarrent un conteneur via Testcontainers : ils sont ignorés si Docker est absent, sauf avec `GRANITDB_REQUIRE_SQLSERVER=1` (positionné par la CI). La première exécution télécharge l'image SQL Server (≈ 1,5 Go). Les tests H2 lisent des fichiers de référence (`tests/GranitDb.Tests/Fixtures/h2`) : Java n'est pas nécessaire.
 
 ## Intégration continue
 

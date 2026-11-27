@@ -13,13 +13,16 @@ public class LocalSqliteRequest
     public string? Description { get; set; }
 }
 
-/// <summary>Documente une base SQLite à partir d'un fichier, sans serveur de base de données.</summary>
+/// <summary>
+///     Documente une base à partir de son fichier, sans serveur : SQLite, ou H2 (<c>.mv.db</c>), reconnu à son en-tête (la route
+///     garde son nom d'origine).
+/// </summary>
 [Route("api/v1/import/sqlite")]
 [Route("import/sqlite")]
 [ApiController]
 public class SqliteImportController(DatabaseImportService import) : ControllerBase
 {
-    /// <summary>Envoie un fichier SQLite (multipart) : crée la base et extrait tables, colonnes et relations.</summary>
+    /// <summary>Envoie un fichier SQLite ou H2 (multipart) : crée la base et extrait tables, colonnes et relations.</summary>
     [HttpPost]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(long.MaxValue)]

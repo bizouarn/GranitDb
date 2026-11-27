@@ -4219,6 +4219,10 @@
           "aiModel": {
             "type": "string",
             "nullable": true
+          },
+          "maxUploadMb": {
+            "type": "integer",
+            "format": "int32"
           }
         },
         "additionalProperties": false

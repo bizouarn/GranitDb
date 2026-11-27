@@ -8,7 +8,7 @@
 
 ## Pourquoi GranitDb
 
-- **Aucun serveur requis** : le catalogue est un fichier SQLite, et une base à documenter peut être un simple fichier SQLite. SQL Server, PostgreSQL et MySQL / MariaDB sont aussi pris en charge comme sources.
+- **Aucun serveur requis** : le catalogue est un fichier SQLite, et une base à documenter peut être un simple fichier SQLite. SQL Server, PostgreSQL et MySQL / MariaDB sont aussi pris en charge comme sources, ainsi que les fichiers H2, lus eux aussi sans serveur et sans Java.
 - **Schéma lu, jamais modifié** : tables, colonnes, clés, index et relations sont extraits en lecture seule ; les descriptions saisies à la main survivent aux resynchronisations (aperçu des différences avant application, synchronisation planifiée possible).
 - **Documentation collaborative** : descriptions modifiables en place, étiquettes, colonnes sensibles, historique, complétude, analyse d'impact.
 - **Diagrammes par domaine** : regroupez les tables par sujet, placez-les, exportez en SVG, PNG ou Mermaid.
@@ -31,7 +31,7 @@ dotnet run --project api --launch-profile http   # API sur http://localhost:5105
 dotnet run --project client                      # interface sur http://localhost:5028
 ```
 
-Ouvrez l'interface et glissez un fichier `.db` / `.sqlite` sur la zone de dépôt : tables, colonnes, types, clés et relations sont extraits et affichés. Le fichier source est ouvert en lecture seule.
+Ouvrez l'interface et glissez un fichier SQLite (`.db`, `.sqlite`) ou H2 (`.mv.db`) sur la zone de dépôt : tables, colonnes, types, clés et relations sont extraits et affichés. Le fichier source est ouvert en lecture seule.
 
 ## Documentation
 

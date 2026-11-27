@@ -14,6 +14,7 @@ builder.Services.Configure<CatalogOptions>(builder.Configuration.GetSection(Cata
 builder.Services.AddSingleton<IDbConnectionFactory, DbConnectionFactory>();
 builder.Services.AddSingleton<ICatalogRepository, CatalogRepository>();
 builder.Services.AddSingleton<ISchemaConnector, SqliteSchemaConnector>();
+builder.Services.AddSingleton<ISchemaConnector, H2SchemaConnector>();
 builder.Services.AddSingleton<ISchemaConnector, SqlServerSchemaConnector>();
 builder.Services.AddSingleton<ISchemaConnector, PostgreSqlSchemaConnector>();
 builder.Services.AddSingleton<ISchemaConnector, MySqlSchemaConnector>();
@@ -82,6 +83,11 @@ builder.Services.AddCors(options =>
         });
 });
 builder.Services.AddControllers(options => options.Filters.Add<RoleAuthorizationFilter>());
+// Un envoi de fichier est un formulaire « multipart », plafonné par ASP.NET à 128 Mo quel que soit [RequestSizeLimit] : ce plafond
+// suit Catalog:MaxUploadMb (avec une marge pour les autres champs), sinon les gros fichiers sont refusés avant d'arriver au contrôle.
+builder.Services.AddOptions<Microsoft.AspNetCore.Http.Features.FormOptions>()
+    .Configure<IOptions<CatalogOptions>>((form, catalog) =>
+        form.MultipartBodyLengthLimit = (catalog.Value.MaxUploadMb + 1L) * 1024 * 1024);
 builder.Services.AddExceptionHandler<GranitExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddEndpointsApiExplorer();

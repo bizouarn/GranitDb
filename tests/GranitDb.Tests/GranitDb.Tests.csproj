@@ -28,6 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Fichiers H2 créés par H2 lui-même : le lecteur se teste sans Java. -->
+    <None Include="Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\api\GranitDB.API.csproj" />
     <ProjectReference Include="..\..\client\GranitDb.Client.csproj" />
   </ItemGroup>
