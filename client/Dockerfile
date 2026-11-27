@@ -1,7 +1,7 @@
 # Contexte de build : la racine du dépôt.
 #   docker build -f client/Dockerfile -t granitdb-client .
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:11.0 AS build
 WORKDIR /src
 COPY client/GranitDb.Client.csproj client/
 RUN dotnet restore client/GranitDb.Client.csproj
