@@ -8,7 +8,7 @@
 | [aides-documentation.md](aides-documentation.md) | Administrateurs | Profilage, relations suggérées, synchronisation planifiée, assistant d'IA |
 | [authentification.md](authentification.md) | Administrateurs | GitHub / OpenID Connect, rôles, bases publiques, secrets |
 | [configuration.md](configuration.md) | Administrateurs | Réglages `Catalog`, `Audit`, `Webhooks`, CORS |
-| [deploiement.md](deploiement.md) | Administrateurs, développeurs | Docker, sauvegarde, migrations, tests, CI |
+| [deploiement.md](deploiement.md) | Administrateurs, développeurs | Docker, publication des images, sauvegarde, migrations, tests, CI |
 | [api.md](api.md) | Développeurs | Routes REST, filtres, pagination, webhooks, client généré |
 
 Pour les développeurs : l'architecture et les conventions sont dans [`CLAUDE.md`](../CLAUDE.md), l'audit du code et la feuille de route dans [`work-doc/`](../work-doc/).

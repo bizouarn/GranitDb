@@ -29,6 +29,72 @@ L'API crée la base `GranitDb` si elle n'existe pas et attend que le serveur ré
 
 Variables courantes : `API_BASE_URL`, `ALLOW_SQLSERVER_SOURCES`, `ALLOW_AI`, `AI_MODEL` ; derrière un proxy, `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true`.
 
+## Images publiées
+
+La poussée d'un tag Git commençant par `v` déclenche `.github/workflows/release.yml` : la CI complète est rejouée sur le commit tagué puis, si elle réussit, les deux images (`linux/amd64`) sont construites et publiées sur GitHub Container Registry :
+
+- `ghcr.io/bizouarn/granitdb-api`
+- `ghcr.io/bizouarn/granitdb-client`
+
+### Publier une version
+
+Le workflow doit être présent dans le commit tagué. Depuis ce commit (en général `main` à jour) :
+
+```bash
+git tag -a v1.2.0 -m "v1.2.0"
+git push origin v1.2.0
+```
+
+L'avancement se suit dans l'onglet *Actions* du dépôt. Les étiquettes des images sont déduites du tag :
+
+| Tag Git | Étiquettes publiées |
+|---|---|
+| `v1.2.0` | `v1.2.0`, `1.2.0`, `1.2`, `latest` |
+| `v2.0.0-rc.1` (préversion : le nom contient `-`) | `v2.0.0-rc.1`, `2.0.0-rc.1` |
+| `v2` (pas une version complète `X.Y.Z`) | `v2`, `latest` |
+
+`latest` désigne le dernier tag publié, hors préversions, et non le plus grand numéro : publier un correctif d'une ancienne branche (`v1.2.1` après `v2.0.0`) le fait revenir en arrière. Poussez les tags un par un : au-delà de trois tags dans une même poussée, GitHub ne déclenche aucun workflow.
+
+Si un job échoue (une seule des deux images peut alors avoir été publiée), relancez les jobs en échec depuis *Actions*. Si le code doit être corrigé, publiez un nouveau numéro plutôt que de déplacer le tag.
+
+Aucun secret n'est à créer : le workflow utilise le `GITHUB_TOKEN`, avec `packages: write` pour le seul job de publication.
+
+### Visibilité des paquets
+
+Après la première publication, vérifiez la visibilité de chaque paquet (profil GitHub → *Packages* → le paquet → *Package settings*) : un nouveau paquet est en principe **privé**. Pour permettre de le récupérer sans compte, passez-le en *Public* (GitHub ne permet pas de revenir ensuite en privé).
+
+Pour un paquet privé, connectez-vous d'abord avec un jeton GitHub (*classic*) ayant la portée `read:packages` ; il est demandé à la place du mot de passe :
+
+```bash
+docker login ghcr.io -u <votre-login-github>
+```
+
+Si les paquets existent déjà sans être liés au dépôt (publiés à la main auparavant), donnez au dépôt le rôle *Write* dans *Package settings* → *Manage Actions access*, sinon la publication est refusée.
+
+### Récupérer et lancer les images
+
+```bash
+docker pull ghcr.io/bizouarn/granitdb-api:1.2.0
+docker pull ghcr.io/bizouarn/granitdb-client:1.2.0
+```
+
+Pour les lancer avec les réglages de `docker-compose.yml`, créez à côté de lui un fichier `compose.ghcr.yml` :
+
+```yaml
+services:
+  api:
+    image: ghcr.io/bizouarn/granitdb-api:${GRANITDB_VERSION:-latest}
+  client:
+    image: ghcr.io/bizouarn/granitdb-client:${GRANITDB_VERSION:-latest}
+```
+
+puis, sans rien construire (la version se choisit avec `GRANITDB_VERSION`, dans `.env` par exemple) :
+
+```bash
+docker compose -f docker-compose.yml -f compose.ghcr.yml pull api client
+docker compose -f docker-compose.yml -f compose.ghcr.yml up -d --no-build
+```
+
 ## Sauvegarde
 
 À sauvegarder ensemble : le catalogue (`granitdb-data/`, ou la base SQL Server), les fichiers sources conservés (`sources/`) et **les clés** (`keys/`), sans lesquelles les connexions enregistrées ne sont plus lisibles.
@@ -51,7 +117,7 @@ Les tests SQLite n'ont besoin d'aucun service externe. Les tests SQL Server, Pos
 
 ## Intégration continue
 
-`.github/workflows/ci.yml` : build de la solution, tests (SQL Server compris, via Testcontainers) puis construction des deux images Docker et démarrage de la pile avec `docker compose`.
+`.github/workflows/ci.yml` : build de la solution, tests (SQL Server compris, via Testcontainers) puis construction des deux images Docker et démarrage de la pile avec `docker compose`. Elle est aussi rejouée avant chaque [publication d'images](#images-publiées).
 
 ## Structure du dépôt
 

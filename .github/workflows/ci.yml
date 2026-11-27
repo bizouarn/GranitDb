@@ -1,7 +1,9 @@
 name: CI
 
 # La CI ne tourne que pour la branche main : un push sur main, ou une pull request qui la vise.
+# Elle est aussi rejouée par release.yml avant la publication des images d'un tag.
 on:
+  workflow_call:
   push:
     branches: [main]
   pull_request:

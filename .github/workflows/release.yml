@@ -1,0 +1,76 @@
+name: Publication des images Docker
+
+# La poussée d'un tag « v… » (v1, v1.2.0, v2.0.0-rc.1) publie les images de l'API et du client sur ghcr.io.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  # La CI ne tourne que sur main : on la rejoue sur le commit tagué avant de publier quoi que ce soit.
+  ci:
+    name: CI
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Image ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    needs: ci
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: granitdb-api
+            dockerfile: api/Dockerfile
+            title: GranitDb API
+            description: API REST du catalogue de métadonnées GranitDb
+          - image: granitdb-client
+            dockerfile: client/Dockerfile
+            title: GranitDb Client
+            description: Interface web de GranitDb (Blazor WebAssembly servie par nginx)
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Étiquettes : le nom du tag ; pour une version complète (v1.2.0), aussi 1.2.0 et 1.2 ;
+      # « latest » sauf pour une préversion (tag contenant « - »).
+      - name: Étiquettes et métadonnées
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          # metadata-action met le nom en minuscules, comme ghcr.io l'exige.
+          images: ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}
+          flavor: latest=false
+          tags: |
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+          # « source » (ajoutée d'office) rattache le paquet au dépôt.
+          labels: |
+            org.opencontainers.image.title=${{ matrix.title }}
+            org.opencontainers.image.description=${{ matrix.description }}
+            org.opencontainers.image.licenses=PolyForm-Noncommercial-1.0.0
+
+      - name: Construction et publication
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
