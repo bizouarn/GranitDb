@@ -1,7 +1,7 @@
 # Contexte de build : la racine du dépôt.
 #   docker build -f api/Dockerfile -t granitdb-api .
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:11.0 AS base
 WORKDIR /app
 # Les données (catalogue SQLite, fichiers importés) vivent dans /data : montez-y un volume.
 RUN mkdir -p /data && chown $APP_UID /data
